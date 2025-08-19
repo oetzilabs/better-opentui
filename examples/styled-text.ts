@@ -1,6 +1,5 @@
 import { BunContext, BunRuntime } from "@effect/platform-bun";
 import * as Colors from "@opentuee/core/src/colors";
-import { OpenTUILive } from "@opentuee/core/src/lib";
 import { CliRenderer, CliRendererLive } from "@opentuee/core/src/renderer/cli";
 import { LibraryLive } from "@opentuee/core/src/zig";
 import { Cause, Console, Duration, Effect, Fiber, Logger, Ref, Schedule } from "effect";

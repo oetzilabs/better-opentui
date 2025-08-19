@@ -1,3 +1,6 @@
+import { reallyExit } from "node:process";
+import * as readline from "node:readline";
+import { Terminal } from "@effect/platform";
 import { BunRuntime } from "@effect/platform-bun";
 import {
   Channel,
@@ -5,18 +8,22 @@ import {
   Console,
   Duration,
   Effect,
+  Exit,
   Fiber,
   LogLevel,
+  Mailbox,
   Option,
   Predicate,
   PubSub,
   Queue,
+  RcRef,
   Ref,
   Schedule,
   Schema,
   Stream,
   Take,
 } from "effect";
+import type { NoSuchElementException } from "effect/Cause";
 import {
   isExitOnCtrlC,
   makeRoomForRenderer,
@@ -144,6 +151,37 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const _useThread = yield* Ref.make(false);
 
     const backgroundColor = yield* Ref.make<Colors.Input>(Colors.Black.make("#000000"));
+    const terminalInputFork = yield* Ref.make<Fiber.RuntimeFiber<
+      never,
+      RendererFailedToCheckHit | NoSuchElementException
+    > | null>(null);
+
+    const stdin = process.stdin;
+    const stdout = process.stdout;
+    const realStdoutWrite = stdout.write;
+
+    const rlRef = yield* RcRef.make({
+      acquire: Effect.acquireRelease(
+        Effect.sync(() => {
+          const rl = readline.createInterface({ input: stdin, escapeCodeTimeout: 50 });
+          readline.emitKeypressEvents(stdin, rl);
+
+          if (stdin.isTTY) {
+            stdin.setRawMode(true);
+          }
+          stdin.resume();
+          stdin.setEncoding("utf8");
+          return rl;
+        }),
+        (rl) =>
+          Effect.sync(() => {
+            if (stdin.isTTY) {
+              stdin.setRawMode(false);
+            }
+            rl.close();
+          })
+      ),
+    });
 
     const root = yield* elements.root({
       width: Effect.fn(function* () {
@@ -173,10 +211,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       yield* startRenderLoop();
     });
 
-    const writeOut = Effect.fn(function* (chunk: string) {
+    const writeOut = Effect.fn(function* (chunk: string, encoding: BufferEncoding = "utf8") {
       const buffer = Buffer.from(chunk);
       const sent = yield* Effect.async<boolean, Error>((resume) => {
-        const sent = process.stdout.write(buffer, (err) => {
+        const sent = realStdoutWrite.call(stdout, buffer, encoding, (err) => {
           if (err) {
             return resume(Effect.fail(err));
           } else {
@@ -245,7 +283,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const w = yield* Ref.get(_width);
       const newlines = " ".repeat(w) + "\n".repeat(space);
       const sbg = yield* setRgbBackground(bgcInts[0], bgcInts[1], bgcInts[2]);
-      const clear = +newlines + ResetBackground.make("\u001B[49m");
+      const clear = sbg + newlines + ResetBackground.make("\u001B[49m");
 
       yield* writeOut(flush + move + output + clear);
 
@@ -281,34 +319,67 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         handleResize(width, height).pipe(BunRuntime.runMain);
       });
 
-      process.stdin.on("data", (data: Buffer) => {
-        const str = data.toString();
+      const shouldQuit = (data: Buffer) => {
+        return isExitOnCtrlC(data.toString());
+      };
 
-        Effect.gen(function* () {
-          const wfpr = yield* Ref.get(_isWaitingForPixelResolution);
-          if (wfpr && /\x1b\[4;\d+;\d+t/.test(str)) {
-            const match = str.match(/\x1b\[4;(\d+);(\d+)t/);
-            if (match) {
-              const resolution: PixelResolution = {
-                width: parseInt(match[2]),
-                height: parseInt(match[1]),
-              };
-
-              yield* Ref.set(_resolution, resolution);
-              yield* Ref.set(_isWaitingForPixelResolution, false);
-              return;
-            }
+      const readData = Effect.gen(function* () {
+        yield* RcRef.get(rlRef);
+        const mailbox = yield* Mailbox.make<Buffer>();
+        const handleData = (s: Buffer) => {
+          const terminalData = s;
+          mailbox.unsafeOffer(terminalData);
+          if (shouldQuit(terminalData)) {
+            mailbox.unsafeDone(Exit.void);
           }
-          const um = yield* getUseMouse();
-          if (um) {
-            const hmd = yield* handleMouseData(data);
-            if (hmd) {
-              return;
-            }
-          }
-          // emit the key to the eventhandler
-        }).pipe(BunRuntime.runMain);
+        };
+        const handleEnd = () => {
+          mailbox.unsafeDone(Exit.void);
+        };
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            stdin.off("data", handleData);
+            stdin.off("end", handleEnd);
+          })
+        );
+        stdin.on("data", handleData);
+        stdin.on("end", handleEnd);
+        return mailbox as Mailbox.ReadonlyMailbox<Buffer>;
       });
+
+      const f = yield* Effect.forkScoped(
+        Effect.gen(function* () {
+          const mb = yield* readData;
+          let si = yield* mb.size;
+          let s = Option.getOrElse(si, () => 0);
+          while (s > 0) {
+            const data = yield* mb.take;
+            si = yield* mb.size;
+            s = Option.getOrElse(si, () => 0);
+            const str = data.toString();
+            const wfpr = yield* Ref.get(_isWaitingForPixelResolution);
+            if (wfpr && /\x1b\[4;\d+;\d+t/.test(str)) {
+              const match = str.match(/\x1b\[4;(\d+);(\d+)t/);
+              if (match) {
+                const resolution: PixelResolution = {
+                  width: parseInt(match[2]),
+                  height: parseInt(match[1]),
+                };
+                yield* Ref.set(_resolution, resolution);
+                yield* Ref.set(_isWaitingForPixelResolution, false);
+                return;
+              }
+            }
+            if (um) {
+              const hmd = yield* handleMouseData(data);
+              if (hmd) {
+                return;
+              }
+            }
+          }
+        }).pipe(Effect.forever)
+      );
+      yield* Ref.set(terminalInputFork, f);
 
       global.requestAnimationFrame = (callback: FrameRequestCallback) => {
         const id = animationFrameId++;
@@ -615,7 +686,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const addPostProcessFn = Effect.fn(function* (
-      processFn: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void>,
+      processFn: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void>
     ) {
       yield* Ref.update(postProcessFns, (fns) => {
         fns.push(processFn);
@@ -624,7 +695,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const removePostProcessFn = Effect.fn(function* (
-      processFn: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void>,
+      processFn: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void>
     ) {
       yield* Ref.update(postProcessFns, (fns) => fns.filter((fn) => fn !== processFn));
     });
@@ -659,7 +730,14 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       yield* Ref.set(_isRunning, false);
       yield* Ref.set(_isShuttingDown, true);
       yield* Ref.set(_isWaitingForPixelResolution, false);
+
       yield* disableStdoutInterception();
+
+      const tif = yield* Ref.get(terminalInputFork);
+      if (tif) {
+        yield* Fiber.interrupt(tif);
+        yield* Ref.set(terminalInputFork, null);
+      }
 
       const rf = yield* Ref.get(renderFiber);
       if (rf) {
@@ -716,8 +794,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const fiber = yield* Effect.forkScoped(
         loop().pipe(
           // We need to repeat the loop to keep the fiber alive
-          Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps))),
-        ),
+          Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps)))
+        )
       );
 
       yield* Ref.set(renderFiber, fiber);
@@ -765,7 +843,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const animationRequestStart = performance.now();
       yield* Effect.all(
         frameRequests.map((callback) => Effect.sync(() => callback(deltaTime))),
-        { concurrency: "unbounded", concurrentFinalizers: true },
+        { concurrency: "unbounded", concurrentFinalizers: true }
       );
       const animationRequestEnd = performance.now();
       const animationRequestTime = animationRequestEnd - animationRequestStart;
@@ -774,7 +852,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const fcbs = yield* Ref.get(frameCallbacks);
       yield* Effect.all(
         fcbs.map((frameCallback) => frameCallback(deltaTime)),
-        { concurrency: "unbounded", concurrentFinalizers: true },
+        { concurrency: "unbounded", concurrentFinalizers: true }
       );
 
       const end = performance.now();
@@ -792,7 +870,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       yield* Effect.all(
         ppfns.map((postProcessFn) => postProcessFn(buf.next!, deltaTime)),
-        { concurrency: "unbounded", concurrentFinalizers: true },
+        { concurrency: "unbounded", concurrentFinalizers: true }
       );
 
       // yield* this._console.renderToBuffer(this.nextRenderBuffer!);
@@ -807,30 +885,27 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       if (gs) {
         yield* collectStatSample(overallFrameTime);
       }
-      // const ir = yield* Ref.get(_isRunning);
-      // if (ir) {
-      // const tft = yield* Ref.get(targetFrameTime);
-      // const delay = Math.max(1, tft - Math.floor(overallFrameTime));
-      // const innerLoop = Effect.suspend(() => this.loop());
-      // const scheduled = Effect.schedule(innerLoop, Schedule.duration(Duration.millis(delay)));
-      // const forked = yield* Effect.forkScoped(scheduled).pipe(Effect.scoped);
-      // this.renderFiber = forked;
-      // }
 
-      // this.rendering = false;
       yield* Ref.set(rendering, false);
-      // const irr = yield* Ref.get(immediateRerenderRequested);
-      // if (irr) {
-      //   yield* Ref.set(immediateRerenderRequested, false);
-
-      //   // We dont have to interrupt it, since the `Schedule.fixed` will run the next loop immediately to prevent "pile-ups," ensuring that the schedule remains consistent without overlapping executions. (from the docs)
-      //   // yield* Effect.suspend(() => this.loop());
-      // }
     });
 
     const intermediateRender = Effect.fn(function* () {});
 
-    const renderNative = Effect.fn(function* () {});
+    const renderingNative = yield* Ref.make(false);
+
+    const renderNative = Effect.fn(function* () {
+      let force = false;
+      const sh = yield* Ref.get(_splitHeight);
+      if (sh > 0) {
+        // TODO: Flickering could maybe be even more reduced by moving the flush to the native layer,
+        // to output the flush with the buffered writer, after the render is done.
+        force = yield* flushStdoutCache(sh);
+      }
+
+      yield* Ref.set(renderingNative, false);
+      yield* lib.render(renderer, force);
+      yield* Ref.set(renderingNative, true);
+    });
 
     const collectStatSample = Effect.fn(function* (overallFrameTime: number) {
       // this.frameTimes.push(frameTime);
