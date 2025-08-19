@@ -1,0 +1,15 @@
+{
+  "name": "@opentuee/3d",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "bun-webgpu": "^0.1.0",
+    "jimp": "^1.6.0"
+  },
+  "devDependencies": {
+    "@dimforge/rapier2d-simd-compat": "^0.17.3",
+    "@types/three": "^0.179.0",
+    "planck": "^1.4.2"
+  }
+}

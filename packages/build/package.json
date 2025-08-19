@@ -1,0 +1,11 @@
+{
+  "name": "@opentuee/build",
+  "version": "0.0.0",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@effect/cli": "0.69.0",
+    "@threema/wasm-minisign-verify": "0.1.3"
+  }
+}

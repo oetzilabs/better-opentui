@@ -1,0 +1,9 @@
+{
+  "name": "@opentuee/ui",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "yoga-layout": "3.2.1"
+  }
+}
