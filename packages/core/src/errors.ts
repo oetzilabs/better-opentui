@@ -399,8 +399,13 @@ export class RendererFailedToDisableMouse extends Schema.TaggedError<RendererFai
   },
 ) {}
 
+export class WritingToBufferError extends Schema.TaggedError<WritingToBufferError>()("WritingToBufferError", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
 // all errors
 export type Collection =
+  | WritingToBufferError
   | RendererFailedToDisableMouse
   | RendererFailedToEnableMouse
   | FailedToFreeYogaNode

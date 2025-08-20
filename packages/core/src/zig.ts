@@ -155,7 +155,7 @@ export class Library extends Effect.Service<Library>()("Library", {
       });
 
       if (!bufferPtr) {
-        return yield* Effect.fail(new Error("Failed to get next buffer"));
+        return yield* Effect.fail(new RendererFailedToGetNextBuffer());
       }
 
       const width = yield* Effect.try({

@@ -1,29 +1,4 @@
-import { reallyExit } from "node:process";
-import * as readline from "node:readline";
-import { Terminal } from "@effect/platform";
-import { BunRuntime } from "@effect/platform-bun";
-import {
-  Channel,
-  Chunk,
-  Console,
-  Deferred,
-  Duration,
-  Effect,
-  Exit,
-  Fiber,
-  LogLevel,
-  Mailbox,
-  Option,
-  Predicate,
-  PubSub,
-  Queue,
-  RcRef,
-  Ref,
-  Schedule,
-  Schema,
-  Stream,
-  Take,
-} from "effect";
+import { Deferred, Duration, Effect, Exit, Fiber, Mailbox, Ref, Schedule } from "effect";
 import type { NoSuchElementException } from "effect/Cause";
 import {
   ClearFromCursor,
@@ -44,7 +19,7 @@ import { OptimizedBuffer } from "../buffer/optimized";
 import * as Colors from "../colors";
 import { OpenTuiConfig, OpenTuiConfigLive } from "../config";
 import type { Style } from "../cursor-style";
-import type { RendererFailedToCheckHit } from "../errors";
+import { WritingToBufferError, type RendererFailedToCheckHit } from "../errors";
 import { KeyboardEvent } from "../events/keyboard";
 import { MouseEvent } from "../events/mouse";
 import { ParsedKey, parse as parseKey } from "../inputs/keyboard";
@@ -212,10 +187,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const writeOut = Effect.fn(function* (chunk: string, encoding: BufferEncoding = "utf8") {
       const buffer = Buffer.from(chunk);
-      const sent = yield* Effect.async<boolean, Error>((resume) => {
+      const sent = yield* Effect.async<boolean, WritingToBufferError>((resume) => {
         const sent = realStdoutWrite.call(stdout, buffer, encoding, (err) => {
           if (err) {
-            return resume(Effect.fail(err));
+            return resume(Effect.fail(new WritingToBufferError({ cause: err })));
           } else {
             return resume(Effect.succeed(true));
           }
@@ -334,7 +309,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       const rsmb = yield* readResize;
       const rsf = yield* rsmb.take.pipe(
-        Effect.tap(({ width, height }) => handleResize(width, height)),
+        Effect.map(({ width, height }) => handleResize(width, height)),
         Effect.forever,
         Effect.forkScoped,
       );
@@ -397,7 +372,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             }
 
             const parsedKey = yield* parseKey(data);
-            yield* Effect.log("Parsed key", JSON.stringify(parsedKey, null, 2));
             if (isExitOnCtrlC(parsedKey.raw)) {
               yield* Effect.log("Ctrl+C", "WE HAVE TO EXIT".repeat(10));
               return yield* Deferred.succeed(shutdown, {
@@ -648,7 +622,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       // }
       // yield* Effect.logWithLevel(LogLevel.Debug, "Resize", width, height);
 
-      yield* processResize(width, height);
+      return yield* processResize(width, height);
     });
 
     const queryPixelResolution = Effect.fn(function* () {
@@ -657,32 +631,28 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const processResize = Effect.fn(function* (width: number, height: number) {
-      let w = yield* Ref.get(_width);
-      let h = yield* Ref.get(_height);
       let tw = yield* Ref.get(_terminalWidth);
       let th = yield* Ref.get(_terminalHeight);
-      if (w === tw && h === th) return;
+      if (width === tw && height === th) return;
 
       const prevWidth = tw;
 
-      tw = yield* Ref.updateAndGet(_terminalWidth, (tw) => w);
-      // this._terminalHeight = height;
-      th = yield* Ref.updateAndGet(_terminalHeight, (th) => h);
+      tw = yield* Ref.updateAndGet(_terminalWidth, (tw) => width);
+      th = yield* Ref.updateAndGet(_terminalHeight, (th) => height);
+      // yield* queryPixelResolution();
 
-      // this.capturedRenderable = undefined;
       yield* Ref.set(capturedRenderable, null);
       yield* mouseParser.reset();
       const sh = yield* Ref.get(_splitHeight);
       if (sh > 0) {
-        // TODO: Handle resizing split mode properly
-        if (w < prevWidth) {
+        if (width < prevWidth) {
           const start = th - sh * 2;
           const flush = yield* moveCursorAndClear(start, 1);
           yield* writeOut(flush);
         }
         // this.renderOffset = h - sh;
-        const ro = yield* Ref.updateAndGet(_renderOffset, (x) => h - sh);
-        yield* Ref.set(_width, w);
+        const ro = yield* Ref.updateAndGet(_renderOffset, (x) => height - sh);
+        yield* Ref.set(_width, width);
 
         yield* Ref.set(_height, sh);
         const c = yield* parseColor(Colors.Black.make("#000000"));
@@ -691,12 +661,11 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         yield* buf.current.clearLocal(c, "\u0a00");
         yield* lib.setRenderOffset(renderer, ro);
       } else {
-        // this.width = width;
-        // this.height = height;
-        w = yield* Ref.updateAndGet(_width, (w) => width);
-        h = yield* Ref.updateAndGet(_height, (h) => height);
+        yield* Ref.update(_width, (w) => width);
+        yield* Ref.update(_height, (h) => height);
       }
-
+      const w = yield* Ref.get(_width);
+      const h = yield* Ref.get(_height);
       yield* lib.resizeRenderer(renderer, w, h);
       const nrba = yield* lib.getNextBuffer(renderer);
 
@@ -835,6 +804,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         yield* Ref.set(memorySnapshotTimer, null);
       }
 
+      const rsf = yield* Ref.get(resizeFiber);
+      if (rsf) {
+        yield* Fiber.interrupt(rsf);
+        yield* Ref.set(resizeFiber, null);
+      }
+
       const sh = yield* Ref.get(_splitHeight);
       if (sh > 0) {
         const th = yield* Ref.get(_terminalHeight);
@@ -850,14 +825,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       }
       yield* writeOut(ResetCursorColor.make("\u001B]12;default\u0007"));
       yield* writeOut(ShowCursor.make("\u001B[?25h"));
-      yield* writeOut(ClearFromCursor.make("\u001B[J"));
       yield* writeOut(yield* moveCursorAndClear(0, 0));
       const uas = yield* Ref.get(_useAlternateScreen);
       if (uas) {
         yield* writeOut(SwitchToMainScreen.make("\u001B[?1049l"));
       }
       stdin.setRawMode(false);
-      console.clear();
     });
 
     const destroy = Effect.fn(function* () {

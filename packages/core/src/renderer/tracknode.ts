@@ -1,4 +1,4 @@
-import { FailedToFreeYogaNode } from "@opentuee/ui/src/lib/errors";
+import { FailedToFreeYogaNode, ParentTrackedNodeDestroyed, TrackedNodeDestroyed } from "@opentuee/ui/src/lib/errors";
 import { Console, Effect } from "effect";
 import Yoga, { type Config, type Node as YogaNode } from "yoga-layout";
 
@@ -32,7 +32,7 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
     Effect.gen(this, function* () {
       if (this._destroyed) {
         // Fatal: Something is very wrong (debug why we are trying to parse width after destruction)
-        return yield* Effect.fail(new Error("Node is destroyed"));
+        return yield* Effect.fail(new TrackedNodeDestroyed());
       }
       if (typeof width === "number" || width === "auto") {
         return width;
@@ -42,7 +42,7 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
       }
       if (this.parent._destroyed) {
         // Fatal: Something is very wrong (debug why we are trying to parse width after destruction)
-        return yield* Effect.fail(new Error("Parent node is destroyed"));
+        return yield* Effect.fail(new ParentTrackedNodeDestroyed());
       }
       return Math.floor((this.parent.yogaNode.getComputedWidth() * parseInt(width)) / 100);
     });
@@ -51,7 +51,7 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
     Effect.gen(this, function* () {
       if (this._destroyed) {
         // Fatal: Something is very wrong (debug why we are trying to parse height after destruction)
-        return yield* Effect.fail(new Error("Node is destroyed"));
+        return yield* Effect.fail(new TrackedNodeDestroyed());
       }
       if (typeof height === "number" || height === "auto") {
         return height;
@@ -61,7 +61,7 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
       }
       if (this.parent._destroyed) {
         // Fatal: Something is very wrong (debug why we are trying to parse height after destruction)
-        return yield* Effect.fail(new Error("Parent node is destroyed"));
+        return yield* Effect.fail(new ParentTrackedNodeDestroyed());
       }
       return Math.floor((this.parent.yogaNode.getComputedHeight() * parseInt(height)) / 100);
     });

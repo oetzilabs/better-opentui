@@ -64,6 +64,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       yield* Ref.set(context, ctx);
       const type = "root" as const;
       const id = yield* counter.getNext();
+      const visible = yield* Ref.make(true);
       const selectable = yield* Ref.make(false);
       const elementsHolder = yield* Ref.make<Element[]>([]);
 
@@ -96,7 +97,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         const elements = yield* Ref.get(elementsHolder);
         return elements.find((e) => e.id === id);
       });
-      const visible = yield* Ref.make(true);
+
       const setVisible = Effect.fn(function* (value: boolean) {
         yield* Ref.set(visible, value);
       });
