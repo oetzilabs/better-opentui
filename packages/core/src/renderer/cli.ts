@@ -25,6 +25,7 @@ import {
 } from "effect";
 import type { NoSuchElementException } from "effect/Cause";
 import {
+  ClearFromCursor,
   isExitOnCtrlC,
   makeRoomForRenderer,
   moveCursor,
@@ -75,6 +76,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const _isShuttingDown = yield* Ref.make(false);
     const _isDestroyed = yield* Ref.make(false);
     const _isWaitingForPixelResolution = yield* Ref.make(false);
+
     const renderFiber = yield* Ref.make<Fiber.RuntimeFiber<number, Error> | null>(null);
     const memorySnapshotTimer = yield* Ref.make<Fiber.RuntimeFiber<number, Error> | null>(null);
     const lastMemorySnapshot = yield* Ref.make<{ heapUsed: number; heapTotal: number; arrayBuffers: number }>({
@@ -82,12 +84,14 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       heapTotal: 0,
       arrayBuffers: 0,
     });
+
     const _splitHeight = yield* Ref.make(0);
     const _width = yield* Ref.make(config.width);
     const _height = yield* Ref.make(config.height);
     const _terminalWidth = yield* Ref.make(0);
     const _terminalHeight = yield* Ref.make(0);
     const _renderOffset = yield* Ref.make(0);
+
     const _useAlternateScreen = yield* Ref.make(true);
     const _useMouse = yield* Ref.make(true);
 
@@ -96,6 +100,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const lastFpsTime = yield* Ref.make(0);
     const currentFps = yield* Ref.make(0);
     const targetFrameTime = yield* Ref.make(0);
+
     const mouseParser = yield* MouseParser;
     const _enableMouseMovement = yield* Ref.make(config.enableMouseMovement);
 
@@ -146,7 +151,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const _useConsole = yield* Ref.make(false);
     const _resolution = yield* Ref.make<PixelResolution | null>(null);
-    const _useThread = yield* Ref.make(false);
+    const _useThread = yield* Ref.make(config.useThread);
+    yield* lib.setUseThread(renderer, config.useThread);
 
     const backgroundColor = yield* Ref.make<Colors.Input>(Colors.Black.make("#000000"));
     const terminalInputFork = yield* Ref.make<Fiber.RuntimeFiber<
@@ -154,33 +160,11 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       RendererFailedToCheckHit | NoSuchElementException
     > | null>(null);
     const resizeFork = yield* Ref.make<Fiber.RuntimeFiber<never, Error | NoSuchElementException> | null>(null);
+    const signalWatcherFork = yield* Ref.make<Fiber.RuntimeFiber<never, Error | NoSuchElementException> | null>(null);
 
     const stdin = process.stdin;
     const stdout = process.stdout;
     const realStdoutWrite = stdout.write;
-
-    const rlRef = yield* RcRef.make({
-      acquire: Effect.acquireRelease(
-        Effect.sync(() => {
-          const rl = readline.createInterface({ input: stdin, escapeCodeTimeout: 50 });
-          readline.emitKeypressEvents(stdin, rl);
-
-          if (stdin.isTTY) {
-            stdin.setRawMode(true);
-          }
-          stdin.resume();
-          stdin.setEncoding("utf8");
-          return rl;
-        }),
-        (rl) =>
-          Effect.sync(() => {
-            if (stdin.isTTY) {
-              stdin.setRawMode(false);
-            }
-            rl.close();
-          })
-      ),
-    });
 
     const root = yield* elements.root({
       width: Effect.fn(function* () {
@@ -313,6 +297,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       }
 
       const readResize = Effect.gen(function* () {
+        yield* Effect.log("reading resize");
         const mailbox = yield* Mailbox.make<{ width: number; height: number }>();
 
         const handleResizeEvt = () => {
@@ -341,16 +326,19 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       );
       yield* Ref.set(resizeFork, rsf);
 
-      const shouldQuit = (data: Buffer) => {
-        return isExitOnCtrlC(data.toString());
-      };
+      if (stdin.setRawMode) {
+        stdin.setRawMode(true);
+        yield* Effect.log("Enabled raw mode");
+      }
+      stdin.resume();
+      stdin.setEncoding("utf8");
 
       const readData = Effect.gen(function* () {
-        yield* RcRef.get(rlRef);
+        yield* Effect.log("reading data");
         const mailbox = yield* Mailbox.make<Buffer>();
         const handleData = (data: Buffer) => {
           mailbox.unsafeOffer(data);
-          if (shouldQuit(data)) {
+          if (isExitOnCtrlC(data.toString())) {
             mailbox.unsafeDone(Exit.void);
           }
         };
@@ -370,8 +358,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       const mb = yield* readData;
       const f = yield* mb.take.pipe(
-        Effect.tap((data) =>
-          Effect.gen(function* () {
+        Effect.tap(
+          Effect.fn(function* (data) {
             const str = data.toString();
             const wfpr = yield* Ref.get(_isWaitingForPixelResolution);
             if (wfpr && /\x1b\[4;\d+;\d+t/.test(str)) {
@@ -386,6 +374,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 return;
               }
             }
+            const um = yield* getUseMouse();
             if (um) {
               const hmd = yield* handleMouseData(data);
               if (hmd) {
@@ -399,6 +388,38 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         Effect.uninterruptible
       );
       yield* Ref.set(terminalInputFork, f);
+
+      const signals = ["SIGINT", "SIGTERM", "SIGQUIT", "SIGABRT", "SIGHUP", "SIGWINCH"] as const;
+
+      const readSignals = Effect.gen(function* () {
+        yield* Effect.log("reading signal");
+        const mailbox = yield* Mailbox.make<NodeJS.Signals>();
+
+        const handlers = signals.map((signal) => {
+          const handler = () => mailbox.unsafeOffer(signal);
+          process.on(signal, handler);
+          return [signal, handler] as const;
+        });
+
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            for (const [signal, handler] of handlers) {
+              process.off(signal, handler);
+            }
+          })
+        );
+
+        return mailbox as Mailbox.ReadonlyMailbox<NodeJS.Signals>;
+      });
+
+      const signalmb = yield* readSignals;
+      const signalFork = yield* signalmb.take.pipe(
+        Effect.tap((signal) => Effect.sync(() => process.exit(0))),
+        Effect.forever,
+        Effect.forkScoped,
+        Effect.uninterruptible
+      );
+      yield* Ref.set(signalWatcherFork, signalFork);
 
       global.requestAnimationFrame = (callback: FrameRequestCallback) => {
         const id = animationFrameId++;
@@ -424,6 +445,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         const h = yield* Ref.get(_height);
         yield* writeOut(yield* makeRoomForRenderer(h - 1));
       }
+      yield* Effect.sleep(Duration.seconds(5));
+      yield* clearTerminal();
       yield* setCursorPosition(0, 0, false);
     });
 
@@ -789,6 +812,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       if (uas) {
         yield* writeOut(SwitchToMainScreen.make("\u001B[?1049l"));
       }
+      if (stdin.isTTY) {
+        stdin.setRawMode(false);
+      }
     });
 
     const destroy = Effect.fn(function* () {
@@ -823,13 +849,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const loop = Effect.fn(function* () {
       const r = yield* Ref.get(rendering);
       if (r) return;
-      // this.rendering = true;
       yield* Ref.set(rendering, true);
-      // We dont have to interrupt it, since the `Schedule.fixed` will run the next loop immediately to prevent "pile-ups," ensuring that the schedule remains consistent without overlapping executions. (from the docs)
-      // if (this.renderFiber) {
-      //   yield* Fiber.interrupt(this.renderFiber);
-      //   this.renderFiber = null;
-      // }
 
       const now = Date.now();
       const lt = yield* Ref.get(lastTime);
@@ -839,7 +859,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       // this.lastTime = now;
       yield* Ref.set(lastTime, now);
 
-      // this.frameCount++;
       const lfc = yield* Ref.updateAndGet(frameCount, (fc) => fc + 1);
       const lfpst = yield* Ref.get(lastFpsTime);
       if (now - lfpst >= 1000) {
@@ -927,10 +946,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const collectStatSample = Effect.fn(function* (overallFrameTime: number) {
-      // this.frameTimes.push(frameTime);
-      // if (this.frameTimes.length > this.maxStatSamples) {
-      //   this.frameTimes.shift();
-      // }
       const mss = yield* Ref.get(maxStatSamples);
       yield* Ref.update(frameTimes, (frameTimes) => {
         frameTimes.push(overallFrameTime);
@@ -964,8 +979,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       yield* currentSelection.setSelecting(true);
       yield* currentSelection.setAnchor({ x, y });
       yield* currentSelection.setFocus({ x, y });
-
-      // this.currentSelection = new Selection({ x, y }, { x, y });
 
       yield* currentSelection.setAnchor({ x, y });
       yield* currentSelection.setFocus({ x, y });

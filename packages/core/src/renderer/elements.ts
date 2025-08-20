@@ -61,6 +61,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
     const root = Effect.fn(function* (ctx: RenderContextInterface) {
       yield* Ref.set(context, ctx);
+      const type = "root" as const;
       const id = yield* counter.getNext();
       const selectable = yield* Ref.make(false);
       const elementsHolder = yield* Ref.make<Element[]>([]);
@@ -97,6 +98,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
       return {
         id,
+        type,
         render,
         resize,
         parent,

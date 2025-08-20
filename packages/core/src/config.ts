@@ -9,7 +9,7 @@ export class OpenTuiConfig extends Effect.Service<OpenTuiConfig>()("OpenTuiConfi
       height: 24,
       targetFps: yield* Config.number("OPENTUI_TARGET_FPS").pipe(Config.withDefault(60)),
       exitOnCtrlC: yield* Config.boolean("OPENTUI_EXIT_ON_CTRL_C").pipe(Config.withDefault(true)),
-      useThread: yield* Config.boolean("OPENTUI_USE_THREAD").pipe(Config.withDefault(false)),
+      useThread: yield* Config.boolean("OPENTUI_USE_THREAD").pipe(Config.withDefault(process.platform !== "linux")),
       memorySnapshotInterval: yield* Config.number("OPENTUI_MEMORY_SNAPSHOT_INTERVAL").pipe(Config.withDefault(1000)),
       debugOverlay: {
         enabled: false,

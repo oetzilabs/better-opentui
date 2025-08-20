@@ -8,6 +8,8 @@ const program = Effect.gen(function* () {
   const cli = yield* CliRenderer;
   yield* cli.setupTerminal();
   yield* cli.setBackgroundColor(Colors.Black.make("#000000"));
+  yield* cli.start();
+  yield* cli.needsUpdate();
 
   const parentContainer = yield* cli.createElement("group");
   const text = yield* cli.createElement("text", "Hello World", { left: 2, top: 2 });
@@ -16,7 +18,6 @@ const program = Effect.gen(function* () {
   yield* parentContainer.add(text);
   yield* parentContainer.add(text2);
   yield* cli.add(parentContainer);
-  yield* cli.start();
   const counter = yield* Ref.make(0);
 
   const fiber = yield* Effect.forkScoped(
@@ -33,7 +34,7 @@ const program = Effect.gen(function* () {
       yield* cli.destroy();
     }).pipe(Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause)))),
   );
-
+  yield* cli.needsUpdate();
   return yield* Effect.never;
 }).pipe(
   Effect.provide([CliRendererLive]),
