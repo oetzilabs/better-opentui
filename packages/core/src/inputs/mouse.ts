@@ -104,7 +104,7 @@ export class MouseParser extends Effect.Service<MouseParser>()("@opentuee/mouse-
       });
     });
     const parse = Effect.fn(function* (input: Buffer | string) {
-      const str = typeof input === "string" ? input : input.toString();
+      const str = typeof input === "string" ? input : input.toString("utf8");
 
       // SGR mouse mode
       const sgrMatch = str.match(sgrRe);

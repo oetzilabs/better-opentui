@@ -4,6 +4,7 @@ import type { OptimizedBuffer } from "../buffer/optimized";
 import { TextBuffer } from "../buffer/text";
 import * as Colors from "../colors";
 import type { RendererFailedToAddToHitGrid, RendererFailedToDrawTextBuffer } from "../errors";
+import type { KeyboardEvent } from "../events/keyboard";
 import type { MouseEvent } from "../events/mouse";
 import type { SelectionState } from "../types";
 import { Library, LibraryLive } from "../zig";
@@ -95,6 +96,34 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         const elements = yield* Ref.get(elementsHolder);
         return elements.find((e) => e.id === id);
       });
+      const visible = yield* Ref.make(true);
+      const setVisible = Effect.fn(function* (value: boolean) {
+        yield* Ref.set(visible, value);
+      });
+
+      const shouldStartSelection = Effect.fn(function* (x: number, y: number) {
+        const elements = yield* Ref.get(elementsHolder);
+        return yield* Effect.all(
+          elements.map((element) => Effect.suspend(() => element.shouldStartSelection(x, y))),
+        ).pipe(Effect.map((shouldStarts) => shouldStarts.some((shouldStart) => shouldStart)));
+      });
+
+      const onSelectionChanged = Effect.fn(function* (selection: SelectionState | null, width: number, height: number) {
+        const elements = yield* Ref.get(elementsHolder);
+        return yield* Effect.all(
+          elements.map((element) => Effect.suspend(() => element.onSelectionChanged(selection, width, height))),
+        ).pipe(Effect.map((changeds) => changeds.some((changed) => changed)));
+      });
+
+      const processMouseEvent = Effect.fn(function* (event: MouseEvent) {
+        const elements = yield* Ref.get(elementsHolder);
+        yield* Effect.all(elements.map((element) => Effect.suspend(() => element.processMouseEvent(event))));
+      });
+
+      const processKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
+        const elements = yield* Ref.get(elementsHolder);
+        yield* Effect.all(elements.map((element) => Effect.suspend(() => element.processKeyboardEvent(event))));
+      });
 
       return {
         id,
@@ -105,6 +134,12 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         getRenderable,
         add,
         selectable,
+        visible,
+        setVisible,
+        shouldStartSelection,
+        onSelectionChanged,
+        processMouseEvent,
+        processKeyboardEvent,
       } as const;
     });
 
@@ -138,6 +173,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         });
       });
       const onMouseEvent = Effect.fn(function* (event: MouseEvent) {});
+      const onKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {});
 
       const processMouseEvent = Effect.fn(function* (event: MouseEvent) {
         yield* onMouseEvent(event);
@@ -159,6 +195,14 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         yield* Ref.set(groupElements, [value]);
       });
 
+      const processKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
+        yield* onKeyboardEvent(event);
+        const p = yield* Ref.get(parent);
+        if (p && !event.defaultPrevented) {
+          yield* Effect.suspend(() => p.processKeyboardEvent(event));
+        }
+      });
+
       return {
         id,
         type,
@@ -171,6 +215,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         shouldStartSelection,
         onSelectionChanged,
         processMouseEvent,
+        processKeyboardEvent,
         setContent,
       };
     });
@@ -218,12 +263,21 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       });
 
       const onMouseEvent = Effect.fn(function* (event: MouseEvent) {});
+      const onKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {});
 
       const processMouseEvent = Effect.fn(function* (event: MouseEvent) {
         yield* onMouseEvent(event);
         const p = yield* Ref.get(parent);
         if (p && !event.defaultPrevented) {
           yield* Effect.suspend(() => p.processMouseEvent(event));
+        }
+      });
+
+      const processKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
+        yield* onKeyboardEvent(event);
+        const p = yield* Ref.get(parent);
+        if (p && !event.defaultPrevented) {
+          yield* Effect.suspend(() => p.processKeyboardEvent(event));
         }
       });
 
@@ -355,6 +409,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         shouldStartSelection,
         onSelectionChanged,
         processMouseEvent,
+        processKeyboardEvent,
         setContent,
       };
     });
@@ -370,7 +425,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
 export const ElementsLive = Elements.Default;
 
-export type Methods = "group" | "text";
+export type Methods = "group" | "text" | "root";
 export type MethodParameters = {
   [key in Methods]: Parameters<Elements[key]>;
 };
@@ -387,6 +442,7 @@ export type Element = {
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
   onSelectionChanged: (selection: SelectionState | null, width: number, height: number) => Effect.Effect<boolean>;
   processMouseEvent: (event: MouseEvent) => Effect.Effect<void>;
+  processKeyboardEvent: (event: KeyboardEvent) => Effect.Effect<void>;
 };
 //  & (
 //   | {

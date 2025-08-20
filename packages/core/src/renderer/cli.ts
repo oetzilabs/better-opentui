@@ -6,6 +6,7 @@ import {
   Channel,
   Chunk,
   Console,
+  Deferred,
   Duration,
   Effect,
   Exit,
@@ -44,7 +45,9 @@ import * as Colors from "../colors";
 import { OpenTuiConfig, OpenTuiConfigLive } from "../config";
 import type { Style } from "../cursor-style";
 import type { RendererFailedToCheckHit } from "../errors";
+import { KeyboardEvent } from "../events/keyboard";
 import { MouseEvent } from "../events/mouse";
+import { ParsedKey, parse as parseKey } from "../inputs/keyboard";
 import {
   isLeftMouseButton,
   isMouseDown,
@@ -63,6 +66,19 @@ import { Library } from "../zig";
 import { Elements, ElementsLive, type Element, type MethodParameters } from "./elements";
 import { Selection, SelectionLive } from "./selection";
 import type { PixelResolution } from "./utils";
+
+export type ShutdownReason =
+  | {
+      type: "exit";
+      code: number;
+    }
+  | {
+      type: "ctrl-c";
+    }
+  | {
+      type: "signal";
+      signal: NodeJS.Signals;
+    };
 
 let animationFrameId = 0;
 
@@ -157,7 +173,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const backgroundColor = yield* Ref.make<Colors.Input>(Colors.Black.make("#000000"));
     const terminalInputFork = yield* Ref.make<Fiber.RuntimeFiber<
       never,
-      RendererFailedToCheckHit | NoSuchElementException
+      Error | RendererFailedToCheckHit | NoSuchElementException
     > | null>(null);
     const resizeFork = yield* Ref.make<Fiber.RuntimeFiber<never, Error | NoSuchElementException> | null>(null);
     const signalWatcherFork = yield* Ref.make<Fiber.RuntimeFiber<never, Error | NoSuchElementException> | null>(null);
@@ -286,7 +302,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const setTerminalSize = Effect.fn(function* () {});
 
-    const setupTerminal = Effect.fn(function* () {
+    const setupTerminal = Effect.fn(function* (shutdown: Deferred.Deferred<ShutdownReason, never>) {
       yield* writeOut(SaveCursorState.make("\u001B[s"));
 
       const um = yield* getUseMouse();
@@ -297,7 +313,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       }
 
       const readResize = Effect.gen(function* () {
-        yield* Effect.log("reading resize");
         const mailbox = yield* Mailbox.make<{ width: number; height: number }>();
 
         const handleResizeEvt = () => {
@@ -309,7 +324,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => {
             process.off("SIGWINCH", handleResizeEvt);
-          })
+          }),
         );
 
         process.on("SIGWINCH", handleResizeEvt);
@@ -322,19 +337,16 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         Effect.tap(({ width, height }) => handleResize(width, height)),
         Effect.forever,
         Effect.forkScoped,
-        Effect.uninterruptible
       );
       yield* Ref.set(resizeFork, rsf);
 
       if (stdin.setRawMode) {
         stdin.setRawMode(true);
-        yield* Effect.log("Enabled raw mode");
       }
       stdin.resume();
       stdin.setEncoding("utf8");
 
       const readData = Effect.gen(function* () {
-        yield* Effect.log("reading data");
         const mailbox = yield* Mailbox.make<Buffer>();
         const handleData = (data: Buffer) => {
           mailbox.unsafeOffer(data);
@@ -349,7 +361,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           Effect.sync(() => {
             stdin.off("data", handleData);
             stdin.off("end", handleEnd);
-          })
+          }),
         );
         stdin.on("data", handleData);
         stdin.on("end", handleEnd);
@@ -360,6 +372,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const f = yield* mb.take.pipe(
         Effect.tap(
           Effect.fn(function* (data) {
+            const ir = yield* Ref.get(_isRunning);
+            if (!ir) return;
             const str = data.toString();
             const wfpr = yield* Ref.get(_isWaitingForPixelResolution);
             if (wfpr && /\x1b\[4;\d+;\d+t/.test(str)) {
@@ -381,18 +395,30 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 return;
               }
             }
-          })
+
+            const parsedKey = yield* parseKey(data);
+            yield* Effect.log("Parsed key", JSON.stringify(parsedKey, null, 2));
+            if (isExitOnCtrlC(parsedKey.raw)) {
+              yield* Effect.log("Ctrl+C", "WE HAVE TO EXIT".repeat(10));
+              return yield* Deferred.succeed(shutdown, {
+                type: "ctrl-c",
+              });
+            }
+            if (parsedKey.name !== "unknown") {
+              yield* handleKeyboardData(parsedKey);
+            } else {
+              yield* Effect.log("Unknown key: " + str);
+            }
+          }),
         ),
         Effect.forever,
         Effect.forkScoped,
-        Effect.uninterruptible
       );
       yield* Ref.set(terminalInputFork, f);
 
       const signals = ["SIGINT", "SIGTERM", "SIGQUIT", "SIGABRT", "SIGHUP", "SIGWINCH"] as const;
 
       const readSignals = Effect.gen(function* () {
-        yield* Effect.log("reading signal");
         const mailbox = yield* Mailbox.make<NodeJS.Signals>();
 
         const handlers = signals.map((signal) => {
@@ -406,7 +432,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             for (const [signal, handler] of handlers) {
               process.off(signal, handler);
             }
-          })
+          }),
         );
 
         return mailbox as Mailbox.ReadonlyMailbox<NodeJS.Signals>;
@@ -414,10 +440,16 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       const signalmb = yield* readSignals;
       const signalFork = yield* signalmb.take.pipe(
-        Effect.tap((signal) => Effect.sync(() => process.exit(0))),
+        Effect.tap(
+          Effect.fn(function* (signal) {
+            return yield* Deferred.succeed(shutdown, {
+              type: "signal",
+              signal,
+            });
+          }),
+        ),
         Effect.forever,
         Effect.forkScoped,
-        Effect.uninterruptible
       );
       yield* Ref.set(signalWatcherFork, signalFork);
 
@@ -445,8 +477,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         const h = yield* Ref.get(_height);
         yield* writeOut(yield* makeRoomForRenderer(h - 1));
       }
-      yield* Effect.sleep(Duration.seconds(5));
-      yield* clearTerminal();
       yield* setCursorPosition(0, 0, false);
     });
 
@@ -552,6 +582,18 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       }
 
       return false;
+    });
+
+    const handleKeyboardData = Effect.fn(function* (parsedKey: ParsedKey) {
+      const keyboardEvent = new KeyboardEvent(root, {
+        ...parsedKey,
+        source: root,
+        type: "keydown",
+      });
+
+      yield* root.processKeyboardEvent(keyboardEvent);
+
+      return true;
     });
 
     const takeMemorySnapshot = Effect.fn(function* () {
@@ -728,7 +770,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const addPostProcessFn = Effect.fn(function* (
-      processFn: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void>
+      processFn: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void>,
     ) {
       yield* Ref.update(postProcessFns, (fns) => {
         fns.push(processFn);
@@ -737,7 +779,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const removePostProcessFn = Effect.fn(function* (
-      processFn: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void>
+      processFn: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void>,
     ) {
       yield* Ref.update(postProcessFns, (fns) => fns.filter((fn) => fn !== processFn));
     });
@@ -808,13 +850,14 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       }
       yield* writeOut(ResetCursorColor.make("\u001B]12;default\u0007"));
       yield* writeOut(ShowCursor.make("\u001B[?25h"));
+      yield* writeOut(ClearFromCursor.make("\u001B[J"));
+      yield* writeOut(yield* moveCursorAndClear(0, 0));
       const uas = yield* Ref.get(_useAlternateScreen);
       if (uas) {
         yield* writeOut(SwitchToMainScreen.make("\u001B[?1049l"));
       }
-      if (stdin.isTTY) {
-        stdin.setRawMode(false);
-      }
+      stdin.setRawMode(false);
+      console.clear();
     });
 
     const destroy = Effect.fn(function* () {
@@ -839,8 +882,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const fiber = yield* Effect.forkScoped(
         loop().pipe(
           // We need to repeat the loop to keep the fiber alive
-          Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps)))
-        )
+          Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps))),
+        ),
       );
 
       yield* Ref.set(renderFiber, fiber);
@@ -881,7 +924,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const animationRequestStart = performance.now();
       yield* Effect.all(
         frameRequests.map((callback) => Effect.sync(() => callback(deltaTime))),
-        { concurrency: "unbounded", concurrentFinalizers: true }
+        { concurrency: "unbounded", concurrentFinalizers: true },
       );
       const animationRequestEnd = performance.now();
       const animationRequestTime = animationRequestEnd - animationRequestStart;
@@ -890,7 +933,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const fcbs = yield* Ref.get(frameCallbacks);
       yield* Effect.all(
         fcbs.map((frameCallback) => frameCallback(deltaTime)),
-        { concurrency: "unbounded", concurrentFinalizers: true }
+        { concurrency: "unbounded", concurrentFinalizers: true },
       );
 
       const end = performance.now();
@@ -908,7 +951,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       yield* Effect.all(
         ppfns.map((postProcessFn) => postProcessFn(buf.next!, deltaTime)),
-        { concurrency: "unbounded", concurrentFinalizers: true }
+        { concurrency: "unbounded", concurrentFinalizers: true },
       );
 
       // yield* this._console.renderToBuffer(this.nextRenderBuffer!);

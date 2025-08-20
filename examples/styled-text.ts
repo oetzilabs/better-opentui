@@ -1,15 +1,22 @@
 import { BunContext, BunRuntime } from "@effect/platform-bun";
 import * as Colors from "@opentuee/core/src/colors";
-import { CliRenderer, CliRendererLive } from "@opentuee/core/src/renderer/cli";
+import { CliRenderer, CliRendererLive, type ShutdownReason } from "@opentuee/core/src/renderer/cli";
 import { LibraryLive } from "@opentuee/core/src/zig";
-import { Cause, Console, Duration, Effect, Fiber, Logger, Ref, Schedule } from "effect";
+import { Cause, Console, Deferred, Duration, Effect, Fiber, Logger, Ref, Schedule } from "effect";
 
 const program = Effect.gen(function* () {
+  const shutdownSignal = yield* Deferred.make<ShutdownReason, never>();
   const cli = yield* CliRenderer;
-  yield* cli.setupTerminal();
+  yield* Effect.addFinalizer((exit) =>
+    Effect.gen(function* () {
+      yield* cli.stop();
+      yield* cli.destroy();
+      process.exit();
+    }).pipe(Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause)))),
+  );
+  yield* cli.setupTerminal(shutdownSignal);
   yield* cli.setBackgroundColor(Colors.Black.make("#000000"));
   yield* cli.start();
-  yield* cli.needsUpdate();
 
   const parentContainer = yield* cli.createElement("group");
   const text = yield* cli.createElement("text", "Hello World", { left: 2, top: 2 });
@@ -18,24 +25,8 @@ const program = Effect.gen(function* () {
   yield* parentContainer.add(text);
   yield* parentContainer.add(text2);
   yield* cli.add(parentContainer);
-  const counter = yield* Ref.make(0);
 
-  const fiber = yield* Effect.forkScoped(
-    Effect.gen(function* () {
-      const c = yield* Ref.updateAndGet(counter, (c) => c + 1);
-      yield* text2.setContent(`Hello World ${c}`);
-    }).pipe(Effect.repeat(Schedule.fixed(Duration.millis(1000)))),
-  );
-
-  yield* Effect.addFinalizer((exit) =>
-    Effect.gen(function* () {
-      yield* Fiber.interrupt(fiber);
-      yield* cli.stop();
-      yield* cli.destroy();
-    }).pipe(Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause)))),
-  );
-  yield* cli.needsUpdate();
-  return yield* Effect.never;
+  return yield* Deferred.await(shutdownSignal);
 }).pipe(
   Effect.provide([CliRendererLive]),
   Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))),
