@@ -16,7 +16,7 @@ import {
   SwitchToMainScreen,
 } from "../ansi";
 import { OptimizedBuffer } from "../buffer/optimized";
-import * as Colors from "../colors";
+import { Colors, Input } from "../colors";
 import { OpenTuiConfig, OpenTuiConfigLive } from "../config";
 import type { Style } from "../cursor-style";
 import { WritingToBufferError, type RendererFailedToCheckHit } from "../errors";
@@ -145,7 +145,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const _useThread = yield* Ref.make(config.useThread);
     yield* lib.setUseThread(renderer, config.useThread);
 
-    const backgroundColor = yield* Ref.make<Colors.Input>(Colors.Black.make("#000000"));
+    const backgroundColor = yield* Ref.make<Input>(Colors.Black);
     const terminalInputFork = yield* Ref.make<Fiber.RuntimeFiber<
       never,
       Error | RendererFailedToCheckHit | NoSuchElementException
@@ -655,7 +655,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         yield* Ref.set(_width, width);
 
         yield* Ref.set(_height, sh);
-        const c = yield* parseColor(Colors.Black.make("#000000"));
+        const c = yield* parseColor(Colors.Black);
         const buf = yield* Ref.get(buffers);
         if (!buf.current) return;
         yield* buf.current.clearLocal(c, "\u0a00");
@@ -680,7 +680,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       yield* needsUpdate();
     });
 
-    const setBackgroundColor = Effect.fn(function* (color: Colors.Input) {
+    const setBackgroundColor = Effect.fn(function* (color: Input) {
       const parsedColor = yield* parseColor(color);
       yield* lib.setBackgroundColor(renderer, parsedColor);
       yield* Ref.set(backgroundColor, color);
@@ -725,7 +725,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       yield* lib.setCursorPosition(x, y, visible);
     });
 
-    const setCursorStyle = Effect.fn(function* (style: Style, blinking: boolean = false, color?: Colors.Input) {
+    const setCursorStyle = Effect.fn(function* (style: Style, blinking: boolean = false, color?: Input) {
       yield* lib.setCursorStyle(style, blinking);
       if (color) {
         const parsedColor = yield* parseColor(color);
@@ -733,7 +733,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       }
     });
 
-    const setCursorColor = Effect.fn(function* (color: Colors.Input) {
+    const setCursorColor = Effect.fn(function* (color: Input) {
       const parsedColor = yield* parseColor(color);
       yield* lib.setCursorColor(parsedColor);
     });

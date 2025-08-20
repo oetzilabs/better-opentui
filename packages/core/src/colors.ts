@@ -135,3 +135,36 @@ export const Input = Schema.Union(
 );
 
 export type Input = typeof Input.Type;
+
+export const Colors = {
+  Custom: (color: `#${string}`) => Custom.make(color),
+  Transparent: Transparent.make("transparent"),
+  Black: Black.make("#000000"),
+  White: White.make("#FFFFFF"),
+  Red: Red.make("#FF0000"),
+  Green: Green.make("#008000"),
+  Blue: Blue.make("#0000FF"),
+  Yellow: Yellow.make("#FFFF00"),
+  Cyan: Cyan.make("#00FFFF"),
+  Magenta: Magenta.make("#FF00FF"),
+  Silver: Silver.make("#C0C0C0"),
+  Gray: Gray.make("#808080"),
+  Grey: Grey.make("#808080"),
+  Maroon: Maroon.make("#800000"),
+  Olive: Olive.make("#808000"),
+  Lime: Lime.make("#00FF00"),
+  Aqua: Aqua.make("#00FFFF"),
+  Teal: Teal.make("#008080"),
+  Navy: Navy.make("#000080"),
+  Fuchsia: Fuchsia.make("#FF00FF"),
+  Purple: Purple.make("#800080"),
+  Orange: Orange.make("#FFA500"),
+  BrightBlack: BrightBlack.make("#666666"),
+  BrightRed: BrightRed.make("#FF6666"),
+  BrightGreen: BrightGreen.make("#66FF66"),
+  BrightBlue: BrightBlue.make("#6666FF"),
+  BrightYellow: BrightYellow.make("#FFFF66"),
+  BrightCyan: BrightCyan.make("#66FFFF"),
+  BrightMagenta: BrightMagenta.make("#FF66FF"),
+  BrightWhite: BrightWhite.make("#FFFFFF"),
+};

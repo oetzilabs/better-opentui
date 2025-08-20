@@ -1,4 +1,4 @@
-import * as Colors from "@opentuee/core/src/colors";
+import { Input } from "@opentuee/core/src/colors";
 import { Effect, Schema } from "effect";
 
 export const BorderSidesConfig = Schema.Struct({
@@ -105,9 +105,9 @@ export const BorderDrawOptions = Schema.Struct({
   height: Schema.Number,
   borderStyle: BorderStyle,
   border: Schema.Union(Schema.Boolean, Schema.Array(BorderSides).pipe(Schema.mutable)),
-  borderColor: Colors.Input,
+  borderColor: Input,
   customBorderChars: Schema.optional(BorderCharactersSchema),
-  backgroundColor: Colors.Input,
+  backgroundColor: Input,
   title: Schema.optional(Schema.String),
   titleAlignment: Schema.optional(
     Schema.Union(Schema.Literal("left"), Schema.Literal("center"), Schema.Literal("right")),

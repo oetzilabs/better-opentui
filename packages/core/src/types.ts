@@ -1,8 +1,8 @@
 // https://github.com/sst/opentui/blob/main/src/types.ts
 // converted to Effect
 
-import { Context, Effect, Layer, Ref, Schema } from "effect";
-import * as Colors from "./colors";
+import { Effect, Ref, Schema } from "effect";
+import { type Input } from "./colors";
 import { hexToRgb, rgbToHex } from "./utils";
 
 export const DebugTopLeft = Schema.Literal(0).pipe(Schema.brand("DebugTopLeft"));
@@ -45,7 +45,7 @@ export class RGBAClass {
     return new RGBAClass(new Float32Array([r / 255, g / 255, b / 255, a / 255]));
   }
 
-  static fromHex(hex: Colors.Input) {
+  static fromHex(hex: Input) {
     return hexToRgb(hex);
   }
 
@@ -115,7 +115,7 @@ export class RGBA {
     return new RGBA(new Float32Array([r / 255, g / 255, b / 255, a / 255]));
   }
 
-  static fromHex = (hex: Colors.Input) =>
+  static fromHex = (hex: Input) =>
     Effect.gen(function* () {
       return yield* hexToRgb(hex);
     });

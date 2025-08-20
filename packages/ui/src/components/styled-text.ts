@@ -1,12 +1,12 @@
 import { isTextChunk, TextChunkSchema, type TextChunk } from "@opentuee/core/src/buffer/text";
-import * as Colors from "@opentuee/core/src/colors";
+import { Colors, type Input } from "@opentuee/core/src/colors";
 import { RGBA, type RGBAClass } from "@opentuee/core/src/types";
 import { createTextAttributes } from "@opentuee/core/src/utils";
 import { Effect } from "effect";
 
 export interface StyleAttrs {
-  fg?: Colors.Input;
-  bg?: Colors.Input;
+  fg?: Input;
+  bg?: Input;
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
@@ -165,33 +165,33 @@ export function t(strings: TemplateStringsArray, ...values: StylableInput[]): St
 }
 
 // Foreground color helpers
-export const black = (input: StylableInput) => applyStyle(input, { fg: Colors.Black.make("#000000") });
-export const red = (input: StylableInput) => applyStyle(input, { fg: Colors.Red.make("#FF0000") });
-export const green = (input: StylableInput) => applyStyle(input, { fg: Colors.Green.make("#008000") });
-export const yellow = (input: StylableInput) => applyStyle(input, { fg: Colors.Yellow.make("#FFFF00") });
-export const blue = (input: StylableInput) => applyStyle(input, { fg: Colors.Blue.make("#0000FF") });
-export const magenta = (input: StylableInput) => applyStyle(input, { fg: Colors.Magenta.make("#FF00FF") });
-export const cyan = (input: StylableInput) => applyStyle(input, { fg: Colors.Cyan.make("#00FFFF") });
-export const white = (input: StylableInput) => applyStyle(input, { fg: Colors.White.make("#FFFFFF") });
+export const black = (input: StylableInput) => applyStyle(input, { fg: Colors.Black });
+export const red = (input: StylableInput) => applyStyle(input, { fg: Colors.Red });
+export const green = (input: StylableInput) => applyStyle(input, { fg: Colors.Green });
+export const yellow = (input: StylableInput) => applyStyle(input, { fg: Colors.Yellow });
+export const blue = (input: StylableInput) => applyStyle(input, { fg: Colors.Blue });
+export const magenta = (input: StylableInput) => applyStyle(input, { fg: Colors.Magenta });
+export const cyan = (input: StylableInput) => applyStyle(input, { fg: Colors.Cyan });
+export const white = (input: StylableInput) => applyStyle(input, { fg: Colors.White });
 
-export const brightBlack = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightBlack.make("#666666") });
-export const brightRed = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightRed.make("#FF6666") });
-export const brightGreen = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightGreen.make("#66FF66") });
-export const brightYellow = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightYellow.make("#FFFF66") });
-export const brightBlue = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightBlue.make("#6666FF") });
-export const brightMagenta = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightMagenta.make("#FF66FF") });
-export const brightCyan = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightCyan.make("#66FFFF") });
-export const brightWhite = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightWhite.make("#FFFFFF") });
+export const brightBlack = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightBlack });
+export const brightRed = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightRed });
+export const brightGreen = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightGreen });
+export const brightYellow = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightYellow });
+export const brightBlue = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightBlue });
+export const brightMagenta = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightMagenta });
+export const brightCyan = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightCyan });
+export const brightWhite = (input: StylableInput) => applyStyle(input, { fg: Colors.BrightWhite });
 
 // Background color helpers
-export const bgBlack = (input: StylableInput) => applyStyle(input, { bg: Colors.Black.make("#000000") });
-export const bgRed = (input: StylableInput) => applyStyle(input, { bg: Colors.Red.make("#FF0000") });
-export const bgGreen = (input: StylableInput) => applyStyle(input, { bg: Colors.Green.make("#008000") });
-export const bgYellow = (input: StylableInput) => applyStyle(input, { bg: Colors.Yellow.make("#FFFF00") });
-export const bgBlue = (input: StylableInput) => applyStyle(input, { bg: Colors.Blue.make("#0000FF") });
-export const bgMagenta = (input: StylableInput) => applyStyle(input, { bg: Colors.Magenta.make("#FF00FF") });
-export const bgCyan = (input: StylableInput) => applyStyle(input, { bg: Colors.Cyan.make("#00FFFF") });
-export const bgWhite = (input: StylableInput) => applyStyle(input, { bg: Colors.White.make("#FFFFFF") });
+export const bgBlack = (input: StylableInput) => applyStyle(input, { bg: Colors.Black });
+export const bgRed = (input: StylableInput) => applyStyle(input, { bg: Colors.Red });
+export const bgGreen = (input: StylableInput) => applyStyle(input, { bg: Colors.Green });
+export const bgYellow = (input: StylableInput) => applyStyle(input, { bg: Colors.Yellow });
+export const bgBlue = (input: StylableInput) => applyStyle(input, { bg: Colors.Blue });
+export const bgMagenta = (input: StylableInput) => applyStyle(input, { bg: Colors.Magenta });
+export const bgCyan = (input: StylableInput) => applyStyle(input, { bg: Colors.Cyan });
+export const bgWhite = (input: StylableInput) => applyStyle(input, { bg: Colors.White });
 
 // Style helpers
 export const bold = (input: StylableInput) => applyStyle(input, { bold: true });
@@ -203,8 +203,8 @@ export const reverse = (input: StylableInput) => applyStyle(input, { reverse: tr
 export const blink = (input: StylableInput) => applyStyle(input, { blink: true });
 
 // Custom color helpers
-export const fg = (color: Colors.Input) => (input: StylableInput) => applyStyle(input, { fg: color });
-export const bg = (color: Colors.Input) => (input: StylableInput) => applyStyle(input, { bg: color });
+export const fg = (color: Input) => (input: StylableInput) => applyStyle(input, { fg: color });
+export const bg = (color: Input) => (input: StylableInput) => applyStyle(input, { bg: color });
 
 const applyStyle = Effect.fn(function* (input: StylableInput, style: StyleAttrs) {
   if (isTextChunk(input)) {

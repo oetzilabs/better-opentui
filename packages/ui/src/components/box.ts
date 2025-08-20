@@ -1,9 +1,7 @@
 import type { OptimizedBuffer } from "@opentuee/core/src/buffer/optimized";
-import * as Colors from "@opentuee/core/src/colors";
-import type { RenderContext } from "@opentuee/core/src/context";
+import { Colors, Input } from "@opentuee/core/src/colors";
 import { Renderable, type RenderableOptions } from "@opentuee/core/src/renderer/renderable-3";
 import { RGBA } from "@opentuee/core/src/types";
-import type { RenderLib } from "@opentuee/core/src/zig";
 import { Effect } from "effect";
 import { Edge } from "yoga-layout";
 import {
@@ -16,15 +14,15 @@ import {
 } from "./border";
 
 export interface BoxOptions extends RenderableOptions {
-  backgroundColor?: Colors.Input;
+  backgroundColor?: Input;
   borderStyle?: BorderStyle;
   border?: boolean | BorderSides[];
-  borderColor?: Colors.Input;
+  borderColor?: Input;
   customBorderChars?: BorderCharacters;
   shouldFill?: boolean;
   title?: string;
   titleAlignment?: "left" | "center" | "right";
-  focusedBorderColor?: Colors.Input;
+  focusedBorderColor?: Input;
 }
 
 export class Box extends Renderable {
@@ -55,9 +53,9 @@ export class Box extends Renderable {
     const baseInitialize = super.initialize();
     return Effect.gen(this, function* () {
       yield* baseInitialize;
-      this._backgroundColor = yield* RGBA.fromHex(this._opts.backgroundColor || Colors.Transparent.make("transparent"));
-      this._borderColor = yield* RGBA.fromHex(this._opts.borderColor || Colors.White.make("#FFFFFF"));
-      this._focusedBorderColor = yield* RGBA.fromHex(this._opts.focusedBorderColor || Colors.Blue.make("#0000FF"));
+      this._backgroundColor = yield* RGBA.fromHex(this._opts.backgroundColor || Colors.Transparent);
+      this._borderColor = yield* RGBA.fromHex(this._opts.borderColor || Colors.White);
+      this._focusedBorderColor = yield* RGBA.fromHex(this._opts.focusedBorderColor || Colors.Blue);
       this.customBorderChars = this._opts.customBorderChars
         ? yield* borderCharsToArray(this._opts.customBorderChars)
         : undefined;
@@ -69,7 +67,7 @@ export class Box extends Renderable {
     return this._backgroundColor!;
   }
 
-  public setBackgroundColor = (value: Colors.Input) =>
+  public setBackgroundColor = (value: Input) =>
     Effect.gen(this, function* () {
       const newColor = yield* RGBA.fromHex(value);
       if (this._backgroundColor !== newColor) {
@@ -112,7 +110,7 @@ export class Box extends Renderable {
       return this._borderColor;
     });
 
-  public setBorderColor = (value: Colors.Input) =>
+  public setBorderColor = (value: Input) =>
     Effect.gen(this, function* () {
       const newColor = yield* RGBA.fromHex(value);
       if (this._borderColor !== newColor) {
@@ -126,7 +124,7 @@ export class Box extends Renderable {
       return this._focusedBorderColor;
     });
 
-  public setFocusedBorderColor = (value: Colors.Input) =>
+  public setFocusedBorderColor = (value: Input) =>
     Effect.gen(this, function* () {
       const newColor = yield* RGBA.fromHex(value);
       if (this._focusedBorderColor !== newColor) {

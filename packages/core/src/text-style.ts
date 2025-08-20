@@ -1,8 +1,8 @@
-import * as Colors from "./colors";
+import { type Input } from "./colors";
 
 export interface StyleAttrs {
-  fg?: Colors.Input;
-  bg?: Colors.Input;
+  fg?: Input;
+  bg?: Input;
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;

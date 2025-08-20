@@ -3,12 +3,12 @@ import os from "os";
 import { FileSystem } from "@effect/platform";
 import type { BorderSides } from "@opentuee/ui/src/components/border";
 import { Brand, Config, Console, Effect, Match, Schema } from "effect";
-import * as Colors from "./colors";
+import { Collection, Custom, Input } from "./colors";
 import { CantParseHexColor, UnsupportedArchitecture, UnsupportedPlatform } from "./errors";
 import * as TextAttributes from "./textattributes";
 import { RGBA, RGBAClass } from "./types";
 
-export const hexToRgb = Effect.fn(function* (hex: Colors.Input) {
+export const hexToRgb = Effect.fn(function* (hex: Input) {
   const isTransparent = hex === "transparent";
   if (isTransparent) {
     return RGBA.fromValues(0, 0, 0, 0);
@@ -75,17 +75,17 @@ export const hsvToRgb = Effect.fn(function* (h: number, s: number, v: number) {
   return RGBAClass.fromValues(r, g, b, 1);
 });
 
-export const parseColor = Effect.fn(function* (color: Colors.Input) {
+export const parseColor = Effect.fn(function* (color: Input) {
   if (color === "transparent") {
     return RGBA.fromValues(0, 0, 0, 0);
   }
-  const isCustom = Schema.is(Colors.Custom);
+  const isCustom = Schema.is(Custom);
   if (isCustom(color)) {
     return yield* hexToRgb(color);
   }
 
-  if (Object.hasOwn(Colors.Collection, color)) {
-    const brand = Brand.nominal<Colors.Input>();
+  if (Object.hasOwn(Collection, color)) {
+    const brand = Brand.nominal<Input>();
     const _color = brand(color);
     return yield* hexToRgb(_color);
   }

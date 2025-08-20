@@ -1,5 +1,5 @@
 import { BunRuntime } from "@effect/platform-bun";
-import * as Colors from "@opentuee/core/src/colors";
+import { Colors } from "@opentuee/core/src/colors";
 import { setup } from "@opentuee/core/src/setup";
 import { Effect } from "effect";
 
@@ -7,7 +7,7 @@ if (import.meta.main) {
   BunRuntime.runMain(
     setup(
       Effect.fn(function* (cli) {
-        yield* cli.setBackgroundColor(Colors.White.make("#FFFFFF"));
+        yield* cli.setBackgroundColor(Colors.White);
         const parentContainer = yield* cli.createElement("group");
         const text = yield* cli.createElement("text", "Hello World", { left: 2, top: 2 });
         const text2 = yield* cli.createElement("text", "Hello World 2", { left: 5, top: 5 });

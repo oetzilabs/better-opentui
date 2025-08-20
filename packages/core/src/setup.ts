@@ -1,5 +1,4 @@
-import { BunContext, BunRuntime } from "@effect/platform-bun";
-import * as Colors from "@opentuee/core/src/colors";
+import { BunContext } from "@effect/platform-bun";
 import * as Errors from "@opentuee/core/src/errors";
 import { CliRenderer, CliRendererLive, type ShutdownReason } from "@opentuee/core/src/renderer/cli";
 import { Library, LibraryLive } from "@opentuee/core/src/zig";

@@ -1,15 +1,14 @@
 import type { TextOptions } from "@opentuee/ui/src/components/text";
-import { Console, Effect, Ref } from "effect";
+import { Effect, Ref } from "effect";
 import type { OptimizedBuffer } from "../buffer/optimized";
 import { TextBuffer } from "../buffer/text";
-import * as Colors from "../colors";
+import { Colors } from "../colors";
 import type { RendererFailedToAddToHitGrid, RendererFailedToDrawTextBuffer } from "../errors";
 import type { KeyboardEvent } from "../events/keyboard";
 import type { MouseEvent } from "../events/mouse";
 import type { SelectionState } from "../types";
 import { Library, LibraryLive } from "../zig";
 import { createTrackedNode } from "./tracknode";
-import { PositionAbsolute } from "./utils/position";
 
 export interface RenderContextInterface {
   addToHitGrid: (
@@ -253,8 +252,8 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       });
 
       const colors = yield* Ref.make({
-        fg: options.fg ?? Colors.White.make("#FFFFFF"),
-        bg: options.bg ?? Colors.Black.make("#000000"),
+        fg: options.fg ?? Colors.White,
+        bg: options.bg ?? Colors.Black,
       });
 
       const localSelection = yield* Ref.make<{ start: number; end: number } | null>(null);
