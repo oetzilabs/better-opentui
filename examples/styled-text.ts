@@ -6,6 +6,7 @@ import { Cause, Console, Duration, Effect, Fiber, Logger, Ref, Schedule } from "
 
 const program = Effect.gen(function* () {
   const cli = yield* CliRenderer;
+  yield* cli.setupTerminal();
   yield* cli.setBackgroundColor(Colors.Black.make("#000000"));
 
   const parentContainer = yield* cli.createElement("group");

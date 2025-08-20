@@ -57,7 +57,6 @@ import {
   MouseParser,
   MouseParserLive,
 } from "../inputs/mouse";
-import { Std, StdLive } from "../stream";
 import { parseColor } from "../utils";
 import { Library } from "../zig";
 import { Elements, ElementsLive, type Element, type MethodParameters } from "./elements";
@@ -67,11 +66,10 @@ import type { PixelResolution } from "./utils";
 let animationFrameId = 0;
 
 export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
-  dependencies: [OpenTuiConfigLive, StdLive, SelectionLive, MouseParserLive, ElementsLive],
+  dependencies: [OpenTuiConfigLive, SelectionLive, MouseParserLive, ElementsLive],
   scoped: Effect.gen(function* () {
     const cfg = yield* OpenTuiConfig;
     const config = yield* cfg.get();
-    const std = yield* Std;
 
     const _isRunning = yield* Ref.make(false);
     const _isShuttingDown = yield* Ref.make(false);
@@ -155,6 +153,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       never,
       RendererFailedToCheckHit | NoSuchElementException
     > | null>(null);
+    const resizeFork = yield* Ref.make<Fiber.RuntimeFiber<never, Error | NoSuchElementException> | null>(null);
 
     const stdin = process.stdin;
     const stdout = process.stdout;
@@ -313,11 +312,34 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         yield* disableMouse();
       }
 
-      process.on("SIGWINCH", () => {
-        const width = process.stdout.columns || 80;
-        const height = process.stdout.rows || 24;
-        handleResize(width, height).pipe(BunRuntime.runMain);
+      const readResize = Effect.gen(function* () {
+        const mailbox = yield* Mailbox.make<{ width: number; height: number }>();
+
+        const handleResizeEvt = () => {
+          const width = process.stdout.columns || 80;
+          const height = process.stdout.rows || 24;
+          mailbox.unsafeOffer({ width, height });
+        };
+
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            process.off("SIGWINCH", handleResizeEvt);
+          })
+        );
+
+        process.on("SIGWINCH", handleResizeEvt);
+
+        return mailbox as Mailbox.ReadonlyMailbox<{ width: number; height: number }>;
       });
+
+      const rsmb = yield* readResize;
+      const rsf = yield* rsmb.take.pipe(
+        Effect.tap(({ width, height }) => handleResize(width, height)),
+        Effect.forever,
+        Effect.forkScoped,
+        Effect.uninterruptible
+      );
+      yield* Ref.set(resizeFork, rsf);
 
       const shouldQuit = (data: Buffer) => {
         return isExitOnCtrlC(data.toString());
@@ -326,10 +348,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const readData = Effect.gen(function* () {
         yield* RcRef.get(rlRef);
         const mailbox = yield* Mailbox.make<Buffer>();
-        const handleData = (s: Buffer) => {
-          const terminalData = s;
-          mailbox.unsafeOffer(terminalData);
-          if (shouldQuit(terminalData)) {
+        const handleData = (data: Buffer) => {
+          mailbox.unsafeOffer(data);
+          if (shouldQuit(data)) {
             mailbox.unsafeDone(Exit.void);
           }
         };
@@ -347,15 +368,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         return mailbox as Mailbox.ReadonlyMailbox<Buffer>;
       });
 
-      const f = yield* Effect.forkScoped(
-        Effect.gen(function* () {
-          const mb = yield* readData;
-          let si = yield* mb.size;
-          let s = Option.getOrElse(si, () => 0);
-          while (s > 0) {
-            const data = yield* mb.take;
-            si = yield* mb.size;
-            s = Option.getOrElse(si, () => 0);
+      const mb = yield* readData;
+      const f = yield* mb.take.pipe(
+        Effect.tap((data) =>
+          Effect.gen(function* () {
             const str = data.toString();
             const wfpr = yield* Ref.get(_isWaitingForPixelResolution);
             if (wfpr && /\x1b\[4;\d+;\d+t/.test(str)) {
@@ -376,8 +392,11 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 return;
               }
             }
-          }
-        }).pipe(Effect.forever)
+          })
+        ),
+        Effect.forever,
+        Effect.forkScoped,
+        Effect.uninterruptible
       );
       yield* Ref.set(terminalInputFork, f);
 
