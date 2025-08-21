@@ -1,8 +1,8 @@
-import { isTextChunk, TextChunkSchema, type TextChunk } from "@opentuee/core/src/buffer/text";
-import { Colors, type Input } from "@opentuee/core/src/colors";
-import { RGBA, type RGBAClass } from "@opentuee/core/src/types";
-import { createTextAttributes } from "@opentuee/core/src/utils";
 import { Effect } from "effect";
+import { isTextChunk, TextChunkSchema, type TextChunk } from "../buffer/text";
+import { Colors, type Input } from "../colors";
+import { RGBA, type RGBAClass } from "../types";
+import { createTextAttributes } from "../utils";
 
 export interface StyleAttrs {
   fg?: Input;
@@ -18,23 +18,90 @@ export interface StyleAttrs {
 
 export class StyledText {
   public readonly chunks: TextChunk[];
-  private _length: number;
   // TODO: plaintext should not be needed anymore when selection moved to native
-  private _plainText: string;
+  private _plainText: string = "";
 
-  constructor(chunks: TextChunk[], length: number, plainText: string) {
+  constructor(chunks: TextChunk[]) {
     this.chunks = chunks;
 
-    this._length = length;
-    this._plainText = plainText;
+    for (let i = 0; i < chunks.length; i++) {
+      this._plainText += chunks[i].plainText;
+    }
   }
 
   toString(): string {
     return this._plainText;
   }
 
-  get length(): number {
-    return this._length;
+  private static _createInstance(chunks: TextChunk[], plainText: string): StyledText {
+    const newInstance = Object.create(StyledText.prototype);
+    newInstance.chunks = chunks;
+    newInstance._plainText = plainText;
+    return newInstance;
+  }
+
+  private static _chunksToPlainText(chunks: TextChunk[]): string {
+    let plainText = "";
+    for (const chunk of chunks) {
+      plainText += chunk.plainText;
+    }
+    return plainText;
+  }
+
+  insert(chunk: TextChunk, index?: number): StyledText {
+    const originalLength = this.chunks.length;
+    let newChunks: TextChunk[];
+    let newPlainText: string;
+
+    if (index === undefined) {
+      newChunks = [...this.chunks, chunk];
+      newPlainText = this._plainText + chunk.plainText;
+    } else if (index === originalLength) {
+      newChunks = [...this.chunks, chunk];
+      newPlainText = this._plainText + chunk.plainText;
+    } else {
+      newChunks = [...this.chunks.slice(0, index), chunk, ...this.chunks.slice(index)];
+      newPlainText = StyledText._chunksToPlainText(newChunks);
+    }
+
+    return StyledText._createInstance(newChunks, newPlainText);
+  }
+
+  remove(chunk: TextChunk): StyledText {
+    const originalLength = this.chunks.length;
+    const index = this.chunks.indexOf(chunk);
+    if (index === -1) return this;
+
+    let newChunks: TextChunk[];
+    let newPlainText: string;
+
+    if (index === originalLength - 1) {
+      newChunks = this.chunks.slice(0, -1);
+      newPlainText = this._plainText.slice(0, this._plainText.length - chunk.plainText.length);
+    } else {
+      newChunks = [...this.chunks.slice(0, index), ...this.chunks.slice(index + 1)];
+      newPlainText = StyledText._chunksToPlainText(newChunks);
+    }
+
+    return StyledText._createInstance(newChunks, newPlainText);
+  }
+
+  replace(chunk: TextChunk, oldChunk: TextChunk): StyledText {
+    const index = this.chunks.indexOf(oldChunk);
+    if (index === -1) return this;
+
+    let newChunks: TextChunk[];
+    let newPlainText: string;
+
+    if (index === this.chunks.length - 1) {
+      newChunks = [...this.chunks.slice(0, -1), chunk];
+      newPlainText = this._plainText.slice(0, this._plainText.length - oldChunk.plainText.length) + chunk.plainText;
+    } else {
+      newChunks = [...this.chunks.slice(0, index), chunk, ...this.chunks.slice(index + 1)];
+      newPlainText = StyledText._chunksToPlainText(newChunks);
+    }
+
+    return StyledText._createInstance(newChunks, newPlainText);
   }
 }
 
@@ -45,7 +112,7 @@ export const stringToStyledText = Effect.fn(function* (content: string) {
     text: textEncoder.encode(content),
     plainText: content,
   });
-  return new StyledText([chunk], content.length, content);
+  return new StyledText([chunk]);
 });
 
 export type StylableInput = string | number | boolean | TextChunk;
@@ -98,7 +165,7 @@ export function tn(strings: TemplateStringsArray, ...values: StylableInput[]): S
     }
   }
 
-  return new StyledText(chunks, length, plainText);
+  return new StyledText(chunks);
 }
 
 /**
@@ -161,7 +228,7 @@ export function t(strings: TemplateStringsArray, ...values: StylableInput[]): St
     }
   }
 
-  return new StyledText(chunks, length, plainText);
+  return new StyledText(chunks);
 }
 
 // Foreground color helpers

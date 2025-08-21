@@ -76,6 +76,10 @@ export class RendererFailedToGetNextBuffer extends Schema.TaggedError<RendererFa
   },
 ) {}
 
+export class NextBufferNotAvailable extends Schema.TaggedError<NextBufferNotAvailable>()("NextBufferNotAvailable", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
 export class RendererFailedToGetBufferWidth extends Schema.TaggedError<RendererFailedToGetBufferWidth>()(
   "RendererFailedToGetBufferWidth",
   {
@@ -405,6 +409,7 @@ export class WritingToBufferError extends Schema.TaggedError<WritingToBufferErro
 
 // all errors
 export type Collection =
+  | NextBufferNotAvailable
   | WritingToBufferError
   | RendererFailedToDisableMouse
   | RendererFailedToEnableMouse

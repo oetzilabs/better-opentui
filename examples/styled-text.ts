@@ -1,19 +1,39 @@
 import { BunRuntime } from "@effect/platform-bun";
 import { Colors } from "@opentuee/core/src/colors";
+import { CliRenderer } from "@opentuee/core/src/renderer/cli";
+import { PositionAbsolute } from "@opentuee/core/src/renderer/utils/position";
 import { run } from "@opentuee/core/src/run";
-import { Effect } from "effect";
+import { Console, Effect } from "effect";
 
 if (import.meta.main) {
   BunRuntime.runMain(
     run({
-      setup: Effect.fn(function* (cli) {
-        yield* cli.setBackgroundColor(Colors.White);
+      setup: Effect.fn(function* () {
+        const cli = yield* CliRenderer;
         const parentContainer = yield* cli.createElement("group");
-        const text = yield* cli.createElement("text", "Hello World", { left: 2, top: 2 });
-        const text2 = yield* cli.createElement("text", "Hello World 2", { left: 5, top: 5 });
+        const text = yield* cli.createElement("text", "Hello World", {
+          position: PositionAbsolute.make(2),
+          left: 2,
+          top: 2,
+          width: "auto",
+          height: "auto",
+          fg: Colors.Red,
+          bg: Colors.Transparent,
+        });
+
+        const text2 = yield* cli.createElement("text", "Hello World 2", {
+          position: PositionAbsolute.make(2),
+          left: 5,
+          top: 5,
+          width: "auto",
+          height: "auto",
+          fg: Colors.Red,
+          bg: Colors.Transparent,
+        });
 
         yield* parentContainer.add(text);
         yield* parentContainer.add(text2);
+
         yield* cli.add(parentContainer);
       }),
       on: {
@@ -21,11 +41,11 @@ if (import.meta.main) {
         resize: Effect.fn(function* (width, height) {
           yield* Effect.log("resize", width, height);
         }),
-        exit: Effect.fn(function* () {
-          yield* Effect.log("Goodbye!");
+        exit: Effect.fn(function* (reason) {
+          yield* Console.log("Goodbye!");
         }),
         panic: Effect.fn(function* (err) {
-          yield* Effect.log("panic", err);
+          yield* Effect.log("Paniced!", err);
         }),
       },
     }),

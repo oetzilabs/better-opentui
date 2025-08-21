@@ -1,26 +1,26 @@
 import type { MouseEventType, RawMouseEvent, ScrollInfo } from "../inputs/mouse";
-import type { Element } from "../renderer/elements";
+import type { BaseElement } from "../renderer/elements";
 
 export class MouseEvent {
   public readonly type: MouseEventType;
   public readonly button: number;
   public readonly x: number;
   public readonly y: number;
-  public readonly source?: Element;
+  public readonly source?: BaseElement;
   public readonly modifiers: {
     shift: boolean;
     alt: boolean;
     ctrl: boolean;
   };
   public readonly scroll?: ScrollInfo;
-  public readonly target: Element | null;
+  public readonly target: BaseElement | null;
   private _defaultPrevented: boolean = false;
 
   public get defaultPrevented(): boolean {
     return this._defaultPrevented;
   }
 
-  constructor(target: Element | null, attributes: RawMouseEvent & { source?: Element }) {
+  constructor(target: BaseElement | null, attributes: RawMouseEvent & { source?: BaseElement }) {
     this.target = target;
     this.type = attributes.type;
     this.button = attributes.button;

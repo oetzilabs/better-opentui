@@ -19,7 +19,12 @@ import { OptimizedBuffer } from "../buffer/optimized";
 import { Colors, Input } from "../colors";
 import { OpenTuiConfig, OpenTuiConfigLive } from "../config";
 import type { Style } from "../cursor-style";
-import { WritingToBufferError, type Collection, type RendererFailedToCheckHit } from "../errors";
+import {
+  NextBufferNotAvailable,
+  WritingToBufferError,
+  type Collection,
+  type RendererFailedToCheckHit,
+} from "../errors";
 import { KeyboardEvent } from "../events/keyboard";
 import { MouseEvent } from "../events/mouse";
 import { ParsedKey, parse as parseKey } from "../inputs/keyboard";
@@ -39,7 +44,14 @@ import {
 import type { RunnerEvent, RunnerEventMap, RunnerHooks } from "../run";
 import { parseColor } from "../utils";
 import { Library } from "../zig";
-import { Elements, ElementsLive, type Element, type MethodParameters } from "./elements";
+import {
+  Elements,
+  ElementsLive,
+  type BaseElement,
+  type ElementElement,
+  type MethodParameters,
+  type Types,
+} from "./elements";
 import { Selection, SelectionLive } from "./selection";
 import type { PixelResolution } from "./utils";
 
@@ -47,6 +59,7 @@ export type ShutdownReason =
   | {
       type: "exit";
       code: number;
+      cause?: Exit.Exit<any, any>;
     }
   | {
       type: "ctrl-c";
@@ -71,11 +84,18 @@ export type HookFunction<Event extends RunnerEvent, R = void> = (
   ...args: RunnerEventMap[Event]
 ) => Effect.Effect<R, Collection, Library>;
 
+export type CapturedOutput = {
+  stream: "stdout" | "stderr";
+  output: string;
+};
+
 export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
   dependencies: [OpenTuiConfigLive, SelectionLive, MouseParserLive, ElementsLive],
   scoped: Effect.gen(function* () {
     const cfg = yield* OpenTuiConfig;
     const config = yield* cfg.get();
+
+    const outputCache = yield* Ref.make<CapturedOutput[]>([]);
 
     const _isRunning = yield* Ref.make(false);
     const _isShuttingDown = yield* Ref.make(false);
@@ -129,7 +149,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const renderer = yield* lib.createRenderer(config.width, config.height);
 
     const needsUpdate = Effect.fn(function* () {});
-    const capturedRenderable = yield* Ref.make<Element | null>(null);
+    const capturedRenderable = yield* Ref.make<BaseElement | null>(null);
 
     const rendering = yield* Ref.make(false);
     const renderStats = yield* Ref.make({
@@ -152,8 +172,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const lastOverRenderableNum = yield* Ref.make(0);
 
     const currentSelection = yield* Selection;
-    const selectionContainers = yield* Ref.make<Array<Element | null>>([]);
-    const lastOverRenderable = yield* Ref.make<Element | undefined>(undefined);
+    const selectionContainers = yield* Ref.make<Array<BaseElement | null>>([]);
+    const lastOverRenderable = yield* Ref.make<BaseElement | undefined>(undefined);
 
     const _useConsole = yield* Ref.make(false);
     const _resolution = yield* Ref.make<PixelResolution | null>(null);
@@ -351,41 +371,41 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         });
       }
 
-      // const readResize = Effect.gen(function* () {
-      //   const mailbox = yield* Mailbox.make<{ width: number; height: number }>();
+      const readResize = Effect.gen(function* () {
+        const mailbox = yield* Mailbox.make<{ width: number; height: number }>();
 
-      //   const handleResizeEvt = () => {
-      //     const width = process.stdout.columns || 80;
-      //     const height = process.stdout.rows || 24;
-      //     mailbox.unsafeOffer({ width, height });
-      //   };
+        const handleResizeEvt = () => {
+          const width = process.stdout.columns || 80;
+          const height = process.stdout.rows || 24;
+          mailbox.unsafeOffer({ width, height });
+        };
 
-      //   yield* Effect.addFinalizer(() =>
-      //     Effect.sync(() => {
-      //       process.off("SIGWINCH", handleResizeEvt);
-      //     }),
-      //   );
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            process.off("SIGWINCH", handleResizeEvt);
+          }),
+        );
 
-      //   process.on("SIGWINCH", handleResizeEvt);
+        process.on("SIGWINCH", handleResizeEvt);
 
-      //   return mailbox as Mailbox.ReadonlyMailbox<{ width: number; height: number }>;
-      // });
+        return mailbox as Mailbox.ReadonlyMailbox<{ width: number; height: number }>;
+      });
 
-      // const rsmb = yield* readResize;
-      // const rsf = yield* rsmb.take.pipe(
-      //   Effect.map(({ width, height }) =>
-      //     Effect.gen(function* () {
-      //       yield* handleResize(width, height);
-      //       const resize = yield* getHook("resize");
-      //       if (resize && resize.on) {
-      //         yield* resize.on(width, height);
-      //       }
-      //     }),
-      //   ),
-      //   Effect.forever,
-      //   Effect.forkScoped,
-      // );
-      // yield* Ref.set(resizeFork, rsf);
+      const rsmb = yield* readResize;
+      const rsf = yield* rsmb.take.pipe(
+        Effect.map(({ width, height }) =>
+          Effect.gen(function* () {
+            yield* handleResize(width, height);
+            const resize = yield* getHook("resize");
+            if (resize && resize.on) {
+              yield* resize.on(width, height);
+            }
+          }),
+        ),
+        Effect.forever,
+        Effect.forkScoped,
+      );
+      yield* Ref.set(resizeFork, rsf);
 
       if (stdin.setRawMode) {
         stdin.setRawMode(true);
@@ -441,10 +461,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             }
             const um = yield* getUseMouse();
             if (um) {
-              const hmd = yield* handleMouseData(data);
-              if (hmd) {
-                return;
-              }
+              yield* handleMouseData(data);
             }
 
             const parsedKey = yield* parseKey(data);
@@ -466,7 +483,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       );
       yield* Ref.set(terminalInputFork, f);
 
-      const signals = ["SIGINT", "SIGTERM", "SIGQUIT", "SIGABRT", "SIGHUP", "SIGWINCH"] as const;
+      const signals = ["SIGINT", "SIGTERM", "SIGQUIT", "SIGABRT", "SIGHUP"] as const;
 
       const readSignals = Effect.gen(function* () {
         const mailbox = yield* Mailbox.make<NodeJS.Signals>();
@@ -912,7 +929,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const destroy = Effect.fn(function* () {
       const isD = yield* Ref.get(_isDestroyed);
       if (isD) return;
-      // yield* this.root.destroy();
+      yield* root.destroy();
       yield* lib.destroyRenderer(renderer);
       yield* Ref.set(_isDestroyed, true);
     });
@@ -929,18 +946,20 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       yield* Ref.set(targetFrameTime, 1000 / tfps);
 
       const fiber = yield* Effect.forkScoped(
-        loop().pipe(
+        loop.pipe(
           // We need to repeat the loop to keep the fiber alive
           Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps))),
+          Effect.retry(Schedule.recurs(10)),
         ),
       );
 
       yield* Ref.set(renderFiber, fiber);
     });
 
-    const loop = Effect.fn(function* () {
+    const loop = Effect.gen(function* () {
       const r = yield* Ref.get(rendering);
-      if (r) return;
+      const isD = yield* Ref.get(_isDestroyed);
+      if (r || isD) return;
       yield* Ref.set(rendering, true);
 
       const now = Date.now();
@@ -948,7 +967,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const elapsed = now - lt;
 
       const deltaTime = elapsed;
-      // this.lastTime = now;
       yield* Ref.set(lastTime, now);
 
       const lfc = yield* Ref.updateAndGet(frameCount, (fc) => fc + 1);
@@ -993,8 +1011,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       // Render the renderable tree
       const buf = yield* Ref.get(buffers);
-
-      yield* root.render(buf.next!, deltaTime);
+      const nextBuffer = buf.next;
+      if (!nextBuffer) {
+        return yield* Effect.fail(new NextBufferNotAvailable());
+      }
+      yield* Effect.log("Rendering");
+      yield* root.render(nextBuffer, deltaTime);
 
       const ppfns = yield* Ref.get(postProcessFns);
 
@@ -1033,7 +1055,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       }
 
       yield* Ref.set(renderingNative, false);
-      yield* lib.render(renderer, force);
+      yield* lib.render(renderer, true);
       yield* Ref.set(renderingNative, true);
     });
 
@@ -1048,18 +1070,39 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       });
     });
 
-    const getStats = Effect.fn(function* () {});
+    const getStats = Effect.fn(function* () {
+      const stats = yield* Ref.get(renderStats);
+      return stats;
+    });
 
-    const resetStats = Effect.fn(function* () {});
+    const resetStats = Effect.fn(function* () {
+      yield* Ref.set(frameTimes, []);
+      yield* Ref.set(renderStats, {
+        frameCount: 0,
+        fps: 0,
+        renderTime: 0,
+        frameCallbackTime: 0,
+      });
+    });
 
-    const setGatherStats = Effect.fn(function* () {});
+    const setGatherStats = Effect.fn(function* (b: boolean) {
+      yield* Ref.set(gatherStats, b);
+    });
 
-    const getSelection = Effect.fn(function* () {});
-    const getSelectionContainer = Effect.fn(function* () {});
+    const getSelection = Effect.fn(function* () {
+      return yield* currentSelection.getSelectedText;
+    });
 
-    const hasSelection = Effect.fn(function* () {});
+    const getSelectionContainer = Effect.fn(function* () {
+      const scs = yield* Ref.get(selectionContainers);
+      return scs.length > 0 ? scs[scs.length - 1] : null;
+    });
 
-    const startSelection = Effect.fn(function* (startRenderable: Element, x: number, y: number) {
+    const hasSelection = Effect.fn(function* () {
+      return yield* currentSelection.isActive();
+    });
+
+    const startSelection = Effect.fn(function* (startRenderable: BaseElement, x: number, y: number) {
       yield* clearSelection();
       const p = yield* Ref.get(startRenderable.parent);
       yield* Ref.update(selectionContainers, (containers) => {
@@ -1083,7 +1126,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       yield* Ref.set(selectionContainers, []);
     });
 
-    const updateSelection = Effect.fn(function* (currentRenderable: Element | undefined, x: number, y: number) {
+    const updateSelection = Effect.fn(function* (currentRenderable: BaseElement | undefined, x: number, y: number) {
       yield* currentSelection.setFocus({ x, y });
       const scs = yield* Ref.get(selectionContainers);
 
@@ -1094,7 +1137,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           const p = yield* Ref.get(currentContainer!.parent);
           const parentContainer = p || root;
           yield* Ref.update(selectionContainers, (containers) => {
-            containers.push(parentContainer as Element);
+            containers.push(parentContainer as BaseElement);
             return containers;
           });
         } else if (currentRenderable && scs.length > 1) {
@@ -1104,7 +1147,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             const p = yield* Ref.get(currentRenderable.parent);
             // @ts-ignore
             const immediateParent = p || root;
-            containerIndex = scs.indexOf(immediateParent as Element);
+            containerIndex = scs.indexOf(immediateParent as BaseElement);
           }
 
           if (containerIndex !== -1 && containerIndex < scs.length - 1) {
@@ -1119,8 +1162,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       yield* notifySelectablesOfSelectionChange();
     });
 
-    const isWithinContainer = Effect.fn(function* (renderable: Element, container: Element) {
-      let current: Element | null = renderable;
+    const isWithinContainer = Effect.fn(function* (renderable: BaseElement, container: BaseElement) {
+      let current: BaseElement | null = renderable;
       while (current) {
         if (current === container) return true;
         current = yield* Ref.get(current.parent);
@@ -1132,18 +1175,15 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const notifySelectablesOfSelectionChange = Effect.fn(function* () {});
 
-    const add = Effect.fn(function* (container: Element, index?: number) {
+    const add = Effect.fn(function* (container: BaseElement, index?: number) {
       yield* root.add(container, index);
     });
 
-    const createElement = Effect.fn(function* <T extends keyof MethodParameters>(
-      type: T,
-      ...args: MethodParameters[T]
-    ) {
+    const createElement = Effect.fn(function* <T extends Types>(type: T, ...args: MethodParameters[T]) {
       const fn = elements[type];
       // @ts-ignore
       const element = yield* fn(...args);
-      return element as Effect.Effect.Success<ReturnType<typeof fn>>;
+      return element as ElementElement<T>;
     });
 
     return {

@@ -43,6 +43,9 @@
     },
     "packages/core": {
       "name": "@opentuee/core",
+      "dependencies": {
+        "yoga-layout": "^3.2.1",
+      },
     },
     "packages/ui": {
       "name": "@opentuee/ui",

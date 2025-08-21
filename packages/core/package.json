@@ -3,5 +3,7 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
-  "dependencies": {}
+  "dependencies": {
+    "yoga-layout": "^3.2.1"
+  }
 }

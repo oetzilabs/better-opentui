@@ -47,7 +47,7 @@ import {
 import { RGBA, type SelectionState } from "../types";
 import { parseColor } from "../utils";
 import { DebugOverlayCorner, Library, LibraryLive } from "../zig";
-import type { Element } from "./elements";
+import type { BaseElement } from "./elements";
 import { Renderable } from "./renderable-3";
 import { Root } from "./root";
 import { Selection } from "./selection";
