@@ -31,16 +31,16 @@ export type RunOptions = RunnerHooks & {
 export const run = (options: RunOptions) =>
   Effect.gen(function* () {
     const cli = yield* CliRenderer;
+    const latch = yield* Effect.makeLatch();
     let onPanic: HookFunction<"panic"> = Effect.fn(function* (_cause: Cause.Cause<unknown>) {});
     yield* cli.setBackgroundColor(Colors.White);
 
-    yield* cli.setupTerminal({
+    yield* cli.setupTerminal(latch, {
       on: options.on,
       off: options.off,
     });
 
     if (options.on && options.on.panic) {
-      yield* Effect.log("Setting up panic handler");
       onPanic = options.on.panic;
     }
 
@@ -48,17 +48,24 @@ export const run = (options: RunOptions) =>
 
     yield* cli.start().pipe(Effect.catchAllCause((cause) => onPanic(cause)));
 
-    // const finalizer = Effect.fn(
-    //   function* (exit: Exit.Exit<unknown, unknown>) {
-    //     yield* cli.stop();
-    //     yield* cli.destroy();
-    //     if (hooks && hooks.on && hooks.on.exit) {
-    //       yield* hooks.on.exit({ type: "exit", code: 0, cause: exit });
-    //     }
-    //   },
-    //   (effect) => effect.pipe(Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause)))),
-    // );
-    // yield* Effect.addFinalizer((exit) => finalizer(exit));
+    const finalizer = Effect.fn(
+      function* (exit: Exit.Exit<unknown, unknown>) {
+        if (options.on && options.on.exit) {
+          yield* options.on.exit({ type: "exit", code: 0, cause: exit });
+        }
+      },
+      (effect) => effect.pipe(Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause)))),
+    );
+
+    yield* Effect.addFinalizer((exit) => finalizer(exit));
+
+    const exitTrigger = yield* Effect.gen(function* () {
+      yield* cli.stop();
+      yield* cli.destroy();
+      process.exit(0);
+    }).pipe(latch.whenOpen, Effect.fork);
+
+    yield* exitTrigger.await;
 
     return yield* Effect.never;
   }).pipe(

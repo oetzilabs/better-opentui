@@ -334,7 +334,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       return hook as HookRecord<RunnerEvent>;
     });
 
-    const setupTerminal = Effect.fn(function* (hooks?: RunnerHooks) {
+    const setupTerminal = Effect.fn(function* (latch: Effect.Latch, hooks?: RunnerHooks) {
       yield* writeOut(SaveCursorState.make("\u001B[s"));
 
       const um = yield* getUseMouse();
@@ -464,15 +464,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
             const parsedKey = yield* parseKey(data);
             if (isExitOnCtrlC(parsedKey.raw)) {
-              // yield* Effect.log("Ctrl+C", "WE HAVE TO EXIT".repeat(10));
-              yield* stop();
-              yield* destroy();
-              const ih = yield* Ref.get(internalHooks);
-              const exit = ih.get("exit") as HookFunction<"exit"> | undefined;
-              if (exit) {
-                yield* exit({ type: "ctrl-c" });
-                return;
-              }
+              yield* latch.open;
             }
             if (parsedKey.name !== "unknown") {
               yield* handleKeyboardData(parsedKey);
