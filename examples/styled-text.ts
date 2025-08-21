@@ -8,9 +8,9 @@ import { Console, Effect } from "effect";
 if (import.meta.main) {
   BunRuntime.runMain(
     run({
-      setup: Effect.fn(function* () {
-        const cli = yield* CliRenderer;
+      setup: Effect.fn(function* (cli) {
         const parentContainer = yield* cli.createElement("group");
+
         const text = yield* cli.createElement("text", "Hello World", {
           position: PositionAbsolute.make(2),
           left: 2,
@@ -38,15 +38,11 @@ if (import.meta.main) {
       }),
       on: {
         start: Effect.fn(function* () {}),
-        resize: Effect.fn(function* (width, height) {
-          yield* Effect.log("resize", width, height);
-        }),
+        resize: Effect.fn(function* (width, height) {}),
         exit: Effect.fn(function* (reason) {
-          yield* Console.log("Goodbye!");
+          process.exit(0);
         }),
-        panic: Effect.fn(function* (err) {
-          yield* Effect.log("Paniced!", err);
-        }),
+        panic: Effect.fn(function* (err) {}),
       },
     }),
   );

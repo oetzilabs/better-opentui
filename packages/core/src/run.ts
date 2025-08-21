@@ -2,10 +2,10 @@ import { BunContext } from "@effect/platform-bun";
 import * as Errors from "@opentuee/core/src/errors";
 import { CliRenderer, CliRendererLive, type HookFunction, type ShutdownReason } from "@opentuee/core/src/renderer/cli";
 import { Library, LibraryLive } from "@opentuee/core/src/zig";
-import { Cause, Console, Deferred, Effect, Exit, Logger, Match } from "effect";
+import { Cause, Console, Deferred, Duration, Effect, Exit, Fiber, Logger } from "effect";
 import { Colors } from "./colors";
 
-export type SetupFunction = () => Effect.Effect<void, Errors.Collection, Library | CliRenderer>;
+export type SetupFunction = (cli: CliRenderer) => Effect.Effect<void, Errors.Collection, Library | CliRenderer>;
 
 export interface RunnerEventMap {
   start: [];
@@ -30,43 +30,37 @@ export type RunOptions = RunnerHooks & {
 
 export const run = (options: RunOptions) =>
   Effect.gen(function* () {
-    const shutdownSignal = yield* Deferred.make<ShutdownReason, never>();
-    const _cli = yield* CliRenderer;
+    const cli = yield* CliRenderer;
+    let onPanic: HookFunction<"panic"> = Effect.fn(function* (_cause: Cause.Cause<unknown>) {});
+    yield* cli.setBackgroundColor(Colors.White);
 
-    let onPanic: HookFunction<"panic"> = Effect.fn(function* (cause: Cause.Cause<unknown>) {});
-
-    yield* _cli.setBackgroundColor(Colors.White);
-    yield* options.setup();
-
-    const hooks = {
+    yield* cli.setupTerminal({
       on: options.on,
       off: options.off,
-    } as const;
+    });
 
-    const finalizer = Effect.fn(
-      function* (exit: Exit.Exit<unknown, unknown>) {
-        yield* _cli.stop();
-        yield* _cli.destroy();
-        if (hooks && hooks.on && hooks.on.exit) {
-          yield* hooks.on.exit({ type: "exit", code: 0, cause: exit });
-        }
-        return process.exit(0);
-      },
-      (effect) => effect.pipe(Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause)))),
-    );
-
-    yield* _cli.setupTerminal(shutdownSignal, hooks);
-
-    if (hooks && hooks.on && hooks.on.panic) {
+    if (options.on && options.on.panic) {
       yield* Effect.log("Setting up panic handler");
-      onPanic = hooks.on.panic;
+      onPanic = options.on.panic;
     }
 
-    yield* _cli.start().pipe(Effect.catchAllCause((cause) => onPanic(cause)));
+    yield* options.setup(cli);
 
-    yield* Effect.addFinalizer((exit) => finalizer(exit));
+    yield* cli.start().pipe(Effect.catchAllCause((cause) => onPanic(cause)));
 
-    return yield* Deferred.await(shutdownSignal);
+    // const finalizer = Effect.fn(
+    //   function* (exit: Exit.Exit<unknown, unknown>) {
+    //     yield* cli.stop();
+    //     yield* cli.destroy();
+    //     if (hooks && hooks.on && hooks.on.exit) {
+    //       yield* hooks.on.exit({ type: "exit", code: 0, cause: exit });
+    //     }
+    //   },
+    //   (effect) => effect.pipe(Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause)))),
+    // );
+    // yield* Effect.addFinalizer((exit) => finalizer(exit));
+
+    return yield* Effect.never;
   }).pipe(
     Effect.provide([CliRendererLive]),
     Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))),

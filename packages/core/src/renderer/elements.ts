@@ -134,7 +134,9 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         selection: SelectionState | null,
         width: number,
         height: number = 1,
-      ) {});
+      ) {
+        return false;
+      });
       const layoutNode = createTrackedNode();
 
       const getSelection = Effect.fn(function* () {
@@ -192,6 +194,9 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
           const cs = yield* Ref.get(elementsHolder);
           index = cs.length;
         }
+
+        // Set the parent reference for the container
+        yield* Ref.set(container.parent, b);
 
         yield* Ref.update(elementsHolder, (cs) => {
           cs.splice(index, 0, container);

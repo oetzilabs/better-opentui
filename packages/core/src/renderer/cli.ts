@@ -194,10 +194,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const root = yield* elements.root({
       width: Effect.fn(function* () {
-        return config.width;
+        return yield* Ref.get(_width);
       }),
       height: Effect.fn(function* () {
-        return config.height;
+        return yield* Ref.get(_height);
       }),
       addToHitGrid: Effect.fn(function* (x: number, y: number, width: number, height: number, id: number) {
         const cr = yield* Ref.get(capturedRenderable);
@@ -313,9 +313,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const setTerminalSize = Effect.fn(function* (width: number, height: number) {
       yield* Ref.set(_width, width);
       yield* Ref.set(_height, height);
-      // yield* Ref.set(_terminalWidth, width);
-      // yield* Ref.set(_terminalHeight, height);
-      // yield* lib.setTerminalSize(renderer, width, height);
     });
 
     function setHook<E extends RunnerEvent>(
@@ -337,10 +334,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       return hook as HookRecord<RunnerEvent>;
     });
 
-    const setupTerminal = Effect.fn(function* (
-      shutdown: Deferred.Deferred<ShutdownReason, never>,
-      hooks?: RunnerHooks,
-    ) {
+    const setupTerminal = Effect.fn(function* (hooks?: RunnerHooks) {
       yield* writeOut(SaveCursorState.make("\u001B[s"));
 
       const um = yield* getUseMouse();
@@ -395,6 +389,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const rsf = yield* rsmb.take.pipe(
         Effect.map(({ width, height }) =>
           Effect.gen(function* () {
+            const isD = yield* Ref.get(_isDestroyed);
+            const isr = yield* Ref.get(_isRunning);
+            if (!isD || !isr) return;
             yield* handleResize(width, height);
             const resize = yield* getHook("resize");
             if (resize && resize.on) {
@@ -403,7 +400,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           }),
         ),
         Effect.forever,
-        Effect.forkScoped,
+        Effect.forkDaemon,
       );
       yield* Ref.set(resizeFork, rsf);
 
@@ -440,7 +437,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         Effect.tap(
           Effect.fn(function* (data) {
             const ir = yield* Ref.get(_isRunning);
-            if (!ir) return;
+            const isD = yield* Ref.get(_isDestroyed);
+            if (!ir || isD) return;
             const str = data.toString();
             const wfpr = yield* Ref.get(_isWaitingForPixelResolution);
             if (wfpr && /\x1b\[4;\d+;\d+t/.test(str)) {
@@ -466,10 +464,15 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
             const parsedKey = yield* parseKey(data);
             if (isExitOnCtrlC(parsedKey.raw)) {
-              yield* Effect.log("Ctrl+C", "WE HAVE TO EXIT".repeat(10));
-              return yield* Deferred.succeed(shutdown, {
-                type: "ctrl-c",
-              });
+              // yield* Effect.log("Ctrl+C", "WE HAVE TO EXIT".repeat(10));
+              yield* stop();
+              yield* destroy();
+              const ih = yield* Ref.get(internalHooks);
+              const exit = ih.get("exit") as HookFunction<"exit"> | undefined;
+              if (exit) {
+                yield* exit({ type: "ctrl-c" });
+                return;
+              }
             }
             if (parsedKey.name !== "unknown") {
               yield* handleKeyboardData(parsedKey);
@@ -479,7 +482,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           }),
         ),
         Effect.forever,
-        Effect.forkScoped,
+        Effect.forkDaemon,
       );
       yield* Ref.set(terminalInputFork, f);
 
@@ -509,14 +512,17 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const signalFork = yield* signalmb.take.pipe(
         Effect.tap(
           Effect.fn(function* (signal) {
-            return yield* Deferred.succeed(shutdown, {
-              type: "signal",
-              signal,
-            });
+            const isD = yield* Ref.get(_isDestroyed);
+            if (!isD) return;
+            const ih = yield* Ref.get(internalHooks);
+            const exit = ih.get("exit") as HookFunction<"exit"> | undefined;
+            if (exit) {
+              yield* exit({ type: "signal", signal });
+            }
           }),
         ),
         Effect.forever,
-        Effect.forkScoped,
+        Effect.forkDaemon,
       );
       yield* Ref.set(signalWatcherFork, signalFork);
 
@@ -690,7 +696,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       const msi = yield* Ref.get(memorySnapshotInterval);
       const duration = Duration.millis(msi);
-      const fiber = yield* Effect.forkScoped(takeMemorySnapshot().pipe(Effect.repeat(Schedule.spaced(duration))));
+      const fiber = yield* Effect.forkDaemon(takeMemorySnapshot().pipe(Effect.repeat(Schedule.spaced(duration))));
       yield* Ref.set(memorySnapshotTimer, fiber);
     });
 
@@ -945,7 +951,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const tfps = yield* Ref.get(targetFps);
       yield* Ref.set(targetFrameTime, 1000 / tfps);
 
-      const fiber = yield* Effect.forkScoped(
+      const fiber = yield* Effect.forkDaemon(
         loop.pipe(
           // We need to repeat the loop to keep the fiber alive
           Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps))),
@@ -990,7 +996,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       const animationRequestStart = performance.now();
       yield* Effect.all(
-        frameRequests.map((callback) => Effect.sync(() => callback(deltaTime))),
+        Array.from(frameRequests).map((callback) => Effect.sync(() => callback(deltaTime))),
         { concurrency: "unbounded", concurrentFinalizers: true },
       );
       const animationRequestEnd = performance.now();
