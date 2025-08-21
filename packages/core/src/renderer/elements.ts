@@ -79,6 +79,20 @@ class ElementCounter extends Effect.Service<ElementCounter>()("ElementCounter", 
 
 export const ElementCounterLive = ElementCounter.Default;
 
+const validateOptions = Effect.fn(function* (id: number, options: ElementOptions) {
+  if (typeof options.width === "number") {
+    if (options.width < 0) {
+      return yield* Effect.fail(new TypeError(`Invalid width for Renderable ${id}: ${options.width}`));
+    }
+  }
+  if (typeof options.height === "number") {
+    if (options.height < 0) {
+      return yield* Effect.fail(new TypeError(`Invalid height for Renderable ${id}: ${options.height}`));
+    }
+  }
+  yield* Effect.succeed(true);
+});
+
 export class Elements extends Effect.Service<Elements>()("Elements", {
   dependencies: [ElementCounterLive],
   effect: Effect.gen(function* () {
@@ -95,11 +109,12 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
     ) {
       const id = yield* counter.getNext();
       const visible = yield* Ref.make(options.visible ?? true);
+      yield* validateOptions(id, options);
       const location = yield* Ref.make<{
         x: number;
         y: number;
         type: PositionType;
-      }>({ x: 0, y: 0, type: PositionAbsolute.make(2) });
+      }>({ x: options.left ?? 0, y: options.top ?? 0, type: PositionAbsolute.make(2) });
       const dimensions = yield* Ref.make<{
         widthValue: number;
         heightValue: number;
@@ -119,7 +134,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       const frameBuffer = yield* Ref.make<OptimizedBuffer | null>(null);
       const buffered = yield* Ref.make<boolean>(false);
       const needsZIndexSort = yield* Ref.make(false);
-      const zIndex = yield* Ref.make(0);
+      const zIndex = yield* Ref.make(options.zIndex ?? 0);
       const renderables = yield* Ref.make<BaseElement[]>([]);
       const position = yield* Ref.make<Position>({});
 
@@ -187,14 +202,11 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
           yield* requestLayout();
         } else {
           if (typeof top === "number" && isPositionAbsolute(type)) {
-            // this._y = top
             yield* Ref.update(location, (l) => ({ ...l, y: top }));
           }
           if (typeof left === "number" && isPositionAbsolute(type)) {
-            // this._x = left
             yield* Ref.update(location, (l) => ({ ...l, x: left }));
           }
-          // this._yogaPerformancePositionUpdated = false;
           yield* Ref.set(_yogaPerformancePositionUpdated, false);
         }
       });
@@ -291,7 +303,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
           yield* layoutNode.setHeight(options.height);
         }
 
-        // this._positionType = options.position ?? PositionRelative.make(1);
         yield* setPosition(options.position ?? PositionRelative.make(1));
         const { type } = yield* Ref.get(location);
         if (isPositionAbsolute(type)) {
@@ -430,11 +441,14 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         }
       });
 
-      const add = Effect.fn(function* (container: BaseElement, index?: number) {
+      const add = Effect.fn(function* (parentElement: BaseElement, container: BaseElement, index?: number) {
         if (index === undefined) {
           const cs = yield* Ref.get(renderables);
           index = cs.length;
         }
+
+        yield* Ref.set(parent, parentElement);
+
         yield* Ref.update(renderables, (cs) => {
           if (index === cs.length) {
             cs.push(container);
@@ -1039,7 +1053,7 @@ export type BaseElement = {
   getElementsCount: () => Effect.Effect<number>;
   setVisible: (value: boolean) => Effect.Effect<void>;
   render: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, Collection, Library>;
-  add: (container: BaseElement, index?: number) => Effect.Effect<void>;
+  add: (parent: BaseElement, container: BaseElement, index?: number) => Effect.Effect<void>;
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
   onSelectionChanged: (selection: SelectionState | null, width: number, height: number) => Effect.Effect<boolean>;
   getSelection: () => Effect.Effect<{ start: number; end: number } | null>;

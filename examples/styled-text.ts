@@ -17,9 +17,10 @@ if (import.meta.main) {
           top: 10,
           width: "auto",
           height: "auto",
+          zIndex: 1,
           colors: {
             fg: Colors.Red,
-            bg: Colors.Transparent,
+            bg: Colors.Yellow,
           },
         });
 
@@ -33,10 +34,11 @@ if (import.meta.main) {
             fg: Colors.Red,
             bg: Colors.Transparent,
           },
+          zIndex: 1,
         });
 
-        yield* parentContainer.add(text);
-        yield* parentContainer.add(text2);
+        yield* parentContainer.add(parentContainer, text);
+        yield* parentContainer.add(parentContainer, text2);
 
         yield* cli.add(parentContainer);
       }),
