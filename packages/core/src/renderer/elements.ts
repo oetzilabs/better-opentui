@@ -1,6 +1,6 @@
 import type { TextOptions } from "@opentuee/ui/src/components/text";
 import { Effect, Ref } from "effect";
-import { Direction, Edge, MeasureMode } from "yoga-layout";
+import { Direction, Display, Edge, MeasureMode } from "yoga-layout";
 import { OptimizedBuffer } from "../buffer/optimized";
 import { TextBuffer, TextChunkSchema } from "../buffer/text";
 import { Colors, Input } from "../colors";
@@ -240,6 +240,9 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
       const setupYogaProperties = Effect.fn(function* (options: ElementOptions) {
         const node = layoutNode.yogaNode;
+        const v = yield* Ref.get(visible);
+        node.setDisplay(v ? Display.Flex : Display.None);
+
         if (isFlexBasis(options.flexBasis)) {
           node.setFlexBasis(options.flexBasis);
         }
@@ -454,6 +457,8 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         return 0;
       });
 
+      yield* setupYogaProperties(options);
+
       return {
         id,
         type,
@@ -467,6 +472,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         localSelection,
         lineInfo,
         zIndex,
+        renderables,
         ensureZIndexSorted,
         setVisible,
         render,
@@ -618,36 +624,18 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
     const group = Effect.fn(function* () {
       const b = yield* base("group");
-      const groupElements = yield* Ref.make<BaseElement[]>([]);
       const parent = yield* Ref.make<BaseElement | null>(null);
 
-      const getElements = Effect.fn(function* () {
-        return yield* Ref.get(groupElements);
-      });
-
-      const getElementsCount = Effect.fn(function* () {
-        const es = yield* Ref.get(groupElements);
-        // deep count of all elements
-        let count = es.length;
-        for (let i = 0; i < es.length; i++) {
-          const e = es[i];
-          if (e.visible) {
-            count += yield* Effect.suspend(() => e.getElementsCount());
-          }
-        }
-        return count;
-      });
-
-      const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
-        const v = yield* Ref.get(b.visible);
-        if (!v) return;
-        const elements = yield* Ref.get(groupElements);
-        yield* Effect.all(
-          elements.map((e) => Effect.suspend(() => e.render(buffer, deltaTime))),
-          { concurrency: "unbounded" },
-        );
-        yield* b.render(buffer, deltaTime);
-      });
+      // const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
+      //   const v = yield* Ref.get(b.visible);
+      //   if (!v) return;
+      //   yield* b.render(buffer, deltaTime);
+      //   const elements = yield* Ref.get(groupElements);
+      //   yield* Effect.all(
+      //     elements.map((e) => Effect.suspend(() => e.render(buffer, deltaTime))),
+      //     { concurrency: "unbounded" },
+      //   );
+      // });
 
       const setVisible = Effect.fn(function* (value: boolean) {
         yield* Ref.set(b.visible, value);
@@ -655,14 +643,15 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
       const add = Effect.fn(function* (container: BaseElement, index?: number) {
         if (index === undefined) {
-          const cs = yield* Ref.get(groupElements);
+          const cs = yield* Ref.get(b.renderables);
           index = cs.length;
         }
-        yield* Ref.update(groupElements, (cs) => {
+        yield* Ref.update(b.renderables, (cs) => {
           cs.splice(index, 0, container);
           return cs;
         });
       });
+
       const onMouseEvent = Effect.fn(function* (event: MouseEvent) {});
       const onKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {});
 
@@ -683,7 +672,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       });
 
       const setContent = Effect.fn(function* (value: BaseElement) {
-        yield* Ref.set(groupElements, [value]);
+        yield* Ref.set(b.renderables, [value]);
       });
 
       const processKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
@@ -695,7 +684,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       });
 
       const destroy = Effect.fn(function* () {
-        const elements = yield* Ref.get(groupElements);
+        const elements = yield* Ref.get(b.renderables);
         yield* Effect.all(
           elements.map((element) => Effect.suspend(() => element.destroy())),
           { concurrency: "unbounded" },
@@ -706,7 +695,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       return {
         ...b,
         setVisible,
-        render,
         add,
         shouldStartSelection,
         onSelectionChanged,
@@ -714,7 +702,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         processKeyboardEvent,
         setContent,
         destroy,
-        getElementsCount,
       };
     });
 
@@ -866,6 +853,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       });
 
       const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
+        // yield* b.render(buffer, deltaTime);
         yield* Effect.log("Rendering text");
         const v = yield* Ref.get(b.visible);
         if (!v) return;
@@ -881,7 +869,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         const ctx = yield* Ref.get(context);
         const { x, y } = yield* Ref.get(location);
         yield* ctx.addToHitGrid(x, y, w, h, b.id);
-        // yield* b.render(buffer, deltaTime);
         // yield* Effect.log("Rendering text");
       });
 
@@ -1086,6 +1073,7 @@ export type BaseElement = {
   lineInfo: { lineStarts: number[]; lineWidths: number[] };
   layoutNode: TrackedNode;
   zIndex: Ref.Ref<number>;
+  renderables: Ref.Ref<BaseElement[]>;
   ensureZIndexSorted: () => Effect.Effect<void>;
   getElements: () => Effect.Effect<BaseElement[]>;
   getElementsCount: () => Effect.Effect<number>;
