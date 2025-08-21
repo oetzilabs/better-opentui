@@ -17,8 +17,10 @@ if (import.meta.main) {
           top: 2,
           width: "auto",
           height: "auto",
-          fg: Colors.Red,
-          bg: Colors.Transparent,
+          colors: {
+            fg: Colors.Red,
+            bg: Colors.Transparent,
+          },
         });
 
         const text2 = yield* cli.createElement("text", "Hello World 2", {
@@ -27,8 +29,10 @@ if (import.meta.main) {
           top: 5,
           width: "auto",
           height: "auto",
-          fg: Colors.Red,
-          bg: Colors.Transparent,
+          colors: {
+            fg: Colors.Red,
+            bg: Colors.Transparent,
+          },
         });
 
         yield* parentContainer.add(text);
@@ -38,8 +42,8 @@ if (import.meta.main) {
       }),
       on: {
         start: Effect.fn(function* (cli) {
-          // const count = yield* cli.getElementCount();
-          // yield* Effect.log("Amount of elements: ", count);
+          const count = yield* cli.getElementCount();
+          yield* Effect.log("Amount of elements: ", count);
         }),
         resize: Effect.fn(function* (width, height) {}),
         exit: Effect.fn(function* (reason) {

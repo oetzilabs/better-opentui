@@ -407,8 +407,37 @@ export class WritingToBufferError extends Schema.TaggedError<WritingToBufferErro
   cause: Schema.optional(Schema.Unknown),
 }) {}
 
+export class TrackedNodeDestroyed extends Schema.TaggedError<TrackedNodeDestroyed>("TrackedNodeDestroyed")(
+  "TrackedNodeDestroyed",
+  {
+    cause: Schema.optional(Schema.Unknown),
+  },
+) {}
+
+export class ParentTrackedNodeDestroyed extends Schema.TaggedError<ParentTrackedNodeDestroyed>(
+  "ParentTrackedNodeDestroyed",
+)("ParentTrackedNodeDestroyed", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class FailedToSetTrackedNodeWidthAndHeight extends Schema.TaggedError<FailedToSetTrackedNodeWidthAndHeight>(
+  "FailedToSetTrackedNodeWidthAndHeight",
+)("FailedToSetTrackedNodeWidthAndHeight", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class FailedToInsertChildTrackNode extends Schema.TaggedError<FailedToInsertChildTrackNode>(
+  "FailedToInsertChildTrackNode",
+)("FailedToInsertChildTrackNode", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
 // all errors
 export type Collection =
+  | FailedToInsertChildTrackNode
+  | FailedToSetTrackedNodeWidthAndHeight
+  | ParentTrackedNodeDestroyed
+  | TrackedNodeDestroyed
   | NextBufferNotAvailable
   | WritingToBufferError
   | RendererFailedToDisableMouse

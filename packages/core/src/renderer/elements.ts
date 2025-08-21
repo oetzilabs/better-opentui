@@ -1,4 +1,3 @@
-import type { TextOptions } from "@opentuee/ui/src/components/text";
 import { Effect, Ref } from "effect";
 import { Direction, Display, Edge, MeasureMode } from "yoga-layout";
 import { OptimizedBuffer } from "../buffer/optimized";
@@ -10,6 +9,7 @@ import type {
   RendererFailedToAddToHitGrid,
   RendererFailedToDestroyOptimizedBuffer,
   RendererFailedToDestroyTextBuffer,
+  TrackedNodeDestroyed,
 } from "../errors";
 import type { KeyboardEvent } from "../events/keyboard";
 import type { MouseEvent } from "../events/mouse";
@@ -31,9 +31,26 @@ import {
   isSize,
   Position,
   PositionAbsolute,
+  PositionInput,
   PositionRelative,
   PositionType,
 } from "./utils/position";
+
+export type ElementOptions = Partial<LayoutOptions> & {
+  visible?: boolean;
+  selectable?: boolean;
+  colors?: {
+    fg?: Input;
+    bg?: Input;
+    selectableFg?: Input;
+    selectableBg?: Input;
+  };
+  attributes?: number;
+};
+
+export interface TextOptions extends ElementOptions {
+  content?: StyledText | string;
+}
 
 export interface RenderContextInterface {
   addToHitGrid: (
@@ -62,18 +79,6 @@ class ElementCounter extends Effect.Service<ElementCounter>()("ElementCounter", 
 
 export const ElementCounterLive = ElementCounter.Default;
 
-export type ElementOptions = Partial<LayoutOptions> & {
-  visible: boolean;
-  selectable: boolean;
-  colors?: {
-    fg?: Input;
-    bg?: Input;
-    selectableFg?: Input;
-    selectableBg?: Input;
-  };
-  attributes?: number;
-};
-
 export class Elements extends Effect.Service<Elements>()("Elements", {
   dependencies: [ElementCounterLive],
   effect: Effect.gen(function* () {
@@ -89,7 +94,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       },
     ) {
       const id = yield* counter.getNext();
-      const visible = yield* Ref.make(options.visible);
+      const visible = yield* Ref.make(options.visible ?? true);
       const location = yield* Ref.make<{
         x: number;
         y: number;
@@ -101,7 +106,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         width: number | "auto" | `${number}%`;
         height: number | "auto" | `${number}%`;
       }>({ width: "auto", height: "auto", widthValue: 0, heightValue: 0 });
-      const selectable = yield* Ref.make(options.selectable);
+      const selectable = yield* Ref.make(options.selectable ?? true);
       const parent = yield* Ref.make<BaseElement | null>(null);
       const colors = yield* Ref.make({
         fg: options.colors?.fg ?? Colors.White,
@@ -447,6 +452,10 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         return local;
       });
 
+      const getSelectedText = Effect.fn(function* () {
+        return "";
+      });
+
       const destroy = Effect.fn(function* () {});
 
       const getElements = Effect.fn(function* () {
@@ -454,7 +463,8 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       });
 
       const getElementsCount = Effect.fn(function* () {
-        return 0;
+        const es = yield* Ref.get(renderables);
+        return es.length;
       });
 
       yield* setupYogaProperties(options);
@@ -478,6 +488,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         render,
         add,
         getSelection,
+        getSelectedText,
         shouldStartSelection,
         onSelectionChanged,
         processMouseEvent,
@@ -508,35 +519,17 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
     const root = Effect.fn(function* (ctx: RenderContextInterface) {
       yield* Ref.set(context, ctx);
       const b = yield* base("root");
-      const elementsHolder = yield* Ref.make<BaseElement[]>([]);
-
-      const getElements = Effect.fn(function* () {
-        return yield* Ref.get(elementsHolder);
-      });
-
-      const getElementsCount = Effect.fn(function* () {
-        const es = yield* Ref.get(elementsHolder);
-        // deep count of all elements
-        let count = es.length;
-        for (let i = 0; i < es.length; i++) {
-          const e = es[i];
-          if (e.visible) {
-            count += yield* Effect.suspend(() => e.getElementsCount());
-          }
-        }
-        return count;
-      });
 
       const add = Effect.fn(function* (container: BaseElement, index?: number) {
         if (index === undefined) {
-          const cs = yield* Ref.get(elementsHolder);
+          const cs = yield* Ref.get(b.renderables);
           index = cs.length;
         }
 
         // Set the parent reference for the container
         yield* Ref.set(container.parent, b);
 
-        yield* Ref.update(elementsHolder, (cs) => {
+        yield* Ref.update(b.renderables, (cs) => {
           cs.splice(index, 0, container);
           return cs;
         });
@@ -552,7 +545,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
           yield* calculateLayout();
         }
         yield* b.updateFromLayout();
-        const elements = yield* Ref.get(elementsHolder);
+        const elements = yield* Ref.get(b.renderables);
         yield* Effect.all(
           elements.map((e) => Effect.suspend(() => e.render(buffer, deltaTime))),
           { concurrency: "unbounded" },
@@ -565,7 +558,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       });
 
       const getRenderable = Effect.fn(function* (id: number) {
-        const elements = yield* Ref.get(elementsHolder);
+        const elements = yield* Ref.get(b.renderables);
         return elements.find((e) => e.id === id);
       });
 
@@ -574,31 +567,31 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       });
 
       const shouldStartSelection = Effect.fn(function* (x: number, y: number) {
-        const elements = yield* Ref.get(elementsHolder);
+        const elements = yield* Ref.get(b.renderables);
         return yield* Effect.all(
           elements.map((element) => Effect.suspend(() => element.shouldStartSelection(x, y))),
         ).pipe(Effect.map((shouldStarts) => shouldStarts.some((shouldStart) => shouldStart)));
       });
 
       const onSelectionChanged = Effect.fn(function* (selection: SelectionState | null, width: number, height: number) {
-        const elements = yield* Ref.get(elementsHolder);
+        const elements = yield* Ref.get(b.renderables);
         return yield* Effect.all(
           elements.map((element) => Effect.suspend(() => element.onSelectionChanged(selection, width, height))),
         ).pipe(Effect.map((changeds) => changeds.some((changed) => changed)));
       });
 
       const processMouseEvent = Effect.fn(function* (event: MouseEvent) {
-        const elements = yield* Ref.get(elementsHolder);
+        const elements = yield* Ref.get(b.renderables);
         yield* Effect.all(elements.map((element) => Effect.suspend(() => element.processMouseEvent(event))));
       });
 
       const processKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
-        const elements = yield* Ref.get(elementsHolder);
+        const elements = yield* Ref.get(b.renderables);
         yield* Effect.all(elements.map((element) => Effect.suspend(() => element.processKeyboardEvent(event))));
       });
 
       const destroy = Effect.fn(function* () {
-        const elements = yield* Ref.get(elementsHolder);
+        const elements = yield* Ref.get(b.renderables);
         yield* Effect.all(
           elements.map((element) => Effect.suspend(() => element.destroy())),
           { concurrency: "unbounded" },
@@ -617,8 +610,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         processMouseEvent,
         processKeyboardEvent,
         destroy,
-        getElements,
-        getElementsCount,
       } as const;
     });
 
@@ -710,8 +701,8 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         visible: options.visible ?? true,
         selectable: options.selectable ?? true,
         colors: {
-          fg: options.fg ?? Colors.Black,
-          bg: options.bg ?? Colors.White,
+          fg: options.colors?.fg ?? Colors.Black,
+          bg: options.colors?.bg ?? Colors.White,
         },
         attributes: options.attributes,
       });
@@ -743,14 +734,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       yield* textBuffer.setDefaultFg(fgC);
       const attrs = yield* Ref.get(b.attributes);
       yield* textBuffer.setDefaultAttributes(attrs);
-
-      const getElements = Effect.fn(function* () {
-        return [];
-      });
-
-      const getElementsCount = Effect.fn(function* () {
-        return 0;
-      });
 
       const measureFunc = (
         width: number,
@@ -870,10 +853,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         const { x, y } = yield* Ref.get(location);
         yield* ctx.addToHitGrid(x, y, w, h, b.id);
         // yield* Effect.log("Rendering text");
-      });
-
-      const setVisible = Effect.fn(function* (value: boolean) {
-        yield* Ref.set(b.visible, value);
       });
 
       const onMouseEvent = Effect.fn(function* (event: MouseEvent) {});
@@ -1018,9 +997,16 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         yield* textBuffer.destroy();
       });
 
+      const getSelectedText = Effect.fn(function* () {
+        const local = yield* Ref.get(b.localSelection);
+        if (!local) return "";
+        const c = yield* Ref.get(_content);
+        return c.toString().slice(local.start, local.end);
+      });
+
       return {
         ...b,
-        setVisible,
+        getSelectedText,
         render,
         add,
         shouldStartSelection,
@@ -1029,8 +1015,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         processKeyboardEvent,
         setContent,
         destroy,
-        getElements,
-        getElementsCount,
       };
     });
 
@@ -1083,11 +1067,12 @@ export type BaseElement = {
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
   onSelectionChanged: (selection: SelectionState | null, width: number, height: number) => Effect.Effect<boolean>;
   getSelection: () => Effect.Effect<{ start: number; end: number } | null>;
+  getSelectedText: () => Effect.Effect<string>;
   processMouseEvent: (event: MouseEvent) => Effect.Effect<void>;
   processKeyboardEvent: (event: KeyboardEvent) => Effect.Effect<void>;
   destroy: () => Effect.Effect<
     void,
-    RendererFailedToDestroyTextBuffer | RendererFailedToDestroyOptimizedBuffer,
+    RendererFailedToDestroyTextBuffer | RendererFailedToDestroyOptimizedBuffer | TrackedNodeDestroyed,
     Library
   >;
   onResize: (width: number, height: number) => Effect.Effect<void, CantParseHexColor, Library>;
