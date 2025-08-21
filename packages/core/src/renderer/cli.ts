@@ -334,6 +334,11 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       return hook as HookRecord<RunnerEvent>;
     });
 
+    const getElementCount = Effect.fn(function* () {
+      const elements = yield* root.getElementsCount();
+      return elements;
+    });
+
     const setupTerminal = Effect.fn(function* (latch: Effect.Latch, hooks?: RunnerHooks) {
       yield* writeOut(SaveCursorState.make("\u001B[s"));
 
@@ -1185,6 +1190,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     return {
+      getElementCount,
       createElement,
       add,
       start,

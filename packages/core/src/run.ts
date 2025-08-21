@@ -8,7 +8,7 @@ import { Colors } from "./colors";
 export type SetupFunction = (cli: CliRenderer) => Effect.Effect<void, Errors.Collection, Library | CliRenderer>;
 
 export interface RunnerEventMap {
-  start: [];
+  start: [cli: CliRenderer];
   exit: [reason: ShutdownReason];
   error: [err: Error];
   shutdown: [];
@@ -45,8 +45,11 @@ export const run = (options: RunOptions) =>
     }
 
     yield* options.setup(cli);
-
     yield* cli.start().pipe(Effect.catchAllCause((cause) => onPanic(cause)));
+
+    const start = options.on?.start ? options.on.start : Effect.fn(function* (cli: CliRenderer) {});
+
+    yield* start(cli);
 
     const finalizer = Effect.fn(
       function* (exit: Exit.Exit<unknown, unknown>) {
@@ -67,7 +70,7 @@ export const run = (options: RunOptions) =>
 
     yield* exitTrigger.await;
 
-    return yield* Effect.never;
+    // return yield* Effect.never;
   }).pipe(
     Effect.provide([CliRendererLive]),
     Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))),

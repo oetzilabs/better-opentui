@@ -37,7 +37,10 @@ if (import.meta.main) {
         yield* cli.add(parentContainer);
       }),
       on: {
-        start: Effect.fn(function* () {}),
+        start: Effect.fn(function* (cli) {
+          // const count = yield* cli.getElementCount();
+          // yield* Effect.log("Amount of elements: ", count);
+        }),
         resize: Effect.fn(function* (width, height) {}),
         exit: Effect.fn(function* (reason) {
           process.exit(0);

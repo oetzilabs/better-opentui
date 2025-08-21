@@ -146,6 +146,14 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
       const destroy = Effect.fn(function* () {});
 
+      const getElements = Effect.fn(function* () {
+        return [];
+      });
+
+      const getElementsCount = Effect.fn(function* () {
+        return 0;
+      });
+
       return {
         id,
         type,
@@ -166,6 +174,8 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         processMouseEvent,
         processKeyboardEvent,
         destroy,
+        getElements,
+        getElementsCount,
       };
     });
 
@@ -188,6 +198,23 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       yield* Ref.set(context, ctx);
       const b = yield* base("root");
       const elementsHolder = yield* Ref.make<BaseElement[]>([]);
+
+      const getElements = Effect.fn(function* () {
+        return yield* Ref.get(elementsHolder);
+      });
+
+      const getElementsCount = Effect.fn(function* () {
+        const es = yield* Ref.get(elementsHolder);
+        // deep count of all elements
+        let count = es.length;
+        for (let i = 0; i < es.length; i++) {
+          const e = es[i];
+          if (e.visible) {
+            count += yield* Effect.suspend(() => e.getElementsCount());
+          }
+        }
+        return count;
+      });
 
       const add = Effect.fn(function* (container: BaseElement, index?: number) {
         if (index === undefined) {
@@ -271,6 +298,8 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         processMouseEvent,
         processKeyboardEvent,
         destroy,
+        getElements,
+        getElementsCount,
       } as const;
     });
 
@@ -278,6 +307,23 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       const b = yield* base("group");
       const groupElements = yield* Ref.make<BaseElement[]>([]);
       const parent = yield* Ref.make<BaseElement | null>(null);
+
+      const getElements = Effect.fn(function* () {
+        return yield* Ref.get(groupElements);
+      });
+
+      const getElementsCount = Effect.fn(function* () {
+        const es = yield* Ref.get(groupElements);
+        // deep count of all elements
+        let count = es.length;
+        for (let i = 0; i < es.length; i++) {
+          const e = es[i];
+          if (e.visible) {
+            count += yield* Effect.suspend(() => e.getElementsCount());
+          }
+        }
+        return count;
+      });
 
       const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
         const v = yield* Ref.get(b.visible);
@@ -355,6 +401,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         processKeyboardEvent,
         setContent,
         destroy,
+        getElementsCount,
       };
     });
 
@@ -397,6 +444,14 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       yield* textBuffer.setDefaultFg(fgC);
       const attrs = yield* Ref.get(b.attributes);
       yield* textBuffer.setDefaultAttributes(attrs);
+
+      const getElements = Effect.fn(function* () {
+        return [];
+      });
+
+      const getElementsCount = Effect.fn(function* () {
+        return 0;
+      });
 
       const measureFunc = (
         width: number,
@@ -511,7 +566,8 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
           height: h,
         };
         yield* lib.bufferDrawTextBuffer(buffer.ptr, textBuffer.ptr, loc.x, loc.y, clipRect);
-        yield* b.render(buffer, deltaTime);
+        // yield* b.render(buffer, deltaTime);
+        yield* Effect.log("Rendering text");
       });
 
       const setVisible = Effect.fn(function* (value: boolean) {
@@ -672,6 +728,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         setContent,
         onResize,
         destroy,
+        getElements,
       };
     });
 
@@ -697,6 +754,8 @@ export type BaseElement = {
   selectable: Ref.Ref<boolean>;
   parent: Ref.Ref<BaseElement | null>;
   visible: Ref.Ref<boolean>;
+  getElements: () => Effect.Effect<BaseElement[]>;
+  getElementsCount: () => Effect.Effect<number>;
   setVisible: (value: boolean) => Effect.Effect<void>;
   render: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, RendererFailedToDrawTextBuffer>;
   add: (container: BaseElement, index?: number) => Effect.Effect<void>;
