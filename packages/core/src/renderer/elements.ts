@@ -1,6 +1,6 @@
 import type { TextOptions } from "@opentuee/ui/src/components/text";
 import { Effect, Ref } from "effect";
-import { Direction, MeasureMode } from "yoga-layout";
+import { Direction, Edge, MeasureMode } from "yoga-layout";
 import { OptimizedBuffer } from "../buffer/optimized";
 import { TextBuffer, TextChunkSchema } from "../buffer/text";
 import { Colors, Input } from "../colors";
@@ -10,26 +10,28 @@ import type {
   RendererFailedToAddToHitGrid,
   RendererFailedToDestroyOptimizedBuffer,
   RendererFailedToDestroyTextBuffer,
-  RendererFailedToDrawTextBuffer,
-  RendererFailedToGetAttributesPointer,
-  RendererFailedToGetBackgroundPointer,
-  RendererFailedToGetBuffer,
-  RendererFailedToGetCharPointer,
-  RendererFailedToGetForegroundPointer,
-  RendererFailedToResizeBuffer,
 } from "../errors";
 import type { KeyboardEvent } from "../events/keyboard";
 import type { MouseEvent } from "../events/mouse";
 import type { SelectionState } from "../types";
 import { parseColor } from "../utils";
 import { Library } from "../zig";
+import type { LayoutOptions } from "./layout";
 import { StyledText } from "./styled-text";
-import { createTrackedNode } from "./tracknode";
+import { createTrackedNode, TrackedNode } from "./tracknode";
 import {
+  isDimension,
+  isFlexBasis,
+  isPercentageNumberMixed,
   isPositionAbsolute,
+  isPositionInput,
+  isPositionRecord,
   isPositionRelative,
   isPositionType,
+  isSize,
+  Position,
   PositionAbsolute,
+  PositionRelative,
   PositionType,
 } from "./utils/position";
 
@@ -60,7 +62,7 @@ class ElementCounter extends Effect.Service<ElementCounter>()("ElementCounter", 
 
 export const ElementCounterLive = ElementCounter.Default;
 
-export type ElementOptions = {
+export type ElementOptions = Partial<LayoutOptions> & {
   visible: boolean;
   selectable: boolean;
   colors?: {
@@ -111,6 +113,209 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       const _yogaPerformancePositionUpdated = yield* Ref.make(false);
       const frameBuffer = yield* Ref.make<OptimizedBuffer | null>(null);
       const buffered = yield* Ref.make<boolean>(false);
+      const needsZIndexSort = yield* Ref.make(false);
+      const zIndex = yield* Ref.make(0);
+      const renderables = yield* Ref.make<BaseElement[]>([]);
+      const position = yield* Ref.make<Position>({});
+
+      const ensureZIndexSorted = Effect.fn(function* () {
+        const needsSort = yield* Ref.get(needsZIndexSort);
+
+        if (needsSort) {
+          const elements = yield* Ref.get(renderables);
+
+          const zIndexPlusId = elements.map((e) => ({ zIndex: e.zIndex, id: e.id }));
+          zIndexPlusId.sort((a, b) => (a.zIndex > b.zIndex ? 1 : a.zIndex < b.zIndex ? -1 : 0));
+          const sortedElements = zIndexPlusId.map((e) => elements.find((el) => el.id === e.id)!);
+
+          yield* Ref.set(renderables, sortedElements);
+          yield* Ref.set(needsZIndexSort, false);
+        }
+      });
+
+      const requestLayout = Effect.fn(function* () {
+        const yppu = yield* Ref.get(_yogaPerformancePositionUpdated);
+        if (!yppu) {
+          const layout = layoutNode.yogaNode.getComputedLayout();
+          const { x, y } = yield* Ref.get(location);
+          if (layout.left !== x || layout.top !== y) {
+            layoutNode.yogaNode.setPosition(Edge.Left, x);
+            layoutNode.yogaNode.setPosition(Edge.Top, y);
+          }
+          yield* Ref.set(_yogaPerformancePositionUpdated, true);
+        }
+      });
+
+      const updateYogaPosition = Effect.fn(function* (position: Position) {
+        const node = layoutNode.yogaNode;
+        const { top, right, bottom, left } = position;
+        const { type } = yield* Ref.get(location);
+        if (isPositionRelative(type)) {
+          if (isPositionInput(top)) {
+            if (top === "auto") {
+              node.setPositionAuto(Edge.Top);
+            } else {
+              node.setPosition(Edge.Top, top);
+            }
+          }
+          if (isPositionInput(right)) {
+            if (right === "auto") {
+              node.setPositionAuto(Edge.Right);
+            } else {
+              node.setPosition(Edge.Right, right);
+            }
+          }
+          if (isPositionInput(bottom)) {
+            if (bottom === "auto") {
+              node.setPositionAuto(Edge.Bottom);
+            } else {
+              node.setPosition(Edge.Bottom, bottom);
+            }
+          }
+          if (isPositionInput(left)) {
+            if (left === "auto") {
+              node.setPositionAuto(Edge.Left);
+            } else {
+              node.setPosition(Edge.Left, left);
+            }
+          }
+          yield* requestLayout();
+        } else {
+          if (typeof top === "number" && isPositionAbsolute(type)) {
+            // this._y = top
+            yield* Ref.update(location, (l) => ({ ...l, y: top }));
+          }
+          if (typeof left === "number" && isPositionAbsolute(type)) {
+            // this._x = left
+            yield* Ref.update(location, (l) => ({ ...l, x: left }));
+          }
+          // this._yogaPerformancePositionUpdated = false;
+          yield* Ref.set(_yogaPerformancePositionUpdated, false);
+        }
+      });
+
+      const setupMarginAndPadding = Effect.fn(function* (options: ElementOptions) {
+        const node = layoutNode.yogaNode;
+
+        if (isPercentageNumberMixed(options.margin)) {
+          node.setMargin(Edge.Top, options.margin);
+          node.setMargin(Edge.Right, options.margin);
+          node.setMargin(Edge.Bottom, options.margin);
+          node.setMargin(Edge.Left, options.margin);
+        }
+
+        if (options.margin && isPositionRecord(options.margin) && isPercentageNumberMixed(options.margin.top)) {
+          node.setMargin(Edge.Top, options.margin.top);
+        }
+        if (options.margin && isPositionRecord(options.margin) && isPercentageNumberMixed(options.margin.right)) {
+          node.setMargin(Edge.Right, options.margin.right);
+        }
+        if (options.margin && isPositionRecord(options.margin) && isPercentageNumberMixed(options.margin.bottom)) {
+          node.setMargin(Edge.Bottom, options.margin.bottom);
+        }
+        if (options.margin && isPositionRecord(options.margin) && isPercentageNumberMixed(options.margin.left)) {
+          node.setMargin(Edge.Left, options.margin.left);
+        }
+
+        if (options.padding && isPercentageNumberMixed(options.padding)) {
+          node.setPadding(Edge.Top, options.padding);
+          node.setPadding(Edge.Right, options.padding);
+          node.setPadding(Edge.Bottom, options.padding);
+          node.setPadding(Edge.Left, options.padding);
+        }
+
+        if (options.padding && isPositionRecord(options.padding) && isPercentageNumberMixed(options.padding.top)) {
+          node.setPadding(Edge.Top, options.padding.top);
+        }
+        if (options.padding && isPositionRecord(options.padding) && isPercentageNumberMixed(options.padding.right)) {
+          node.setPadding(Edge.Right, options.padding.right);
+        }
+        if (options.padding && isPositionRecord(options.padding) && isPercentageNumberMixed(options.padding.bottom)) {
+          node.setPadding(Edge.Bottom, options.padding.bottom);
+        }
+        if (options.padding && isPositionRecord(options.padding) && isPercentageNumberMixed(options.padding.left)) {
+          node.setPadding(Edge.Left, options.padding.left);
+        }
+      });
+
+      const setupYogaProperties = Effect.fn(function* (options: ElementOptions) {
+        const node = layoutNode.yogaNode;
+        if (isFlexBasis(options.flexBasis)) {
+          node.setFlexBasis(options.flexBasis);
+        }
+
+        if (isSize(options.minWidth)) {
+          node.setMinWidth(options.minWidth);
+        }
+        if (isSize(options.minHeight)) {
+          node.setMinHeight(options.minHeight);
+        }
+
+        if (options.flexGrow !== undefined) {
+          node.setFlexGrow(options.flexGrow);
+        } else {
+          node.setFlexGrow(0);
+        }
+
+        if (options.flexShrink !== undefined) {
+          node.setFlexShrink(options.flexShrink);
+        } else {
+          const shrinkValue = options.flexGrow && options.flexGrow > 0 ? 1 : 0;
+          node.setFlexShrink(shrinkValue);
+        }
+
+        if (options.flexDirection !== undefined) {
+          const flexDirection = node.setFlexDirection(options.flexDirection);
+        }
+        if (options.alignItems !== undefined) {
+          node.setAlignItems(options.alignItems);
+        }
+        if (options.justifyContent !== undefined) {
+          node.setJustifyContent(options.justifyContent);
+        }
+
+        if (options.width && isDimension(options.width)) {
+          yield* Ref.update(dimensions, (d) => ({ ...d, width: options.width! }));
+          yield* layoutNode.setWidth(options.width);
+        }
+        if (options.height && isDimension(options.height)) {
+          yield* Ref.update(dimensions, (d) => ({ ...d, height: options.height! }));
+          yield* layoutNode.setHeight(options.height);
+        }
+
+        // this._positionType = options.position ?? PositionRelative.make(1);
+        yield* setPosition(options.position ?? PositionRelative.make(1));
+        const { type } = yield* Ref.get(location);
+        if (isPositionAbsolute(type)) {
+          node.setPositionType(type);
+        }
+
+        // TODO: flatten position properties internally as well
+        const hasPositionProps =
+          options.top !== undefined ||
+          options.right !== undefined ||
+          options.bottom !== undefined ||
+          options.left !== undefined;
+        if (hasPositionProps) {
+          const pos = yield* Ref.updateAndGet(position, (p) => ({
+            top: options.top,
+            right: options.right,
+            bottom: options.bottom,
+            left: options.left,
+          }));
+
+          yield* updateYogaPosition(pos);
+        }
+
+        if (isSize(options.maxWidth)) {
+          node.setMaxWidth(options.maxWidth);
+        }
+        if (isSize(options.maxHeight)) {
+          node.setMaxHeight(options.maxHeight);
+        }
+
+        yield* setupMarginAndPadding(options);
+      });
 
       const createFrameBuffer = Effect.fn(function* () {
         const { widthValue: w, heightValue: h } = yield* Ref.get(dimensions);
@@ -261,6 +466,8 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         layoutNode,
         localSelection,
         lineInfo,
+        zIndex,
+        ensureZIndexSorted,
         setVisible,
         render,
         add,
@@ -274,7 +481,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         getElementsCount,
         onResize,
         updateFromLayout,
-      };
+      } satisfies BaseElement;
     });
 
     const context = yield* Ref.make<RenderContextInterface>({
@@ -862,6 +1069,24 @@ export type BaseElement = {
   selectable: Ref.Ref<boolean>;
   parent: Ref.Ref<BaseElement | null>;
   visible: Ref.Ref<boolean>;
+  colors: Ref.Ref<{
+    fg: Input;
+    bg: Input;
+    selectableFg: Input;
+    selectableBg: Input;
+  }>;
+  attributes: Ref.Ref<number>;
+  dimensions: Ref.Ref<{
+    widthValue: number;
+    heightValue: number;
+    width: number | "auto" | `${number}%`;
+    height: number | "auto" | `${number}%`;
+  }>;
+  localSelection: Ref.Ref<{ start: number; end: number } | null>;
+  lineInfo: { lineStarts: number[]; lineWidths: number[] };
+  layoutNode: TrackedNode;
+  zIndex: Ref.Ref<number>;
+  ensureZIndexSorted: () => Effect.Effect<void>;
   getElements: () => Effect.Effect<BaseElement[]>;
   getElementsCount: () => Effect.Effect<number>;
   setVisible: (value: boolean) => Effect.Effect<void>;

@@ -22,9 +22,20 @@ export const Percentage = Schema.TemplateLiteral(Schema.Number, Schema.Literal("
 export type Percentage = typeof Percentage.Type;
 export const isPercentage = Schema.is(Percentage);
 
+export const PercentageNumberMixed = Schema.Union(Percentage, Schema.Number);
+export type PercentageNumberMixed = typeof PercentageNumberMixed.Type;
+export const isPercentageNumberMixed = Schema.is(PercentageNumberMixed);
+
 export const PositionInput = Schema.Union(Schema.Number, Percentage, Schema.Literal("auto"));
 export type PositionInput = typeof PositionInput.Type;
 export const isPositionInput = Schema.is(PositionInput);
+
+export const PositionRecord = Schema.Record({
+  key: Schema.String,
+  value: PositionInput,
+});
+export type PositionRecord = typeof PositionRecord.Type;
+export const isPositionRecord = Schema.is(PositionRecord);
 
 export const Position = Schema.Struct({
   left: Schema.optional(PositionInput),
