@@ -1,14 +1,22 @@
 import type { TextOptions } from "@opentuee/ui/src/components/text";
 import { Effect, Ref } from "effect";
-import { MeasureMode } from "yoga-layout";
-import type { OptimizedBuffer } from "../buffer/optimized";
+import { Direction, MeasureMode } from "yoga-layout";
+import { OptimizedBuffer } from "../buffer/optimized";
 import { TextBuffer, TextChunkSchema } from "../buffer/text";
 import { Colors, Input } from "../colors";
 import type {
+  CantParseHexColor,
+  Collection,
   RendererFailedToAddToHitGrid,
   RendererFailedToDestroyOptimizedBuffer,
   RendererFailedToDestroyTextBuffer,
   RendererFailedToDrawTextBuffer,
+  RendererFailedToGetAttributesPointer,
+  RendererFailedToGetBackgroundPointer,
+  RendererFailedToGetBuffer,
+  RendererFailedToGetCharPointer,
+  RendererFailedToGetForegroundPointer,
+  RendererFailedToResizeBuffer,
 } from "../errors";
 import type { KeyboardEvent } from "../events/keyboard";
 import type { MouseEvent } from "../events/mouse";
@@ -17,7 +25,13 @@ import { parseColor } from "../utils";
 import { Library } from "../zig";
 import { StyledText } from "./styled-text";
 import { createTrackedNode } from "./tracknode";
-import { isPositionAbsolute, PositionAbsolute, PositionType } from "./utils/position";
+import {
+  isPositionAbsolute,
+  isPositionRelative,
+  isPositionType,
+  PositionAbsolute,
+  PositionType,
+} from "./utils/position";
 
 export interface RenderContextInterface {
   addToHitGrid: (
@@ -74,8 +88,17 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
     ) {
       const id = yield* counter.getNext();
       const visible = yield* Ref.make(options.visible);
-      const location = yield* Ref.make({ x: 0, y: 0 });
-      const dimensions = yield* Ref.make({ width: 0, height: 0 });
+      const location = yield* Ref.make<{
+        x: number;
+        y: number;
+        type: PositionType;
+      }>({ x: 0, y: 0, type: PositionAbsolute.make(2) });
+      const dimensions = yield* Ref.make<{
+        widthValue: number;
+        heightValue: number;
+        width: number | "auto" | `${number}%`;
+        height: number | "auto" | `${number}%`;
+      }>({ width: "auto", height: "auto", widthValue: 0, heightValue: 0 });
       const selectable = yield* Ref.make(options.selectable);
       const parent = yield* Ref.make<BaseElement | null>(null);
       const colors = yield* Ref.make({
@@ -85,8 +108,80 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         selectableBg: options.colors?.selectableBg ?? Colors.Black,
       });
       const attributes = yield* Ref.make(options.attributes ?? 0);
+      const _yogaPerformancePositionUpdated = yield* Ref.make(false);
+      const frameBuffer = yield* Ref.make<OptimizedBuffer | null>(null);
+      const buffered = yield* Ref.make<boolean>(false);
 
-      const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
+      const createFrameBuffer = Effect.fn(function* () {
+        const { widthValue: w, heightValue: h } = yield* Ref.get(dimensions);
+
+        if (w <= 0 || h <= 0) {
+          return;
+        }
+
+        const fb = yield* OptimizedBuffer.create(w, h, {
+          respectAlpha: true,
+        }).pipe(Effect.catchAll(() => Effect.succeed(null)));
+
+        yield* Ref.set(frameBuffer, fb);
+      });
+
+      const handleFrameBufferResize = Effect.fn(function* (width: number, height: number) {
+        const buf = yield* Ref.get(buffered);
+        if (!buf) return;
+
+        if (width <= 0 || height <= 0) {
+          return;
+        }
+        const fb = yield* Ref.get(frameBuffer);
+        if (fb) {
+          yield* fb.resize(width, height);
+        } else {
+          yield* createFrameBuffer();
+        }
+      });
+
+      const onResize: BaseElement["onResize"] = Effect.fn(function* (width: number, height: number) {
+        // Override in subclasses for additional resize logic
+      });
+
+      const onLayoutResize = Effect.fn(function* (width: number, height: number) {
+        const v = yield* Ref.get(visible);
+        if (v) {
+          yield* handleFrameBufferResize(width, height);
+          yield* onResize(width, height);
+        }
+      });
+
+      const setPosition = Effect.fn(function* (type: PositionType) {
+        const { type: oldType } = yield* Ref.get(location);
+        if (!isPositionType(type) || oldType === type) return;
+        const { type: newType } = yield* Ref.updateAndGet(location, (l) => ({ ...l, type }));
+        layoutNode.yogaNode.setPositionType(newType);
+        yield* Ref.set(_yogaPerformancePositionUpdated, true);
+      });
+
+      const updateFromLayout = Effect.fn(function* () {
+        const layout = layoutNode.yogaNode.getComputedLayout();
+        const { type } = yield* Ref.get(location);
+        const yppu = yield* Ref.get(_yogaPerformancePositionUpdated);
+        if (isPositionRelative(type) || yppu) {
+          yield* Ref.update(location, (l) => ({ ...l, x: layout.left, y: layout.top }));
+        }
+
+        const newWidth = Math.max(layout.width, 1);
+        const newHeight = Math.max(layout.height, 1);
+        const { width: oldWidth, height: oldHeight } = yield* Ref.get(dimensions);
+        const sizeChanged = oldWidth !== newWidth || oldHeight !== newHeight;
+
+        yield* Ref.update(dimensions, (d) => ({ ...d, width: newWidth, height: newHeight }));
+
+        if (sizeChanged) {
+          yield* onLayoutResize(newWidth, newHeight);
+        }
+      });
+
+      const render: BaseElement["render"] = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
         // empty
         // yield* Console.log("Rendering base element");
       });
@@ -124,7 +219,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
       const shouldStartSelection = Effect.fn(function* (x: number, y: number) {
         const p = yield* Ref.get(location);
-        const { width, height } = yield* Ref.get(dimensions);
+        const { widthValue: width, heightValue: height } = yield* Ref.get(dimensions);
         const localX = x - p.x;
         const localY = y - p.y;
         return localX >= 0 && localX < width && localY >= 0 && localY < height;
@@ -162,6 +257,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         attributes,
         parent,
         selectable,
+        dimensions,
         layoutNode,
         localSelection,
         lineInfo,
@@ -176,6 +272,8 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         destroy,
         getElements,
         getElementsCount,
+        onResize,
+        updateFromLayout,
       };
     });
 
@@ -231,7 +329,16 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         });
       });
 
-      const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
+      const calculateLayout = Effect.fn(function* () {
+        const { widthValue: width, heightValue: height } = yield* Ref.get(b.dimensions);
+        b.layoutNode.yogaNode.calculateLayout(width, height, Direction.LTR);
+      });
+
+      b.render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
+        if (b.layoutNode.yogaNode.isDirty()) {
+          yield* calculateLayout();
+        }
+        yield* b.updateFromLayout();
         const elements = yield* Ref.get(elementsHolder);
         yield* Effect.all(
           elements.map((e) => Effect.suspend(() => e.render(buffer, deltaTime))),
@@ -288,7 +395,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
       return {
         ...b,
-        render,
         resize,
         getRenderable,
         add,
@@ -428,12 +534,11 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         y: number;
         type: PositionType;
       }>({ x: 0, y: 0, type: PositionAbsolute.make(2) });
-      const dimensions = yield* Ref.make<{
-        widthValue: number;
-        heightValue: number;
-        width: number | "auto" | `${number}%`;
-        height: number | "auto" | `${number}%`;
-      }>({ width: options.width ?? "auto", height: options.height ?? "auto", widthValue: 0, heightValue: 0 });
+      yield* Ref.update(b.dimensions, (d) => ({
+        ...d,
+        width: options.width ?? "auto",
+        height: options.height ?? "auto",
+      }));
       const capacity = 64 as const;
       const tba = yield* lib.createTextBuffer(capacity);
       const textBuffer = new TextBuffer(tba.bufferPtr, tba.buffers, capacity);
@@ -519,10 +624,10 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         b.lineInfo = yield* textBuffer.getLineInfo();
 
         const numLines = b.lineInfo.lineStarts.length;
-        const { width, height, heightValue, widthValue } = yield* Ref.get(dimensions);
+        const { width, height, heightValue, widthValue } = yield* Ref.get(b.dimensions);
         const loc = yield* Ref.get(location);
         if (isPositionAbsolute(loc.type) && height === "auto") {
-          yield* Ref.update(dimensions, (d) => ({
+          yield* Ref.update(b.dimensions, (d) => ({
             ...d,
             heightValue: numLines,
           }));
@@ -532,13 +637,13 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         const maxLineWidth = Math.max(...b.lineInfo.lineWidths);
         if (isPositionAbsolute(loc.type) && width === "auto") {
           // widthValue = maxLineWidth;
-          yield* Ref.update(dimensions, (d) => ({
+          yield* Ref.update(b.dimensions, (d) => ({
             ...d,
             widthValue: maxLineWidth,
           }));
           b.layoutNode.yogaNode.markDirty();
         }
-        const { widthValue: w, heightValue: h } = yield* Ref.get(dimensions);
+        const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
         const changed = reevaluateSelection(w, h);
         if (changed) {
           yield* syncSelectionToTextBuffer();
@@ -546,7 +651,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       });
       yield* updateTextInfo();
 
-      const onResize = Effect.fn(function* (width: number, height: number) {
+      b.onResize = Effect.fn(function* (width: number, height: number) {
         const changed = yield* reevaluateSelection(width, height);
         if (changed) {
           yield* syncSelectionToTextBuffer();
@@ -558,7 +663,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         const v = yield* Ref.get(b.visible);
         if (!v) return;
         const loc = yield* Ref.get(location);
-        const { widthValue: w, heightValue: h } = yield* Ref.get(dimensions);
+        const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
         const clipRect = {
           x: loc.x,
           y: loc.y,
@@ -566,6 +671,9 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
           height: h,
         };
         yield* lib.bufferDrawTextBuffer(buffer.ptr, textBuffer.ptr, loc.x, loc.y, clipRect);
+        const ctx = yield* Ref.get(context);
+        const { x, y } = yield* Ref.get(location);
+        yield* ctx.addToHitGrid(x, y, w, h, b.id);
         // yield* b.render(buffer, deltaTime);
         // yield* Effect.log("Rendering text");
       });
@@ -609,7 +717,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
       const shouldStartSelection = Effect.fn(function* (x: number, y: number) {
         const p = yield* Ref.get(location);
-        const { widthValue: w, heightValue: h } = yield* Ref.get(dimensions);
+        const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
         const localX = x - p.x;
         const localY = y - p.y;
         return localX >= 0 && localX < w && localY >= 0 && localY < h;
@@ -726,9 +834,9 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         processMouseEvent,
         processKeyboardEvent,
         setContent,
-        onResize,
         destroy,
         getElements,
+        getElementsCount,
       };
     });
 
@@ -757,7 +865,7 @@ export type BaseElement = {
   getElements: () => Effect.Effect<BaseElement[]>;
   getElementsCount: () => Effect.Effect<number>;
   setVisible: (value: boolean) => Effect.Effect<void>;
-  render: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, RendererFailedToDrawTextBuffer>;
+  render: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, Collection, Library>;
   add: (container: BaseElement, index?: number) => Effect.Effect<void>;
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
   onSelectionChanged: (selection: SelectionState | null, width: number, height: number) => Effect.Effect<boolean>;
@@ -769,6 +877,8 @@ export type BaseElement = {
     RendererFailedToDestroyTextBuffer | RendererFailedToDestroyOptimizedBuffer,
     Library
   >;
+  onResize: (width: number, height: number) => Effect.Effect<void, CantParseHexColor, Library>;
+  updateFromLayout: () => Effect.Effect<void, Collection, Library>;
 };
 
 type Effects = Effect.Effect.Success<ReturnType<Elements[Methods]>>;
