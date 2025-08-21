@@ -19,7 +19,7 @@ import { OptimizedBuffer } from "../buffer/optimized";
 import { Colors, Input } from "../colors";
 import { OpenTuiConfig, OpenTuiConfigLive } from "../config";
 import type { Style } from "../cursor-style";
-import { WritingToBufferError, type RendererFailedToCheckHit } from "../errors";
+import { WritingToBufferError, type Collection, type RendererFailedToCheckHit } from "../errors";
 import { KeyboardEvent } from "../events/keyboard";
 import { MouseEvent } from "../events/mouse";
 import { ParsedKey, parse as parseKey } from "../inputs/keyboard";
@@ -36,6 +36,7 @@ import {
   MouseParser,
   MouseParserLive,
 } from "../inputs/mouse";
+import type { RunnerEvent, RunnerEventMap, RunnerHooks } from "../run";
 import { parseColor } from "../utils";
 import { Library } from "../zig";
 import { Elements, ElementsLive, type Element, type MethodParameters } from "./elements";
@@ -57,6 +58,19 @@ export type ShutdownReason =
 
 let animationFrameId = 0;
 
+type HookRecord<E extends RunnerEvent> = {
+  on?: HookFunction<E>;
+  off?: HookFunction<E>;
+};
+
+type HookMap = {
+  [E in RunnerEvent]: HookRecord<E>;
+};
+
+export type HookFunction<Event extends RunnerEvent, R = void> = (
+  ...args: RunnerEventMap[Event]
+) => Effect.Effect<R, Collection, Library>;
+
 export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
   dependencies: [OpenTuiConfigLive, SelectionLive, MouseParserLive, ElementsLive],
   scoped: Effect.gen(function* () {
@@ -67,6 +81,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const _isShuttingDown = yield* Ref.make(false);
     const _isDestroyed = yield* Ref.make(false);
     const _isWaitingForPixelResolution = yield* Ref.make(false);
+    const internalHooks = yield* Ref.make(new Map<RunnerEvent, HookMap[RunnerEvent]>());
 
     const renderFiber = yield* Ref.make<Fiber.RuntimeFiber<number, Error> | null>(null);
     const memorySnapshotTimer = yield* Ref.make<Fiber.RuntimeFiber<number, Error> | null>(null);
@@ -275,9 +290,37 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const setUseThread = Effect.fn(function* () {});
 
-    const setTerminalSize = Effect.fn(function* () {});
+    const setTerminalSize = Effect.fn(function* (width: number, height: number) {
+      yield* Ref.set(_width, width);
+      yield* Ref.set(_height, height);
+      // yield* Ref.set(_terminalWidth, width);
+      // yield* Ref.set(_terminalHeight, height);
+      // yield* lib.setTerminalSize(renderer, width, height);
+    });
 
-    const setupTerminal = Effect.fn(function* (shutdown: Deferred.Deferred<ShutdownReason, never>) {
+    function setHook<E extends RunnerEvent>(
+      map: Map<RunnerEvent, HookMap[RunnerEvent]>,
+      event: E,
+      hook: HookRecord<E>,
+    ) {
+      const existing = map.get(event) as HookRecord<E> | undefined;
+      map.set(event, {
+        ...existing,
+        ...hook,
+      } as HookRecord<E>);
+      return map;
+    }
+
+    const getHook = Effect.fn(function* (event: RunnerEvent) {
+      const hooks = yield* Ref.get(internalHooks);
+      const hook = hooks.get(event);
+      return hook as HookRecord<RunnerEvent>;
+    });
+
+    const setupTerminal = Effect.fn(function* (
+      shutdown: Deferred.Deferred<ShutdownReason, never>,
+      hooks?: RunnerHooks,
+    ) {
       yield* writeOut(SaveCursorState.make("\u001B[s"));
 
       const um = yield* getUseMouse();
@@ -286,34 +329,63 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       } else {
         yield* disableMouse();
       }
+      if (hooks) {
+        yield* Ref.update(internalHooks, (hs) => {
+          let copy = new Map<RunnerEvent, HookMap[RunnerEvent]>(hs);
 
-      const readResize = Effect.gen(function* () {
-        const mailbox = yield* Mailbox.make<{ width: number; height: number }>();
+          (Object.keys(hooks.on ?? {}) as RunnerEvent[]).forEach((event) => {
+            const on = hooks.on?.[event] as HookFunction<keyof RunnerEventMap> | undefined;
+            if (on) {
+              copy = setHook<typeof event>(copy, event, { on });
+            }
+          });
 
-        const handleResizeEvt = () => {
-          const width = process.stdout.columns || 80;
-          const height = process.stdout.rows || 24;
-          mailbox.unsafeOffer({ width, height });
-        };
+          (Object.keys(hooks.off ?? {}) as RunnerEvent[]).forEach((event) => {
+            const off = hooks.off?.[event] as HookFunction<keyof RunnerEventMap> | undefined;
+            if (off) {
+              copy = setHook<typeof event>(copy, event, { off });
+            }
+          });
 
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => {
-            process.off("SIGWINCH", handleResizeEvt);
-          }),
-        );
+          return copy;
+        });
+      }
 
-        process.on("SIGWINCH", handleResizeEvt);
+      // const readResize = Effect.gen(function* () {
+      //   const mailbox = yield* Mailbox.make<{ width: number; height: number }>();
 
-        return mailbox as Mailbox.ReadonlyMailbox<{ width: number; height: number }>;
-      });
+      //   const handleResizeEvt = () => {
+      //     const width = process.stdout.columns || 80;
+      //     const height = process.stdout.rows || 24;
+      //     mailbox.unsafeOffer({ width, height });
+      //   };
 
-      const rsmb = yield* readResize;
-      const rsf = yield* rsmb.take.pipe(
-        Effect.map(({ width, height }) => handleResize(width, height)),
-        Effect.forever,
-        Effect.forkScoped,
-      );
-      yield* Ref.set(resizeFork, rsf);
+      //   yield* Effect.addFinalizer(() =>
+      //     Effect.sync(() => {
+      //       process.off("SIGWINCH", handleResizeEvt);
+      //     }),
+      //   );
+
+      //   process.on("SIGWINCH", handleResizeEvt);
+
+      //   return mailbox as Mailbox.ReadonlyMailbox<{ width: number; height: number }>;
+      // });
+
+      // const rsmb = yield* readResize;
+      // const rsf = yield* rsmb.take.pipe(
+      //   Effect.map(({ width, height }) =>
+      //     Effect.gen(function* () {
+      //       yield* handleResize(width, height);
+      //       const resize = yield* getHook("resize");
+      //       if (resize && resize.on) {
+      //         yield* resize.on(width, height);
+      //       }
+      //     }),
+      //   ),
+      //   Effect.forever,
+      //   Effect.forkScoped,
+      // );
+      // yield* Ref.set(resizeFork, rsf);
 
       if (stdin.setRawMode) {
         stdin.setRawMode(true);
@@ -360,6 +432,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 };
                 yield* Ref.set(_resolution, resolution);
                 yield* Ref.set(_isWaitingForPixelResolution, false);
+                const resize = yield* getHook("resize");
+                if (resize && resize.on) {
+                  yield* resize.on(resolution.width, resolution.height);
+                }
                 return;
               }
             }
