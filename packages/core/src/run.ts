@@ -5,7 +5,9 @@ import { Library, LibraryLive } from "@opentuee/core/src/zig";
 import { Cause, Console, Deferred, Duration, Effect, Exit, Fiber, Logger } from "effect";
 import { Colors } from "./colors";
 
-export type SetupFunction = (cli: CliRenderer) => Effect.Effect<void, Errors.Collection, Library | CliRenderer>;
+export type SetupFunction = (
+  cli: CliRenderer,
+) => Effect.Effect<void, Errors.Collection | TypeError, Library | CliRenderer>;
 
 export interface RunnerEventMap {
   start: [cli: CliRenderer];
