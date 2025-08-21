@@ -567,7 +567,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         };
         yield* lib.bufferDrawTextBuffer(buffer.ptr, textBuffer.ptr, loc.x, loc.y, clipRect);
         // yield* b.render(buffer, deltaTime);
-        yield* Effect.log("Rendering text");
+        // yield* Effect.log("Rendering text");
       });
 
       const setVisible = Effect.fn(function* (value: boolean) {
