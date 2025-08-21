@@ -1,14 +1,14 @@
 import { BunRuntime } from "@effect/platform-bun";
 import { Colors } from "@opentuee/core/src/colors";
-import { CliRenderer } from "@opentuee/core/src/renderer/cli";
 import { PositionAbsolute } from "@opentuee/core/src/renderer/utils/position";
 import { run } from "@opentuee/core/src/run";
-import { Console, Effect } from "effect";
+import { Effect } from "effect";
 
 if (import.meta.main) {
   BunRuntime.runMain(
     run({
       setup: Effect.fn(function* (cli) {
+        yield* cli.setBackgroundColor(Colors.White);
         const parentContainer = yield* cli.createElement("group");
 
         const text = yield* cli.createElement("text", "Hello World", {

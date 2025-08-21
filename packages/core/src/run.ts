@@ -35,7 +35,6 @@ export const run = (options: RunOptions) =>
     const cli = yield* CliRenderer;
     const latch = yield* Effect.makeLatch();
     let onPanic: HookFunction<"panic"> = Effect.fn(function* (_cause: Cause.Cause<unknown>) {});
-    yield* cli.setBackgroundColor(Colors.Black);
 
     yield* cli.setupTerminal(latch, {
       on: options.on,
