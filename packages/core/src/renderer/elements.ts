@@ -395,8 +395,10 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       });
 
       const render: BaseElement["render"] = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
-        // empty
-        // yield* Console.log("Rendering base element");
+        const es = yield* Ref.get(renderables);
+        for (const element of es) {
+          yield* Effect.suspend(() => element.render(buffer, deltaTime));
+        }
       });
 
       const setVisible = Effect.fn(function* (value: boolean) {
@@ -428,7 +430,20 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         }
       });
 
-      const add = Effect.fn(function* (container: BaseElement, index?: number) {});
+      const add = Effect.fn(function* (container: BaseElement, index?: number) {
+        if (index === undefined) {
+          const cs = yield* Ref.get(renderables);
+          index = cs.length;
+        }
+        yield* Ref.update(renderables, (cs) => {
+          if (index === cs.length) {
+            cs.push(container);
+          } else {
+            cs.splice(index, 0, container);
+          }
+          return cs;
+        });
+      });
 
       const shouldStartSelection = Effect.fn(function* (x: number, y: number) {
         const p = yield* Ref.get(location);
@@ -459,12 +474,21 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       const destroy = Effect.fn(function* () {});
 
       const getElements = Effect.fn(function* () {
-        return [];
+        const es = yield* Ref.get(renderables);
+        return es;
       });
 
       const getElementsCount = Effect.fn(function* () {
         const es = yield* Ref.get(renderables);
-        return es.length;
+        let count = es.length; // Count direct renderables
+
+        // Recursively count nested elements
+        for (const element of es) {
+          const nestedCount = yield* Effect.suspend(() => element.getElementsCount());
+          count += nestedCount;
+        }
+
+        return count;
       });
 
       yield* setupYogaProperties(options);
@@ -520,27 +544,13 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       yield* Ref.set(context, ctx);
       const b = yield* base("root");
 
-      const add = Effect.fn(function* (container: BaseElement, index?: number) {
-        if (index === undefined) {
-          const cs = yield* Ref.get(b.renderables);
-          index = cs.length;
-        }
-
-        // Set the parent reference for the container
-        yield* Ref.set(container.parent, b);
-
-        yield* Ref.update(b.renderables, (cs) => {
-          cs.splice(index, 0, container);
-          return cs;
-        });
-      });
-
       const calculateLayout = Effect.fn(function* () {
         const { widthValue: width, heightValue: height } = yield* Ref.get(b.dimensions);
         b.layoutNode.yogaNode.calculateLayout(width, height, Direction.LTR);
       });
 
       b.render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
+        // we are in the `render` method of the root element, so we need to render all the elements
         if (b.layoutNode.yogaNode.isDirty()) {
           yield* calculateLayout();
         }
@@ -603,7 +613,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         ...b,
         resize,
         getRenderable,
-        add,
         setVisible,
         shouldStartSelection,
         onSelectionChanged,
@@ -616,32 +625,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
     const group = Effect.fn(function* () {
       const b = yield* base("group");
       const parent = yield* Ref.make<BaseElement | null>(null);
-
-      // const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
-      //   const v = yield* Ref.get(b.visible);
-      //   if (!v) return;
-      //   yield* b.render(buffer, deltaTime);
-      //   const elements = yield* Ref.get(groupElements);
-      //   yield* Effect.all(
-      //     elements.map((e) => Effect.suspend(() => e.render(buffer, deltaTime))),
-      //     { concurrency: "unbounded" },
-      //   );
-      // });
-
-      const setVisible = Effect.fn(function* (value: boolean) {
-        yield* Ref.set(b.visible, value);
-      });
-
-      const add = Effect.fn(function* (container: BaseElement, index?: number) {
-        if (index === undefined) {
-          const cs = yield* Ref.get(b.renderables);
-          index = cs.length;
-        }
-        yield* Ref.update(b.renderables, (cs) => {
-          cs.splice(index, 0, container);
-          return cs;
-        });
-      });
 
       const onMouseEvent = Effect.fn(function* (event: MouseEvent) {});
       const onKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {});
@@ -685,8 +668,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
       return {
         ...b,
-        setVisible,
-        add,
         shouldStartSelection,
         onSelectionChanged,
         processMouseEvent,
@@ -836,8 +817,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       });
 
       const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
-        // yield* b.render(buffer, deltaTime);
-        yield* Effect.log("Rendering text");
+        // we are in the `render` method of the text element, so we need to render only the text
         const v = yield* Ref.get(b.visible);
         if (!v) return;
         const loc = yield* Ref.get(location);
@@ -852,7 +832,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         const ctx = yield* Ref.get(context);
         const { x, y } = yield* Ref.get(location);
         yield* ctx.addToHitGrid(x, y, w, h, b.id);
-        // yield* Effect.log("Rendering text");
       });
 
       const onMouseEvent = Effect.fn(function* (event: MouseEvent) {});
@@ -873,8 +852,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
           yield* Effect.suspend(() => p.processKeyboardEvent(event));
         }
       });
-
-      const add = Effect.fn(function* (container: BaseElement, index?: number) {});
 
       const setContent = Effect.fn(function* (value: string) {
         const textEncoder = new TextEncoder();
@@ -1008,7 +985,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         ...b,
         getSelectedText,
         render,
-        add,
         shouldStartSelection,
         onSelectionChanged,
         processMouseEvent,

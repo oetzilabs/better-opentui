@@ -394,9 +394,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const rsf = yield* rsmb.take.pipe(
         Effect.map(({ width, height }) =>
           Effect.gen(function* () {
-            const isD = yield* Ref.get(_isDestroyed);
-            const isr = yield* Ref.get(_isRunning);
-            if (!isD || !isr) return;
+            // const isD = yield* Ref.get(_isDestroyed);
+            // const isr = yield* Ref.get(_isRunning);
+            // if (!isD || !isr) return;
             yield* handleResize(width, height);
             const resize = yield* getHook("resize");
             if (resize && resize.on) {
@@ -762,19 +762,25 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       }
       const w = yield* Ref.get(_width);
       const h = yield* Ref.get(_height);
-      yield* lib.resizeRenderer(renderer, w, h);
-      const nrba = yield* lib.getNextBuffer(renderer);
 
+      yield* lib.resizeRenderer(renderer, w, h);
+
+      const nrba = yield* lib.getNextBuffer(renderer);
       const nextRenderBuffer = new OptimizedBuffer(nrba.bufferPtr, nrba.buffers, nrba.width, nrba.height, {});
+
       const crba = yield* lib.getCurrentBuffer(renderer);
       const currentRenderBuffer = new OptimizedBuffer(crba.bufferPtr, crba.buffers, crba.width, crba.height, {});
+
       yield* Ref.set(buffers, {
         next: nextRenderBuffer,
         current: currentRenderBuffer,
       });
+
       yield* root.resize(w, h);
-      yield* needsUpdate();
     });
+
+    // running the processResize once.
+    yield* processResize(config.width, config.height);
 
     const setBackgroundColor = Effect.fn(function* (color: Input) {
       const parsedColor = yield* parseColor(color);
@@ -948,11 +954,11 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const tfps = yield* Ref.get(targetFps);
       yield* Ref.set(targetFrameTime, 1000 / tfps);
 
-      const fiber = yield* Effect.forkDaemon(
+      const fiber = yield* Effect.fork(
         loop.pipe(
           // We need to repeat the loop to keep the fiber alive
           Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps))),
-          Effect.retry(Schedule.recurs(10)),
+          // Effect.retry(Schedule.recurs(10)),
         ),
       );
 
@@ -960,9 +966,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const loop = Effect.gen(function* () {
-      const r = yield* Ref.get(rendering);
-      const isD = yield* Ref.get(_isDestroyed);
-      if (r || isD) return;
+      // const r = yield* Ref.get(rendering);
+      // const isD = yield* Ref.get(_isDestroyed);
+      // if (r || isD) return;
       yield* Ref.set(rendering, true);
 
       const now = Date.now();
@@ -1016,9 +1022,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const buf = yield* Ref.get(buffers);
       const nextBuffer = buf.next;
       if (!nextBuffer) {
+        yield* Effect.log("No next buffer available");
         return yield* Effect.fail(new NextBufferNotAvailable());
       }
-      yield* Effect.log("Rendering");
       yield* root.render(nextBuffer, deltaTime);
 
       const ppfns = yield* Ref.get(postProcessFns);

@@ -13,8 +13,8 @@ if (import.meta.main) {
 
         const text = yield* cli.createElement("text", "Hello World", {
           position: PositionAbsolute.make(2),
-          left: 2,
-          top: 2,
+          left: 10,
+          top: 10,
           width: "auto",
           height: "auto",
           colors: {
@@ -42,10 +42,12 @@ if (import.meta.main) {
       }),
       on: {
         start: Effect.fn(function* (cli) {
-          const count = yield* cli.getElementCount();
-          yield* Effect.log("Amount of elements: ", count);
+          // const count = yield* cli.getElementCount();
+          // yield* Effect.log("Amount of elements: ", count);
         }),
-        resize: Effect.fn(function* (width, height) {}),
+        resize: Effect.fn(function* (width, height) {
+          // yield* Effect.log("Resized to ", width, "x", height);
+        }),
         exit: Effect.fn(function* (reason) {
           process.exit(0);
         }),
