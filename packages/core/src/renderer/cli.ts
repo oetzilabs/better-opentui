@@ -1,7 +1,6 @@
-import { Deferred, Duration, Effect, Exit, Fiber, Mailbox, Ref, Schedule } from "effect";
+import { Duration, Effect, Exit, Fiber, Mailbox, Ref, Schedule, Schema } from "effect";
 import type { NoSuchElementException } from "effect/Cause";
 import {
-  ClearFromCursor,
   isExitOnCtrlC,
   makeRoomForRenderer,
   moveCursor,
@@ -392,11 +391,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       const rsmb = yield* readResize;
       const rsf = yield* rsmb.take.pipe(
-        Effect.map(({ width, height }) =>
+        Effect.tap(({ width, height }) =>
           Effect.gen(function* () {
-            // const isD = yield* Ref.get(_isDestroyed);
-            // const isr = yield* Ref.get(_isRunning);
-            // if (!isD || !isr) return;
             yield* handleResize(width, height);
             const resize = yield* getHook("resize");
             if (resize && resize.on) {
@@ -446,14 +442,16 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             if (!ir || isD) return;
             const str = data.toString();
             const wfpr = yield* Ref.get(_isWaitingForPixelResolution);
+            const numberParser = Schema.decodeUnknown(Schema.Int);
             if (wfpr && /\x1b\[4;\d+;\d+t/.test(str)) {
               const match = str.match(/\x1b\[4;(\d+);(\d+)t/);
               if (match) {
                 const resolution: PixelResolution = {
-                  width: parseInt(match[2]),
-                  height: parseInt(match[1]),
+                  width: yield* numberParser(match[2]),
+                  height: yield* numberParser(match[1]),
                 };
                 yield* Ref.set(_resolution, resolution);
+                // yield* handleResize(resolution.width, resolution.height);
                 yield* Ref.set(_isWaitingForPixelResolution, false);
                 const resize = yield* getHook("resize");
                 if (resize && resize.on) {
@@ -469,7 +467,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
             const parsedKey = yield* parseKey(data);
             if (isExitOnCtrlC(parsedKey.raw)) {
-              yield* latch.open;
+              return yield* latch.open;
             }
             if (parsedKey.name !== "unknown") {
               yield* handleKeyboardData(parsedKey);
@@ -1022,7 +1020,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const buf = yield* Ref.get(buffers);
       const nextBuffer = buf.next;
       if (!nextBuffer) {
-        yield* Effect.log("No next buffer available");
         return yield* Effect.fail(new NextBufferNotAvailable());
       }
       yield* root.render(nextBuffer, deltaTime);
@@ -1185,7 +1182,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const notifySelectablesOfSelectionChange = Effect.fn(function* () {});
 
     const add = Effect.fn(function* (container: BaseElement, index?: number) {
-      yield* root.add(container, index);
+      yield* root.add(root, container, index);
     });
 
     const createElement = Effect.fn(function* <T extends Types>(type: T, ...args: MethodParameters[T]) {
