@@ -225,8 +225,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       if (msl > 0) {
         yield* startMemorySnapshotTimer();
       }
-      yield* startUpdateLoop();
-      yield* startRenderLoop();
+      yield* Effect.all([startUpdateLoop(), startRenderLoop()], {
+        concurrency: "unbounded",
+        concurrentFinalizers: true,
+      });
     });
 
     const writeOut = Effect.fn(function* (chunk: string, encoding: BufferEncoding = "utf8") {
@@ -487,11 +489,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             if (isExitOnCtrlC(parsedKey.raw)) {
               return yield* latch.open;
             }
-            if (parsedKey.name !== "unknown") {
-              yield* handleKeyboardData(parsedKey);
-            } else {
-              yield* Effect.log("Unknown key: " + str);
-            }
+            yield* handleKeyboardData(parsedKey);
           }),
         ),
         Effect.forever,
@@ -1011,8 +1009,14 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const errorRenderer = Effect.fn("errorRenderer")(function* (nextBuffer: OptimizedBuffer, deltaTime: number) {
       const es = yield* Ref.get(errors);
-      if (es.length === 0) return;
-      return yield* Effect.dieMessage(es.map((e) => e.toString()).join("\n"));
+      yield* Effect.annotateCurrentSpan(
+        "renderer.errorRenderer",
+        es.map((e) => e.toJSON()),
+      );
+      if (es.length === 0) {
+        return;
+      }
+      // return yield* Effect.dieMessage(es.map((e) => e.toString()).join("\n"));
     });
 
     const updateLoop = Effect.fn("updateLoop")(function* () {
@@ -1080,7 +1084,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         return yield* Effect.fail(new NextBufferNotAvailable());
       }
       yield* root.render(nextBuffer, deltaTime);
-      yield* errorRenderer(nextBuffer, deltaTime);
+
+      // yield* errorRenderer(nextBuffer, deltaTime);
 
       const ppfns = yield* Ref.get(postProcessFns);
 

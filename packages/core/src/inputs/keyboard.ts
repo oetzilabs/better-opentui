@@ -193,7 +193,7 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
       return b;
     }),
     Match.when(Schema.is(Schema.Unknown), (s) => String(s)),
-    Match.when(Schema.is(Schema.String), () => ""),
+    Match.when(Schema.is(Schema.String), (s) => s),
     Match.exhaustive,
   );
 
@@ -201,9 +201,9 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
     Match.when(Schema.is(KeyNames), (s) => {
       return ParsedKey.make({
         name: "",
-        ctrl: Schema.is(Ctrl)(key),
+        ctrl: Schema.is(Ctrl)(s),
         meta: metaKeyCodeRe.test(s),
-        shift: Schema.is(Shift)(key),
+        shift: Schema.is(Shift)(s),
         option: false,
         number: false,
         sequence: parsed1 || "",
@@ -357,9 +357,9 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             raw: parsed1,
           });
         }),
-        Match.when(fnKeyRe.test, (s) => {
-          const parts = s.match(fnKeyRe)!;
-          const segs = [...s];
+        Match.when(fnKeyRe.test, (fnS) => {
+          const parts = fnS.match(fnKeyRe)!;
+          const segs = [...fnS];
           // ansi escape sequence
           // reassemble the key code leaving out leading \x1b's,
           // the modifier key bitflag and any meaningless "1;" sequence
@@ -368,9 +368,9 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
           const brandName = "";
           return ParsedKey.make({
             name: brandName,
-            ctrl: !!(modifier & 4) || Schema.is(Ctrl)(key),
+            ctrl: !!(modifier & 4) || Schema.is(Ctrl)(s),
             meta: !!(modifier & 10),
-            shift: !!(modifier & 1) || Schema.is(Shift)(key),
+            shift: !!(modifier & 1) || Schema.is(Shift)(s),
             option: (segs[0] === "\u001b" && segs[1] === "\u001b") || !!(modifier & 2), // Add option/alt modifier detection,
             number: true,
             sequence: parsed1 || "",

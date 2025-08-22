@@ -33,6 +33,7 @@ if (import.meta.main) {
           colors: {
             fg: Colors.Red,
             bg: Colors.Transparent,
+            selectableBg: Colors.Green,
           },
           zIndex: 1,
         });

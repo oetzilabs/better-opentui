@@ -47,11 +47,6 @@ export const run = (options: RunOptions) =>
     }
 
     yield* options.setup(cli);
-    yield* cli.start().pipe(Effect.catchAllCause((cause) => onPanic(cause)));
-
-    const start = options.on?.start ? options.on.start : Effect.fn(function* (cli: CliRenderer) {});
-
-    yield* start(cli);
 
     const finalizer = Effect.fn(
       function* (exit: Exit.Exit<unknown, unknown>) {
@@ -63,6 +58,12 @@ export const run = (options: RunOptions) =>
     );
 
     yield* Effect.addFinalizer((exit) => finalizer(exit));
+
+    yield* cli.start().pipe(Effect.catchAllCause((cause) => onPanic(cause)));
+
+    const start = options.on?.start ? options.on.start : Effect.fn(function* (cli: CliRenderer) {});
+
+    yield* start(cli);
 
     const exitTrigger = yield* Effect.gen(function* () {
       yield* cli.stop();
