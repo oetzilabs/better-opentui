@@ -2,12 +2,13 @@ import { BunContext } from "@effect/platform-bun";
 import * as Errors from "@opentuee/core/src/errors";
 import { CliRenderer, CliRendererLive, type HookFunction, type ShutdownReason } from "@opentuee/core/src/renderer/cli";
 import { Library, LibraryLive } from "@opentuee/core/src/zig";
-import { Cause, Console, Deferred, Duration, Effect, Exit, Fiber, Logger } from "effect";
+import { Cause, Console, Effect, Exit, Logger } from "effect";
 import { Colors } from "./colors";
 import { createOtelLayer } from "./otel";
+import { Shutdown, ShutdownLive } from "./renderer/latch/shutdown";
 
 export type SetupFunction = (
-  cli: CliRenderer,
+  cli: CliRenderer
 ) => Effect.Effect<void, Errors.Collection | TypeError, Library | CliRenderer>;
 
 export interface RunnerEventMap {
@@ -33,6 +34,7 @@ export type RunOptions = RunnerHooks & {
 
 export const run = (options: RunOptions) =>
   Effect.gen(function* () {
+    const shutdown = yield* Shutdown;
     const cli = yield* CliRenderer;
     const latch = yield* Effect.makeLatch();
     let onPanic: HookFunction<"panic"> = Effect.fn(function* (_cause: Cause.Cause<unknown>) {});
@@ -54,7 +56,7 @@ export const run = (options: RunOptions) =>
           yield* options.on.exit({ type: "exit", code: 0, cause: exit });
         }
       },
-      (effect) => effect.pipe(Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause)))),
+      (effect) => effect.pipe(Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))))
     );
 
     yield* Effect.addFinalizer((exit) => finalizer(exit));
@@ -69,7 +71,7 @@ export const run = (options: RunOptions) =>
       yield* cli.stop();
       yield* cli.destroy();
       process.exit(0);
-    }).pipe(latch.whenOpen, Effect.fork);
+    }).pipe(shutdown.listen, Effect.fork);
 
     yield* exitTrigger.await;
 
@@ -77,7 +79,7 @@ export const run = (options: RunOptions) =>
   }).pipe(
     Effect.provide([CliRendererLive]),
     Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))),
-    Effect.provide([LibraryLive, Logger.pretty, createOtelLayer("opentuee")]),
+    Effect.provide([ShutdownLive, LibraryLive, Logger.pretty, createOtelLayer("opentuee")]),
     Effect.provide(BunContext.layer),
-    Effect.scoped,
+    Effect.scoped
   );

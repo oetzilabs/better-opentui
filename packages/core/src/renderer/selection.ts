@@ -1,5 +1,6 @@
 import { Effect, Ref } from "effect";
 import type { SelectionState } from "../types";
+import type { BaseElement } from "./elements/base";
 
 export class Selection extends Effect.Service<Selection>()("Selection", {
   effect: Effect.gen(function* () {
@@ -7,7 +8,7 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
     const _selecting = yield* Ref.make(false);
     const anchorRef = yield* Ref.make({ x: 0, y: 0 });
     const focusRef = yield* Ref.make({ x: 0, y: 0 });
-    const selectedRenderablesRef = yield* Ref.make<Element[]>([]);
+    const selectedRenderablesRef = yield* Ref.make<BaseElement<any>[]>([]);
     const selectionState = yield* Ref.make<SelectionState | null>(null);
 
     const anchor = Effect.fn(function* () {
@@ -29,7 +30,7 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
       };
     });
 
-    const updateSelectedRenderables = Effect.fn(function* (selected: Element[]) {
+    const updateSelectedRenderables = Effect.fn(function* (selected: BaseElement<any>[]) {
       yield* Ref.set(selectedRenderablesRef, selected);
     });
 
@@ -62,12 +63,8 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
       // 2) renderable.getX is itself an Effect (yield it directly)
       const sortedSelectedTexts = yield* Effect.all(
         selectedRenderables.map(
-          Effect.fn(function* (renderable: Element) {
-            const getXProp = (renderable as any).getX;
-            const getYProp = (renderable as any).getY;
-
-            const x = typeof getXProp === "function" ? yield* getXProp() : yield* getXProp;
-            const y = typeof getYProp === "function" ? yield* getYProp() : yield* getYProp;
+          Effect.fn(function* (renderable: BaseElement<any>) {
+            const  { x, y } = yield* Ref.get(renderable.location);
 
             return { x, y, id: renderable.id };
           }),

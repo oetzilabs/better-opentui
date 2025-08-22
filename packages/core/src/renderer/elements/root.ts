@@ -5,7 +5,6 @@ import type { KeyboardEvent } from "../../events/keyboard";
 import type { MouseEvent } from "../../events/mouse";
 import type { SelectionState } from "../../types";
 import { base } from "./base";
-import type { RenderContextInterface } from "./utils";
 
 export const root = Effect.fn(function* () {
   const b = yield* base("root");

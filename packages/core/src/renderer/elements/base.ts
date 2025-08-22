@@ -85,7 +85,7 @@ export type BaseElement<T extends string> = {
   add: (
     this: BaseElement<T>,
     container: BaseElement<any>,
-    index?: number | undefined,
+    index?: number | undefined
   ) => Effect.Effect<void, never, never>;
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
   onSelectionChanged: (selection: SelectionState | null, width: number, height: number) => Effect.Effect<boolean>;
@@ -107,7 +107,7 @@ export const base = Effect.fn(function* <T extends string>(
   options: ElementOptions = {
     visible: true,
     selectable: true,
-  },
+  }
 ) {
   const counter = yield* ElementCounter;
   const id = yield* counter.getNext();
@@ -458,6 +458,10 @@ export const base = Effect.fn(function* <T extends string>(
     if (p && !event.defaultPrevented) {
       yield* Effect.suspend(() => p.processMouseEvent(event));
     }
+    if (!event.defaultPrevented) {
+      const es = yield* Ref.get(renderables);
+      yield* Effect.all(es.map((e) => Effect.suspend(() => e.processMouseEvent(event))));
+    }
   });
 
   const processKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
@@ -511,7 +515,7 @@ export const base = Effect.fn(function* <T extends string>(
     const elements = yield* Ref.get(renderables);
     yield* Effect.all(
       elements.map((r) => Effect.suspend(() => r.destroy())),
-      { concurrency: "unbounded", concurrentFinalizers: true },
+      { concurrency: "unbounded", concurrentFinalizers: true }
     );
   });
 

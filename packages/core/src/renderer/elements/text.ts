@@ -48,7 +48,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     width: number,
     widthMode: MeasureMode,
     height: number,
-    heightMode: MeasureMode,
+    heightMode: MeasureMode
   ): { width: number; height: number } => {
     const maxLineWidth = Math.max(...b.lineInfo.lineWidths, 0);
     const numLines = b.lineInfo.lineStarts.length || 1;
@@ -171,10 +171,10 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
 
   const processMouseEvent = Effect.fn(function* (event: MouseEvent) {
     yield* onMouseEvent(event);
-    const p = yield* Ref.get(b.parent);
-    if (p && !event.defaultPrevented) {
-      yield* Effect.suspend(() => p.processMouseEvent(event));
-    }
+    // if (!event.defaultPrevented) {
+    //   const es = yield* Ref.get(b.renderables);
+    //   yield* Effect.all(es.map((e) => Effect.suspend(() => e.processMouseEvent(event))));
+    // }
   });
 
   const processKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
