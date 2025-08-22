@@ -13,8 +13,8 @@ if (import.meta.main) {
 
         const text = yield* cli.createElement("text", "Hello World", {
           position: PositionAbsolute.make(2),
-          left: 10,
-          top: 10,
+          left: 0,
+          top: 0,
           width: "auto",
           height: "auto",
           zIndex: 1,
