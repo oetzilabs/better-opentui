@@ -43,21 +43,10 @@ if (import.meta.main) {
         yield* cli.add(parentContainer);
       }),
       on: {
-        start: Effect.fn(function* (cli) {
-          // const count = yield* cli.getElementCount();
-          // yield* Effect.log("Amount of elements: ", count);
-        }),
-        resize: Effect.fn(function* (width, height) {
-          // yield* Effect.log("Resized to ", width, "x", height);
-        }),
-        exit: Effect.fn(function* (reason) {
-          // yield* Effect.log("Exiting with reason: ", reason);
-          process.exit(0);
-        }),
-        panic: Effect.fn(function* (err) {
-          // console.log("Panic: ", err);
-          process.exit(0);
-        }),
+        start: Effect.fn(function* (cli) {}),
+        resize: Effect.fn(function* (width, height) {}),
+        exit: Effect.fn(function* (reason) {}),
+        panic: Effect.fn(function* (err) {}),
       },
     }),
   );
