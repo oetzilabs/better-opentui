@@ -4,6 +4,7 @@ import { CliRenderer, CliRendererLive, type HookFunction, type ShutdownReason } 
 import { Library, LibraryLive } from "@opentuee/core/src/zig";
 import { Cause, Console, Deferred, Duration, Effect, Exit, Fiber, Logger } from "effect";
 import { Colors } from "./colors";
+import { createOtelLayer } from "./otel";
 
 export type SetupFunction = (
   cli: CliRenderer,
@@ -75,7 +76,7 @@ export const run = (options: RunOptions) =>
   }).pipe(
     Effect.provide([CliRendererLive]),
     Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))),
-    Effect.provide([LibraryLive, Logger.pretty]),
+    Effect.provide([LibraryLive, Logger.pretty, createOtelLayer("opentuee")]),
     Effect.provide(BunContext.layer),
     Effect.scoped,
   );

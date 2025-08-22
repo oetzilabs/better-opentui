@@ -14,10 +14,10 @@ export interface LayoutOptions {
   justifyContent?: Justify;
   flexBasis?: number | "auto" | undefined;
   position?: PositionTypeString;
-  top?: number;
-  right?: number;
-  bottom?: number;
-  left?: number;
+  top?: PositionInput;
+  right?: PositionInput;
+  bottom?: PositionInput;
+  left?: PositionInput;
   zIndex: number;
   minWidth?: number;
   minHeight?: number;

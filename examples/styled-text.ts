@@ -37,8 +37,8 @@ if (import.meta.main) {
           zIndex: 1,
         });
 
-        yield* parentContainer.add(parentContainer, text);
-        yield* parentContainer.add(parentContainer, text2);
+        yield* parentContainer.add(text);
+        yield* parentContainer.add(text2);
 
         yield* cli.add(parentContainer);
       }),
@@ -51,9 +51,13 @@ if (import.meta.main) {
           // yield* Effect.log("Resized to ", width, "x", height);
         }),
         exit: Effect.fn(function* (reason) {
+          // yield* Effect.log("Exiting with reason: ", reason);
           process.exit(0);
         }),
-        panic: Effect.fn(function* (err) {}),
+        panic: Effect.fn(function* (err) {
+          // console.log("Panic: ", err);
+          process.exit(0);
+        }),
       },
     }),
   );
