@@ -1405,21 +1405,20 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           const scs = yield* Ref.get(selectionContainers);
           const currentContainer = scs.length > 0 ? scs[scs.length - 1] : null;
           let hasSelection = false;
+          const { heightValue, widthValue } = yield* Ref.get(renderable.dimensions);
           if (!currentContainer) {
-            hasSelection = yield* renderable.onSelectionChanged(normalizedSelection);
-            if (hasSelection) {
-              selectedRenderables.push(renderable);
-              yield* currentSelection.updateSelectedRenderables(selectedRenderables);
-            }
-            return;
-          }
-          const iwc = yield* isWithinContainer(renderable, currentContainer);
-          if (iwc) {
-            hasSelection = yield* renderable.onSelectionChanged(normalizedSelection);
+            hasSelection = yield* renderable.onSelectionChanged(normalizedSelection, widthValue, heightValue);
           } else {
-            hasSelection = yield* renderable.onSelectionChanged(
-              normalizedSelection ? { ...normalizedSelection, isActive: false } : null,
-            );
+            const iwc = yield* isWithinContainer(renderable, currentContainer);
+            if (iwc) {
+              hasSelection = yield* renderable.onSelectionChanged(normalizedSelection, widthValue, heightValue);
+            } else {
+              hasSelection = yield* renderable.onSelectionChanged(
+                normalizedSelection ? { ...normalizedSelection, isActive: false } : null,
+                widthValue,
+                heightValue,
+              );
+            }
           }
 
           if (hasSelection) {

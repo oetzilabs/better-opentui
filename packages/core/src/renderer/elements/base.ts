@@ -94,7 +94,7 @@ export type BaseElement<T extends string, E> = {
     index?: number | undefined,
   ) => Effect.Effect<void, never, never>;
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
-  onSelectionChanged: (selection: SelectionState | null) => Effect.Effect<boolean>;
+  onSelectionChanged: (selection: SelectionState | null, w: number, h: number) => Effect.Effect<boolean>;
   getSelection: () => Effect.Effect<{ start: number; end: number } | null>;
   getSelectedText: () => Effect.Effect<string>;
   processMouseEvent: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
@@ -586,7 +586,7 @@ export const base = Effect.fn(function* <T extends string, E>(
     return localX >= 0 && localX < width && localY >= 0 && localY < height;
   });
 
-  const onSelectionChanged = Effect.fn(function* (selection: SelectionState | null) {
+  const onSelectionChanged = Effect.fn(function* (selection: SelectionState | null, w: number, h: number) {
     return false;
   });
 

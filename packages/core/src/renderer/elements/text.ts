@@ -19,6 +19,7 @@ export interface TextElement extends BaseElement<"text", TextElement> {
   setContent: (content: string | StyledText) => Effect.Effect<void, Collection, Library>;
   getContent: () => Effect.Effect<StyledText, Collection, Library>;
   onUpdate: (self: TextElement) => Effect.Effect<void, Collection, Library>;
+  onSelectionChanged: (selection: SelectionState | null, w: number, h: number) => Effect.Effect<boolean>;
 }
 
 export type TextOptions = ElementOptions<"text", TextElement> & {
@@ -39,6 +40,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
     yield* ctx.addToHitGrid(x, y, w, h, b.num);
+    yield* updateTextInfo();
   });
 
   b.onMouseEvent = Effect.fn("text.onMouseEvent")(function* (event) {
@@ -113,12 +115,12 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
 
   yield* Effect.sync(() => b.layoutNode.yogaNode.setMeasureFunc(measureFunc));
 
-  const reevaluateSelection = Effect.fn(function* () {
+  const reevaluateSelection = Effect.fn(function* (w: number, h: number) {
     const cgs = yield* Ref.get(binds.cachedGlobalSelection);
     if (!cgs) {
       return false;
     }
-    return yield* onSelectionChanged(cgs);
+    return yield* onSelectionChanged(cgs, w, h);
   });
 
   const updateTextBuffer = Effect.fn(function* () {
@@ -146,7 +148,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     b.lineInfo = yield* textBuffer.getLineInfo();
 
     const numLines = b.lineInfo.lineStarts.length;
-    const { width, height, heightValue, widthValue } = yield* Ref.get(b.dimensions);
+    const { width, height } = yield* Ref.get(b.dimensions);
     const loc = yield* Ref.get(b.location);
     if (isPositionAbsolute(loc.type) && height === "auto") {
       yield* Ref.update(b.dimensions, (d) => ({
@@ -165,7 +167,8 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
       }));
       b.layoutNode.yogaNode.markDirty();
     }
-    const changed = reevaluateSelection();
+    const { heightValue, widthValue } = yield* Ref.get(b.dimensions);
+    const changed = reevaluateSelection(widthValue, heightValue);
     if (changed) {
       yield* syncSelectionToTextBuffer();
     }
@@ -173,7 +176,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
   yield* updateTextInfo();
 
   b.onResize = Effect.fn(function* (width: number, height: number) {
-    const changed = yield* reevaluateSelection();
+    const changed = yield* reevaluateSelection(width, height);
     if (changed) {
       yield* syncSelectionToTextBuffer();
     }
@@ -224,7 +227,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
   });
 
   const onSelectionChanged = Effect.fn(
-    function* (selection: SelectionState | null) {
+    function* (selection: SelectionState | null, width: number, height: number) {
       const previousSelection = yield* Ref.get(b.localSelection);
       if (!selection?.isActive) {
         yield* Ref.set(b.localSelection, null);
