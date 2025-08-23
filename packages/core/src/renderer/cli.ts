@@ -335,7 +335,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     function setHook<E extends RunnerEvent>(
       map: Map<RunnerEvent, HookMap[RunnerEvent]>,
       event: E,
-      hook: HookRecord<E>,
+      hook: HookRecord<E>
     ) {
       const existing = map.get(event) as HookRecord<E> | undefined;
       map.set(event, {
@@ -399,7 +399,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => {
             process.off("SIGWINCH", handleResizeEvt);
-          }),
+          })
         );
 
         process.on("SIGWINCH", handleResizeEvt);
@@ -416,10 +416,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             if (resize && resize.on) {
               yield* resize.on(width, height);
             }
-          }),
+          })
         ),
         Effect.forever,
-        Effect.fork,
+        Effect.fork
       );
       yield* Ref.set(resizeFork, rsf);
 
@@ -444,7 +444,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           Effect.sync(() => {
             stdin.off("data", handleData);
             stdin.off("end", handleEnd);
-          }),
+          })
         );
         stdin.on("data", handleData);
         stdin.on("end", handleEnd);
@@ -468,12 +468,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                   width: yield* numberParser(match[2]).pipe(
                     Effect.catchTags({
                       ParseError: () => Effect.succeed(config.width),
-                    }),
+                    })
                   ),
                   height: yield* numberParser(match[1]).pipe(
                     Effect.catchTags({
                       ParseError: () => Effect.succeed(config.height),
-                    }),
+                    })
                   ),
                 };
                 yield* Ref.set(_resolution, resolution);
@@ -499,8 +499,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                     Effect.gen(function* () {
                       yield* Ref.update(errors, (errors) => [...errors, cause]);
                       return yield* Effect.void;
-                    }),
-                  ),
+                    })
+                  )
                 );
                 return true;
               }
@@ -514,8 +514,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                     Effect.gen(function* () {
                       yield* Ref.update(errors, (errors) => [...errors, cause]);
                       return yield* Effect.succeed(false);
-                    }),
-                  ),
+                    })
+                  )
                 );
                 yield* Effect.annotateCurrentSpan("handleKeyboardData", hkb);
                 return hkb;
@@ -532,8 +532,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                     Effect.gen(function* () {
                       yield* Ref.update(errors, (errors) => [...errors, cause]);
                       return yield* Effect.succeed(false);
-                    }),
-                  ),
+                    })
+                  )
                 );
                 yield* Effect.annotateCurrentSpan("handleMouseData", hm);
                 return hm;
@@ -548,13 +548,13 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             });
 
             yield* Effect.annotateCurrentSpan("handlerResults", handlerResults);
-          }),
+          })
         ),
         Effect.forever,
         // Effect.catchAllCause((cause) => Effect.sync(() => errors.push(cause))),
         Effect.tapError((cause) => Ref.update(errors, (errors) => [...errors, cause])),
         Effect.retry(Schedule.recurs(10)),
-        Effect.fork,
+        Effect.fork
       );
       yield* Ref.set(terminalInputFork, f);
 
@@ -574,7 +574,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             for (const [signal, handler] of handlers) {
               process.off(signal, handler);
             }
-          }),
+          })
         );
 
         return mailbox as Mailbox.ReadonlyMailbox<NodeJS.Signals>;
@@ -591,10 +591,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             if (exit) {
               yield* exit({ type: "signal", signal });
             }
-          }),
+          })
         ),
         Effect.forever,
-        Effect.fork,
+        Effect.fork
       );
       yield* Ref.set(signalWatcherFork, signalFork);
 
@@ -880,7 +880,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     yield* processResize(config.width, config.height);
 
     const setBackgroundColor = Effect.fn("cli.setBackgroundColor")(function* (
-      option: ((oldColor: Input) => Input) | Input,
+      option: ((oldColor: Input) => Input) | Input
     ) {
       if (typeof option !== "function") {
         const parsedColor = yield* parseColor(option);
@@ -934,7 +934,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const setCursorPosition = Effect.fn("cli.setCursorPosition")(function* (
       x: number,
       y: number,
-      visible: boolean = true,
+      visible: boolean = true
     ) {
       yield* lib.setCursorPosition(x, y, visible);
     });
@@ -942,7 +942,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const setCursorStyle = Effect.fn("cli.setCursorStyle")(function* (
       style: Style,
       blinking: boolean = false,
-      color?: Input,
+      color?: Input
     ) {
       yield* lib.setCursorStyle(style, blinking);
       if (color) {
@@ -957,7 +957,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const addPostProcessFn = Effect.fn("cli.addPostProcessFn")(function* (
-      processFn: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void>,
+      processFn: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void>
     ) {
       yield* Ref.update(postProcessFns, (fns) => {
         fns.push(processFn);
@@ -966,7 +966,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const removePostProcessFn = Effect.fn("cli.removePostProcessFn")(function* (
-      processFn: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void>,
+      processFn: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void>
     ) {
       yield* Ref.update(postProcessFns, (fns) => fns.filter((fn) => fn !== processFn));
     });
@@ -976,7 +976,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const setFrameCallback = Effect.fn("cli.setFrameCallback")(function* (
-      callback: (deltaTime: number) => Effect.Effect<void>,
+      callback: (deltaTime: number) => Effect.Effect<void>
     ) {
       yield* Ref.update(frameCallbacks, (fcbs) => {
         fcbs.push(callback);
@@ -985,7 +985,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const removeFrameCallback = Effect.fn("cli.removeFrameCallback")(function* (
-      callback: (deltaTime: number) => Effect.Effect<void>,
+      callback: (deltaTime: number) => Effect.Effect<void>
     ) {
       yield* Ref.update(frameCallbacks, (fcbs) => fcbs.filter((fcb) => fcb !== callback));
     });
@@ -1079,9 +1079,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         l.pipe(
           // We need to repeat the loop to keep the fiber alive
           // Effect.forever,
-          Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps))),
+          Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps)))
           // Effect.retry(Schedule.recurs(10)),
-        ),
+        )
       );
       yield* Ref.set(updateFiber, fiber);
     });
@@ -1100,9 +1100,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const fiber = yield* Effect.fork(
         l.pipe(
           // We need to repeat the loop to keep the fiber alive
-          Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps))), // also this is the main "rendering" loop
+          Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps))) // also this is the main "rendering" loop
           // Effect.retry(Schedule.recurs(10)),
-        ),
+        )
       );
 
       yield* Ref.set(renderFiber, fiber);
@@ -1112,7 +1112,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const es = yield* Ref.get(errors);
       yield* Effect.annotateCurrentSpan(
         "renderer.errorRenderer",
-        es.map((e) => e.toJSON()),
+        es.map((e) => e.toJSON())
       );
       if (es.length === 0) {
         return;
@@ -1160,7 +1160,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const animationRequestStart = performance.now();
       yield* Effect.all(
         Array.from(frameRequests).map((callback) => Effect.sync(() => callback(deltaTime))),
-        { concurrency: "unbounded", concurrentFinalizers: true },
+        { concurrency: "unbounded", concurrentFinalizers: true }
       );
       const animationRequestEnd = performance.now();
       const animationRequestTime = animationRequestEnd - animationRequestStart;
@@ -1169,7 +1169,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const fcbs = yield* Ref.get(frameCallbacks);
       yield* Effect.all(
         fcbs.map((frameCallback) => frameCallback(deltaTime)),
-        { concurrency: "unbounded", concurrentFinalizers: true },
+        { concurrency: "unbounded", concurrentFinalizers: true }
       );
 
       const end = performance.now();
@@ -1192,7 +1192,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       yield* Effect.all(
         ppfns.map((postProcessFn) => postProcessFn(buf.next!, deltaTime)),
-        { concurrency: "unbounded", concurrentFinalizers: true },
+        { concurrency: "unbounded", concurrentFinalizers: true }
       );
 
       // yield* this._console.renderToBuffer(this.nextRenderBuffer!);
@@ -1278,7 +1278,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const startSelection = Effect.fn("cli.startSelection")(function* (
       startRenderable: BaseElement<any, any>,
       x: number,
-      y: number,
+      y: number
     ) {
       yield* clearSelection();
       const p = yield* Ref.get(startRenderable.parent);
@@ -1287,13 +1287,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         containers.push(p || root);
         return containers;
       });
+        yield* currentSelection.create({ x, y }, { x, y });
       yield* currentSelection.enable();
       yield* currentSelection.setSelecting(true);
-      yield* currentSelection.setAnchor({ x, y });
-      yield* currentSelection.setFocus({ x, y });
 
-      yield* currentSelection.setAnchor({ x, y });
-      yield* currentSelection.setFocus({ x, y });
       yield* notifySelectablesOfSelectionChange();
     });
 
@@ -1306,13 +1303,13 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const updateSelection = Effect.fn("cli.updateSelection")(function* (
       currentRenderable: BaseElement<any, any> | undefined,
       x: number,
-      y: number,
+      y: number
     ) {
       yield* currentSelection.setFocus({ x, y });
       const scs = yield* Ref.get(selectionContainers);
 
       if (scs.length > 0) {
-        const currentContainer = scs[scs.length - 1];
+        const currentContainer = scs[scs.length - 1]!;
 
         if (!currentRenderable) {
           const p = yield* Ref.get(currentContainer!.parent);
@@ -1324,45 +1321,45 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           return;
         }
 
-        if (currentContainer && currentRenderable) {
-          const iwc = yield* isWithinContainer(currentRenderable, currentContainer);
-          if (iwc) {
-            const p = yield* Ref.get(currentContainer!.parent);
-            const parentContainer = p || root;
+        const iwc = yield* isWithinContainer(currentRenderable, currentContainer);
+        if (!iwc) {
+          const p = yield* Ref.get(currentContainer!.parent);
+          const parentContainer = p || root;
+          yield* Ref.update(selectionContainers, (containers) => {
+            containers.push(parentContainer as BaseElement<any, any>);
+            return containers;
+          });
+        } else if (scs.length > 1) {
+          let containerIndex = scs.indexOf(currentRenderable);
+
+          if (containerIndex === -1) {
+            const p = yield* Ref.get(currentRenderable.parent);
+            // @ts-ignore
+            const immediateParent = p || root;
+            containerIndex = scs.indexOf(immediateParent as BaseElement<any, any>);
+          }
+
+          if (containerIndex !== -1 && containerIndex < scs.length - 1) {
             yield* Ref.update(selectionContainers, (containers) => {
-              containers.push(parentContainer as BaseElement<any, any>);
+              containers.splice(0, containerIndex + 1);
               return containers;
             });
-          } else if (currentRenderable && scs.length > 1) {
-            let containerIndex = scs.indexOf(currentRenderable);
-
-            if (containerIndex === -1) {
-              const p = yield* Ref.get(currentRenderable.parent);
-              // @ts-ignore
-              const immediateParent = p || root;
-              containerIndex = scs.indexOf(immediateParent as BaseElement<any, any>);
-            }
-
-            if (containerIndex !== -1 && containerIndex < scs.length - 1) {
-              yield* Ref.update(selectionContainers, (containers) => {
-                containers.splice(0, containerIndex + 1);
-                return containers;
-              });
-            }
           }
         }
       }
+
+      yield* currentSelection.create({ x, y }, { x, y });
 
       yield* notifySelectablesOfSelectionChange();
     });
 
     const isWithinContainer = Effect.fn("cli.isWithinContainer")(function* (
       renderable: BaseElement<any, any>,
-      container: BaseElement<any, any>,
+      container: BaseElement<any, any>
     ) {
       let current: BaseElement<any, any> | null = renderable;
       while (current) {
-        if (current === container) return true;
+        if (current.id === container.id) return true;
         current = yield* Ref.get(current.parent);
       }
       return false;
@@ -1416,7 +1413,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
               hasSelection = yield* renderable.onSelectionChanged(
                 normalizedSelection ? { ...normalizedSelection, isActive: false } : null,
                 widthValue,
-                heightValue,
+                heightValue
               );
             }
           }

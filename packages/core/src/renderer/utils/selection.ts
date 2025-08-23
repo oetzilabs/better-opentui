@@ -36,6 +36,7 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
 
     const enable = Effect.fn(function* () {
       yield* Ref.set(_active, true);
+      yield* create({ x: 0, y: 0 }, { x: 0, y: 0 });
     });
 
     const disable = Effect.fn(function* () {
@@ -72,8 +73,8 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
             const { x, y } = yield* Ref.get(renderable.location);
 
             return { x, y, id: renderable.id };
-          }),
-        ),
+          })
+        )
       );
 
       const selectedTexts = sortedSelectedTexts.sort((a, b) => {
@@ -81,9 +82,10 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
         return a.x - b.x;
       });
 
-      const selectedTexts2 = selectedTexts
-        .map((r) => selectedRenderables.find((el) => el.id === r.id)!)
-        .filter((t) => Boolean(t));
+      let selectedTexts2 = yield* Effect.all(
+        selectedTexts.map((r) => selectedRenderables.find((el) => el.id === r.id)!.getSelectedText())
+      );
+      selectedTexts2 = selectedTexts2.filter((t) => t);
 
       // The original code returns selected elements joined with "\n".
       // If Element has a text property or toString, adjust here accordingly.
@@ -92,11 +94,11 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
     });
 
     const setAnchor = Effect.fn(function* (a: { x: number; y: number }) {
-      yield* Ref.set(anchorRef, { ...a });
+      yield* Ref.set(anchorRef, a);
     });
 
     const setFocus = Effect.fn(function* (f: { x: number; y: number }) {
-      yield* Ref.set(focusRef, { ...f });
+      yield* Ref.set(focusRef, f);
     });
 
     const create = Effect.fn(function* (_anchor: { x: number; y: number }, _focus: { x: number; y: number }) {
