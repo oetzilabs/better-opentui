@@ -25,11 +25,9 @@ if (import.meta.main) {
           borderStyle: "rounded",
           borderColor: Colors.Maroon,
           focusedBorderColor: Colors.Red,
-          // focused: true,
           zIndex: 2,
           onMouseEvent: Effect.fn("text.onMouseEvent")(function* (event) {
             event.preventDefault();
-            // yield* Effect.log("AAAA".repeat(10000));
             if (isMouseOver(event.type) && event.source) {
               yield* event.source.setBackgroundColor((c) => {
                 if (Colors.is("Yellow", c)) {
