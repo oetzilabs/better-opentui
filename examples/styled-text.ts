@@ -23,7 +23,7 @@ if (import.meta.main) {
           },
           border: true,
           borderStyle: "rounded",
-          borderColor: Colors.Yellow,
+          borderColor: Colors.Maroon,
           focusedBorderColor: Colors.Red,
           // focused: true,
           zIndex: 2,
