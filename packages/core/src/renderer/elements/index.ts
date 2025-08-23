@@ -13,7 +13,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
   effect: Effect.gen(function* () {
     const cachedGlobalSelection = yield* Ref.make<SelectionState | null>(null);
 
-    const renderables = yield* Ref.make<BaseElement<any>[]>([]);
+    const renderables = yield* Ref.make<BaseElement<any, any>[]>([]);
 
     const context = yield* Ref.make<RenderContextInterface | null>(null);
 

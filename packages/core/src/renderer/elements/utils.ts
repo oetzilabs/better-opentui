@@ -32,7 +32,7 @@ export class ElementCounter extends Effect.Service<ElementCounter>()("ElementCou
 
 export const ElementCounterLive = ElementCounter.Default;
 
-export type ElementOptions<T extends string> = Partial<LayoutOptions> & {
+export type ElementOptions<T extends string, E> = Partial<LayoutOptions> & {
   visible?: boolean;
   focused?: boolean;
   selectable?: boolean;
@@ -43,9 +43,9 @@ export type ElementOptions<T extends string> = Partial<LayoutOptions> & {
     selectableBg?: Input;
   };
   attributes?: number;
-  onMouseEvent?: BaseElement<T>["onMouseEvent"];
-  onKeyboardEvent?: BaseElement<T>["onKeyboardEvent"];
-  onUpdate?: BaseElement<T>["onUpdate"];
+  onMouseEvent?: BaseElement<T, E>["onMouseEvent"];
+  onKeyboardEvent?: BaseElement<T, E>["onKeyboardEvent"];
+  onUpdate?: BaseElement<T, E>["onUpdate"];
 };
 
 export interface Binds {

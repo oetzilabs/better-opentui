@@ -1,6 +1,8 @@
 import { BunRuntime } from "@effect/platform-bun";
 import { Colors } from "@opentuee/core/src/colors";
 import { isMouseOver } from "@opentuee/core/src/inputs/mouse";
+import type { BaseElement } from "@opentuee/core/src/renderer/elements/base";
+import type { TextElement } from "@opentuee/core/src/renderer/elements/text";
 import { PositionAbsolute } from "@opentuee/core/src/renderer/utils/position";
 import { run } from "@opentuee/core/src/run";
 import { Effect } from "effect";
@@ -42,8 +44,8 @@ if (import.meta.main) {
 
         const text = yield* cli.createElement("text", "Hello World", {
           position: PositionAbsolute.make(2),
-          left: 0,
-          top: 0,
+          left: 1,
+          top: 1,
           width: "auto",
           height: "auto",
           zIndex: 1,
@@ -66,6 +68,10 @@ if (import.meta.main) {
             selectableBg: Colors.Green,
           },
           zIndex: 1,
+          onUpdate: Effect.fn("text.onUpdate")(function* (self: TextElement) {
+            const elementCount = yield* cli.getElementCount();
+            yield* self.setContent(`Amount of elements: ${elementCount - 1} (root is not counted)`);
+          }),
         });
 
         yield* parentContainer.add(box);

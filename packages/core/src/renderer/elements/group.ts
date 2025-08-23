@@ -6,9 +6,11 @@ import type { SelectionState } from "../../types";
 import { base, type BaseElement } from "./base";
 import type { Binds, ElementOptions } from "./utils";
 
-export interface GroupOptions extends ElementOptions<"group"> {
-  onMouseEvent?: BaseElement<"group">["onMouseEvent"];
-  onKeyboardEvent?: BaseElement<"group">["onKeyboardEvent"];
+export interface GroupElement extends BaseElement<"group", GroupElement> {}
+
+export interface GroupOptions extends ElementOptions<"group", GroupElement> {
+  onMouseEvent?: BaseElement<"group", GroupElement>["onMouseEvent"];
+  onKeyboardEvent?: BaseElement<"group", GroupElement>["onKeyboardEvent"];
 }
 
 export const group = Effect.fn(function* (

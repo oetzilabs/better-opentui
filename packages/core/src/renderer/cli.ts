@@ -162,7 +162,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const renderer = yield* lib.createRenderer(config.width, config.height);
 
-    const capturedRenderable = yield* Ref.make<BaseElement<any> | null>(null);
+    const capturedRenderable = yield* Ref.make<BaseElement<any, any> | null>(null);
 
     const rendering = yield* Ref.make(false);
     const renderStats = yield* Ref.make({
@@ -187,8 +187,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const lastOverRenderableNum = yield* Ref.make(0);
 
     const currentSelection = yield* Selection;
-    const selectionContainers = yield* Ref.make<Array<BaseElement<any> | null>>([]);
-    const lastOverRenderable = yield* Ref.make<BaseElement<any> | undefined>(undefined);
+    const selectionContainers = yield* Ref.make<Array<BaseElement<any, any> | null>>([]);
+    const lastOverRenderable = yield* Ref.make<BaseElement<any, any> | undefined>(undefined);
 
     const _useConsole = yield* Ref.make(false);
     const _resolution = yield* Ref.make<PixelResolution | null>(null);
@@ -1276,7 +1276,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const startSelection = Effect.fn("cli.startSelection")(function* (
-      startRenderable: BaseElement<any>,
+      startRenderable: BaseElement<any, any>,
       x: number,
       y: number,
     ) {
@@ -1304,7 +1304,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const updateSelection = Effect.fn("cli.updateSelection")(function* (
-      currentRenderable: BaseElement<any> | undefined,
+      currentRenderable: BaseElement<any, any> | undefined,
       x: number,
       y: number,
     ) {
@@ -1318,7 +1318,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           const p = yield* Ref.get(currentContainer!.parent);
           const parentContainer = p || root;
           yield* Ref.update(selectionContainers, (containers) => {
-            containers.push(parentContainer as BaseElement<any>);
+            containers.push(parentContainer as BaseElement<any, any>);
             return containers;
           });
           return;
@@ -1330,7 +1330,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             const p = yield* Ref.get(currentContainer!.parent);
             const parentContainer = p || root;
             yield* Ref.update(selectionContainers, (containers) => {
-              containers.push(parentContainer as BaseElement<any>);
+              containers.push(parentContainer as BaseElement<any, any>);
               return containers;
             });
           } else if (currentRenderable && scs.length > 1) {
@@ -1340,7 +1340,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
               const p = yield* Ref.get(currentRenderable.parent);
               // @ts-ignore
               const immediateParent = p || root;
-              containerIndex = scs.indexOf(immediateParent as BaseElement<any>);
+              containerIndex = scs.indexOf(immediateParent as BaseElement<any, any>);
             }
 
             if (containerIndex !== -1 && containerIndex < scs.length - 1) {
@@ -1357,10 +1357,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const isWithinContainer = Effect.fn("cli.isWithinContainer")(function* (
-      renderable: BaseElement<any>,
-      container: BaseElement<any>,
+      renderable: BaseElement<any, any>,
+      container: BaseElement<any, any>,
     ) {
-      let current: BaseElement<any> | null = renderable;
+      let current: BaseElement<any, any> | null = renderable;
       while (current) {
         if (current === container) return true;
         current = yield* Ref.get(current.parent);
@@ -1396,7 +1396,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         }
       }
 
-      const selectedRenderables: BaseElement<any>[] = [];
+      const selectedRenderables: BaseElement<any, any>[] = [];
 
       const renderables = yield* Ref.get(elements.renderables);
 
@@ -1431,7 +1431,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       yield* currentSelection.updateSelectedRenderables(selectedRenderables);
     });
 
-    const add = Effect.fn(function* (container: BaseElement<any>, index?: number) {
+    const add = Effect.fn(function* (container: BaseElement<any, any>, index?: number) {
       yield* root.add(container, index);
     });
 

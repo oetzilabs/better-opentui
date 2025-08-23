@@ -8,7 +8,7 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
     const _selecting = yield* Ref.make(false);
     const anchorRef = yield* Ref.make({ x: 0, y: 0 });
     const focusRef = yield* Ref.make({ x: 0, y: 0 });
-    const selectedRenderablesRef = yield* Ref.make<BaseElement<any>[]>([]);
+    const selectedRenderablesRef = yield* Ref.make<BaseElement<any, any>[]>([]);
     const selectionState = yield* Ref.make<SelectionState | null>(null);
 
     const anchor = Effect.fn(function* () {
@@ -30,7 +30,7 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
       };
     });
 
-    const updateSelectedRenderables = Effect.fn(function* (selected: BaseElement<any>[]) {
+    const updateSelectedRenderables = Effect.fn(function* (selected: BaseElement<any, any>[]) {
       yield* Ref.set(selectedRenderablesRef, selected);
     });
 
@@ -68,7 +68,7 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
       // 2) renderable.getX is itself an Effect (yield it directly)
       const sortedSelectedTexts = yield* Effect.all(
         selectedRenderables.map(
-          Effect.fn(function* (renderable: BaseElement<any>) {
+          Effect.fn(function* (renderable: BaseElement<any, any>) {
             const { x, y } = yield* Ref.get(renderable.location);
 
             return { x, y, id: renderable.id };

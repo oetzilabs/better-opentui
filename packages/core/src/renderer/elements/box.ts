@@ -2,6 +2,7 @@ import { Effect, Ref } from "effect";
 import { Edge } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, type Input } from "../../colors";
+import type { Collection } from "../../errors";
 import { isMouseDown, isMouseDrag, isMouseUp } from "../../inputs/mouse";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
@@ -15,7 +16,7 @@ import {
 import { base, type BaseElement } from "./base";
 import type { Binds, ElementOptions } from "./utils";
 
-export interface BoxOptions extends ElementOptions<"box"> {
+export interface BoxOptions extends ElementOptions<"box", BoxElement> {
   borderStyle?: BorderStyle;
   border?: boolean | BorderSides[];
   borderColor?: Input;
@@ -26,9 +27,18 @@ export interface BoxOptions extends ElementOptions<"box"> {
   focusedBorderColor?: Input;
 }
 
+export interface BoxElement extends BaseElement<"box", BoxElement> {
+  setBorder: (value: boolean | BorderSides[]) => Effect.Effect<void, Collection, Library>;
+  setBorderStyle: (value: BorderStyle) => Effect.Effect<void, Collection, Library>;
+  setBorderColor: (value: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
+  setFocusedBorderColor: (value: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
+  setTitle: (value: string | undefined) => Effect.Effect<void, Collection, Library>;
+  setTitleAlignment: (value: "left" | "center" | "right") => Effect.Effect<void, Collection, Library>;
+}
+
 export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = {}) {
   // const lib = yield* Library;
-  const b = yield* base("box", options);
+  const b = yield* base<"box", BoxElement>("box", options);
 
   b.onMouseEvent = Effect.fn("box.onMouseEvent")(function* (event) {
     const fn = options.onMouseEvent ?? Effect.fn(function* (event) {});
@@ -103,7 +113,7 @@ export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = {}) 
     yield* Ref.set(titleAlignment, value);
   });
 
-  b.onUpdate = Effect.fn("box.update")(function* (self) {
+  b.onUpdate = Effect.fn("box.update")(function* () {
     const ctx = yield* Ref.get(binds.context);
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);

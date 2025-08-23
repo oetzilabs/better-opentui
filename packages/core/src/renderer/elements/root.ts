@@ -1,10 +1,12 @@
 import { Effect, Ref } from "effect";
 import { Direction } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
-import { base } from "./base";
+import { base, type BaseElement } from "./base";
+
+export interface RootElement extends BaseElement<"root", RootElement> {}
 
 export const root = Effect.fn(function* () {
-  const b = yield* base("root");
+  const b = yield* base<"root", RootElement>("root");
 
   const calculateLayout = Effect.fn(function* () {
     const { widthValue: width, heightValue: height } = yield* Ref.get(b.dimensions);
@@ -22,7 +24,7 @@ export const root = Effect.fn(function* () {
     );
   });
 
-  b.onUpdate = Effect.fn(function* (self) {
+  b.onUpdate = Effect.fn(function* () {
     if (b.layoutNode.yogaNode.isDirty()) {
       yield* calculateLayout();
     }

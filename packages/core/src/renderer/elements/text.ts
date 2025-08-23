@@ -3,6 +3,7 @@ import { MeasureMode, PositionType } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { TextBuffer, TextChunkSchema } from "../../buffer/text";
 import { Colors } from "../../colors";
+import type { Collection } from "../../errors";
 import type { KeyboardEvent } from "../../events/keyboard";
 import type { MouseEvent } from "../../events/mouse";
 import { isMouseDown, isMouseDrag, isMouseUp } from "../../inputs/mouse";
@@ -14,19 +15,36 @@ import { StyledText } from "../utils/styled-text";
 import { base, type BaseElement } from "./base";
 import type { Binds, ElementOptions, RenderContextInterface } from "./utils";
 
-export interface TextOptions extends ElementOptions<"text"> {
-  content?: StyledText | string;
-  onMouseEvent?: BaseElement<"text">["onMouseEvent"];
-  onKeyboardEvent?: BaseElement<"text">["onKeyboardEvent"];
+export interface TextElement extends BaseElement<"text", TextElement> {
+  setContent: (content: string | StyledText) => Effect.Effect<void, Collection, Library>;
+  getContent: () => Effect.Effect<StyledText, Collection, Library>;
+  onUpdate: (self: TextElement) => Effect.Effect<void, Collection, Library>;
 }
+
+export type TextOptions = ElementOptions<"text", TextElement> & {
+  content?: StyledText | string;
+  onMouseEvent?: BaseElement<"text", TextElement>["onMouseEvent"];
+  onKeyboardEvent?: BaseElement<"text", TextElement>["onKeyboardEvent"];
+  onUpdate?: (self: TextElement) => Effect.Effect<void, Collection, Library>;
+};
 
 export const text = Effect.fn(function* (binds: Binds, content: string, options: TextOptions = {}) {
   const lib = yield* Library;
   const b = yield* base("text", options);
 
+  b.onUpdate = Effect.fn(function* (self) {
+    const fn = options.onUpdate ?? Effect.fn(function* (self) {});
+    yield* fn(self);
+    const ctx = yield* Ref.get(binds.context);
+    const { x, y } = yield* Ref.get(b.location);
+    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
+    yield* ctx.addToHitGrid(x, y, w, h, b.num);
+  });
+
   b.onMouseEvent = Effect.fn("text.onMouseEvent")(function* (event) {
     yield* Effect.annotateCurrentSpan("text.onMouseEvent", event);
-    const fn = options.onMouseEvent ?? Effect.fn(function* (event) {});
+    const fn: BaseElement<"text", TextElement>["onMouseEvent"] =
+      options.onMouseEvent ?? Effect.fn(function* (event) {});
     yield* fn(event);
     if (event.source) {
       if (event.source.id === b.id) {
@@ -123,7 +141,6 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
 
   // update text info
   const updateTextInfo = Effect.fn(function* () {
-    const _plainText = content.toString();
     yield* updateTextBuffer();
 
     b.lineInfo = yield* textBuffer.getLineInfo();
@@ -162,13 +179,6 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     }
   });
 
-  b.onUpdate = Effect.fn(function* (self) {
-    const ctx = yield* Ref.get(binds.context);
-    const { x, y } = yield* Ref.get(b.location);
-    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-    yield* ctx.addToHitGrid(x, y, w, h, b.num);
-  });
-
   b.render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
     // we are in the `render` method of the text element, so we need to render only the text
     const v = yield* Ref.get(b.visible);
@@ -184,16 +194,25 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     yield* lib.bufferDrawTextBuffer(buffer.ptr, textBuffer.ptr, loc.x, loc.y, clipRect);
   });
 
-  const setContent = Effect.fn(function* (value: string) {
-    const textEncoder = new TextEncoder();
-    const chunk = TextChunkSchema.make({
-      __isChunk: true as const,
-      text: textEncoder.encode(value),
-      plainText: value,
-    });
-    const st = new StyledText([chunk]);
+  const setContent = Effect.fn(function* (value: string | StyledText) {
+    let st: StyledText;
+    if (typeof value === "string") {
+      const textEncoder = new TextEncoder();
+      const chunk = TextChunkSchema.make({
+        __isChunk: true as const,
+        text: textEncoder.encode(value),
+        plainText: value,
+      });
+      st = new StyledText([chunk]);
+    } else {
+      st = value;
+    }
     yield* Ref.set(_content, st);
     yield* updateTextInfo();
+  });
+
+  const getContent = Effect.fn(function* () {
+    return yield* Ref.get(_content);
   });
 
   const shouldStartSelection = Effect.fn(function* (x: number, y: number) {
@@ -315,6 +334,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     shouldStartSelection,
     onSelectionChanged,
     setContent,
+    getContent,
     destroy,
-  };
+  } satisfies TextElement;
 });

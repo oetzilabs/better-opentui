@@ -33,7 +33,7 @@ import {
 import { createTrackedNode, TrackedNode } from "../utils/tracknode";
 import { ElementCounter, type ElementOptions } from "./utils";
 
-const validateOptions = Effect.fn(function* <T extends string>(id: string, options: ElementOptions<T>) {
+const validateOptions = Effect.fn(function* <T extends string, E>(id: string, options: ElementOptions<T, E>) {
   if (typeof options.width === "number") {
     if (options.width < 0) {
       return yield* Effect.fail(new TypeError(`Invalid width for Renderable ${id}: ${options.width}`));
@@ -47,12 +47,12 @@ const validateOptions = Effect.fn(function* <T extends string>(id: string, optio
   yield* Effect.succeed(true);
 });
 
-export type BaseElement<T extends string> = {
+export type BaseElement<T extends string, E> = {
   type: T;
   id: string;
   num: number;
   selectable: Ref.Ref<boolean>;
-  parent: Ref.Ref<BaseElement<any> | null>;
+  parent: Ref.Ref<BaseElement<any, E> | null>;
   visible: Ref.Ref<boolean>;
   colors: Ref.Ref<{
     fg: Input;
@@ -78,21 +78,21 @@ export type BaseElement<T extends string> = {
   lineInfo: { lineStarts: number[]; lineWidths: number[] };
   layoutNode: TrackedNode;
   zIndex: Ref.Ref<number>;
-  renderables: Ref.Ref<BaseElement<any>[]>;
+  renderables: Ref.Ref<BaseElement<any, E>[]>;
   yogaConfig: YogaConfig;
   focused: Ref.Ref<boolean>;
   ensureZIndexSorted: () => Effect.Effect<void>;
-  getElements: () => Effect.Effect<BaseElement<any>[]>;
+  getElements: () => Effect.Effect<BaseElement<any, E>[]>;
   getElementsCount: () => Effect.Effect<number>;
   setVisible: (value: boolean) => Effect.Effect<void>;
   update: () => Effect.Effect<void, Collection, Library>;
+  onUpdate: (self: E) => Effect.Effect<void, Collection, Library>;
   render: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, Collection, Library>;
   add: (
-    this: BaseElement<T>,
-    container: BaseElement<any>,
+    this: BaseElement<T, E>,
+    container: BaseElement<any, E>,
     index?: number | undefined,
   ) => Effect.Effect<void, never, never>;
-  onUpdate: (self: BaseElement<T>) => Effect.Effect<void, Collection, Library>;
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
   onSelectionChanged: (selection: SelectionState | null) => Effect.Effect<boolean>;
   getSelection: () => Effect.Effect<{ start: number; end: number } | null>;
@@ -112,7 +112,7 @@ export type BaseElement<T extends string> = {
   updateFromLayout: () => Effect.Effect<void, Collection, Library>;
   onMouseEvent: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
   onKeyboardEvent: (event: KeyboardEvent) => Effect.Effect<void, Collection, Library>;
-  getRenderable: (id: string) => Effect.Effect<BaseElement<any> | undefined, Collection, Library>;
+  getRenderable: (id: string) => Effect.Effect<BaseElement<any, E> | undefined, Collection, Library>;
   setBackgroundColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
   setForegroundColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
   setSelectionBackgroundColor: (
@@ -124,9 +124,9 @@ export type BaseElement<T extends string> = {
   setFocused: (value: boolean) => Effect.Effect<void, Collection, Library>;
 };
 
-export const base = Effect.fn(function* <T extends string>(
+export const base = Effect.fn(function* <T extends string, E>(
   type: T,
-  options: ElementOptions<T> = {
+  options: ElementOptions<T, E> = {
     visible: true,
     selectable: true,
   },
@@ -162,7 +162,7 @@ export const base = Effect.fn(function* <T extends string>(
     heightValue: typeof options.height === "number" ? options.height : 0,
   });
   const selectable = yield* Ref.make(options.selectable ?? true);
-  const parent = yield* Ref.make<BaseElement<any> | null>(null);
+  const parent = yield* Ref.make<BaseElement<any, E> | null>(null);
   const colors = yield* Ref.make({
     fg: options.colors?.fg ?? Colors.Black,
     bg: options.colors?.bg ?? Colors.Transparent,
@@ -175,7 +175,7 @@ export const base = Effect.fn(function* <T extends string>(
   const buffered = yield* Ref.make<boolean>(false);
   const needsZIndexSort = yield* Ref.make(false);
   const zIndex = yield* Ref.make(options.zIndex ?? 0);
-  const renderables = yield* Ref.make<BaseElement<any>[]>([]);
+  const renderables = yield* Ref.make<BaseElement<any, E>[]>([]);
   const position = yield* Ref.make<Position>({});
   const focused = yield* Ref.make(options.focused ?? false);
   const layoutNode = createTrackedNode();
@@ -301,7 +301,7 @@ export const base = Effect.fn(function* <T extends string>(
     }
   });
 
-  const setupMarginAndPadding = Effect.fn(function* (options: ElementOptions<T>) {
+  const setupMarginAndPadding = Effect.fn(function* (options: ElementOptions<T, E>) {
     const node = layoutNode.yogaNode;
 
     if (isPercentageNumberMixed(options.margin)) {
@@ -345,7 +345,7 @@ export const base = Effect.fn(function* <T extends string>(
     }
   });
 
-  const setupYogaProperties = Effect.fn(function* (options: ElementOptions<T>) {
+  const setupYogaProperties = Effect.fn(function* (options: ElementOptions<T, E>) {
     const node = layoutNode.yogaNode;
     const v = yield* Ref.get(visible);
     node.setDisplay(v ? Display.Flex : Display.None);
@@ -455,7 +455,7 @@ export const base = Effect.fn(function* <T extends string>(
     }
   });
 
-  const onResize: BaseElement<any>["onResize"] = Effect.fn(function* (width: number, height: number) {
+  const onResize: BaseElement<any, E>["onResize"] = Effect.fn(function* (width: number, height: number) {
     // Override in subclasses for additional resize logic
   });
 
@@ -520,7 +520,7 @@ export const base = Effect.fn(function* <T extends string>(
     lineWidths: [],
   };
 
-  const onMouseEvent: BaseElement<any>["onMouseEvent"] =
+  const onMouseEvent: BaseElement<any, E>["onMouseEvent"] =
     options.onMouseEvent ??
     Effect.fn("base.onMouseEvent")(function* (event: MouseEvent) {
       if (!event.defaultPrevented) {
@@ -529,7 +529,7 @@ export const base = Effect.fn(function* <T extends string>(
       }
     });
 
-  const onKeyboardEvent: BaseElement<any>["onKeyboardEvent"] =
+  const onKeyboardEvent: BaseElement<any, E>["onKeyboardEvent"] =
     options.onKeyboardEvent ??
     Effect.fn("base.onKeyboardEvent")(function* (event: KeyboardEvent) {
       if (!event.defaultPrevented) {
@@ -538,7 +538,7 @@ export const base = Effect.fn(function* <T extends string>(
       }
     });
 
-  const processMouseEvent = Effect.fn(function* (handler: BaseElement<any>["onMouseEvent"], event: MouseEvent) {
+  const processMouseEvent = Effect.fn(function* (handler: BaseElement<any, E>["onMouseEvent"], event: MouseEvent) {
     yield* handler(event);
     // if (!event.defaultPrevented) {
     //   const es = yield* Ref.get(renderables);
@@ -550,7 +550,7 @@ export const base = Effect.fn(function* <T extends string>(
   });
 
   const processKeyboardEvent = Effect.fn(function* (
-    handler: BaseElement<any>["onKeyboardEvent"],
+    handler: BaseElement<any, E>["onKeyboardEvent"],
     event: KeyboardEvent,
   ) {
     yield* handler(event);
@@ -560,7 +560,7 @@ export const base = Effect.fn(function* <T extends string>(
     }
   });
 
-  const add = Effect.fn(function* (parentElement: BaseElement<any>, container: BaseElement<any>, index?: number) {
+  const add = Effect.fn(function* (parentElement: BaseElement<any, E>, container: BaseElement<any, E>, index?: number) {
     if (index === undefined) {
       const cs = yield* Ref.get(renderables);
       index = cs.length;
@@ -639,7 +639,7 @@ export const base = Effect.fn(function* <T extends string>(
     yield* Ref.set(focused, value);
   });
 
-  const onUpdate: BaseElement<any>["onUpdate"] = Effect.fn(function* () {
+  const onUpdate: BaseElement<any, E>["onUpdate"] = Effect.fn(function* <T>(self: T) {
     const es = yield* Ref.get(renderables);
     yield* Effect.all(
       es.map((e) => Effect.suspend(() => e.update())),
@@ -667,7 +667,7 @@ export const base = Effect.fn(function* <T extends string>(
     ensureZIndexSorted,
     setVisible,
     render,
-    add: function (this, container: BaseElement<any>, index?: number) {
+    add: function (this, container: BaseElement<any, any>, index?: number) {
       return add(this, container, index);
     },
     getSelection,
@@ -688,7 +688,7 @@ export const base = Effect.fn(function* <T extends string>(
     onUpdate,
     update: function (this) {
       const handler = this.onUpdate;
-      return handler(this);
+      return handler(this as E);
     },
     setFocused,
     destroy,
@@ -701,5 +701,5 @@ export const base = Effect.fn(function* <T extends string>(
     setForegroundColor,
     setSelectionBackgroundColor,
     setSelectionForegroundColor,
-  } satisfies BaseElement<T>;
+  } satisfies BaseElement<T, E>;
 });
