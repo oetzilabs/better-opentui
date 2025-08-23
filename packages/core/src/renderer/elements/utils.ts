@@ -3,7 +3,7 @@ import type { Input } from "../../colors";
 import type { RendererFailedToAddToHitGrid } from "../../errors";
 import type { SelectionState } from "../../types";
 import type { Library } from "../../zig";
-import type { LayoutOptions } from "../layout";
+import type { LayoutOptions } from "../utils/layout";
 import type { BaseElement } from "./base";
 
 export interface RenderContextInterface {
@@ -16,7 +16,6 @@ export interface RenderContextInterface {
   ) => Effect.Effect<void, RendererFailedToAddToHitGrid, Library>;
   width: () => Effect.Effect<number>;
   height: () => Effect.Effect<number>;
-  needsUpdate: () => Effect.Effect<void>;
 }
 
 export class ElementCounter extends Effect.Service<ElementCounter>()("ElementCounter", {
@@ -33,7 +32,7 @@ export class ElementCounter extends Effect.Service<ElementCounter>()("ElementCou
 
 export const ElementCounterLive = ElementCounter.Default;
 
-export type ElementOptions = Partial<LayoutOptions> & {
+export type ElementOptions<T extends string> = Partial<LayoutOptions> & {
   visible?: boolean;
   focused?: boolean;
   selectable?: boolean;
@@ -44,8 +43,9 @@ export type ElementOptions = Partial<LayoutOptions> & {
     selectableBg?: Input;
   };
   attributes?: number;
-  onMouseEvent?: BaseElement<any>["onMouseEvent"];
-  onKeyboardEvent?: BaseElement<any>["onKeyboardEvent"];
+  onMouseEvent?: BaseElement<T>["onMouseEvent"];
+  onKeyboardEvent?: BaseElement<T>["onKeyboardEvent"];
+  onUpdate?: BaseElement<T>["onUpdate"];
 };
 
 export interface Binds {

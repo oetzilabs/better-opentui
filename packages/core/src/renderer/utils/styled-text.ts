@@ -1,8 +1,8 @@
 import { Effect } from "effect";
-import { isTextChunk, TextChunkSchema, type TextChunk } from "../buffer/text";
-import { Colors, type Input } from "../colors";
-import { RGBA, type RGBAClass } from "../types";
-import { createTextAttributes } from "../utils";
+import { isTextChunk, TextChunkSchema, type TextChunk } from "../../buffer/text";
+import { Colors, type Input } from "../../colors";
+import { RGBA, type RGBAClass } from "../../types";
+import { createTextAttributes } from "../../utils";
 
 export interface StyleAttrs {
   fg?: Input;

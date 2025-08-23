@@ -1,6 +1,6 @@
 import { Effect, Ref } from "effect";
-import type { SelectionState } from "../types";
-import type { BaseElement } from "./elements/base";
+import type { SelectionState } from "../../types";
+import type { BaseElement } from "../elements/base";
 
 export class Selection extends Effect.Service<Selection>()("Selection", {
   effect: Effect.gen(function* () {

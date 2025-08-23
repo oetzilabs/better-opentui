@@ -15,7 +15,7 @@ import {
 import { base, type BaseElement } from "./base";
 import type { Binds, ElementOptions } from "./utils";
 
-export interface BoxOptions extends ElementOptions {
+export interface BoxOptions extends ElementOptions<"box"> {
   borderStyle?: BorderStyle;
   border?: boolean | BorderSides[];
   borderColor?: Input;
@@ -103,7 +103,7 @@ export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = {}) 
     yield* Ref.set(titleAlignment, value);
   });
 
-  b.update = Effect.fn("box.update")(function* () {
+  b.onUpdate = Effect.fn("box.update")(function* (self) {
     const ctx = yield* Ref.get(binds.context);
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);

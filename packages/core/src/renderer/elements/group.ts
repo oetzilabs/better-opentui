@@ -6,7 +6,7 @@ import type { SelectionState } from "../../types";
 import { base, type BaseElement } from "./base";
 import type { Binds, ElementOptions } from "./utils";
 
-export interface GroupOptions extends ElementOptions {
+export interface GroupOptions extends ElementOptions<"group"> {
   onMouseEvent?: BaseElement<"group">["onMouseEvent"];
   onKeyboardEvent?: BaseElement<"group">["onKeyboardEvent"];
 }

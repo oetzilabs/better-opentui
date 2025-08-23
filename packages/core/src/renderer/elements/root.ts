@@ -22,7 +22,7 @@ export const root = Effect.fn(function* () {
     );
   });
 
-  b.update = Effect.fn(function* () {
+  b.onUpdate = Effect.fn(function* (self) {
     if (b.layoutNode.yogaNode.isDirty()) {
       yield* calculateLayout();
     }

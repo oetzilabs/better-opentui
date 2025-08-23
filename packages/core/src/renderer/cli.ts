@@ -29,7 +29,7 @@ import {
 } from "../errors";
 import { KeyboardEvent } from "../events/keyboard";
 import { MouseEvent } from "../events/mouse";
-import { isCtrlLetter, ParsedKey, parse as parseKey } from "../inputs/keyboard";
+import { ParsedKey, parse as parseKey } from "../inputs/keyboard";
 import {
   isLeftMouseButton,
   isMouseDown,
@@ -37,7 +37,6 @@ import {
   isMouseMove,
   isMouseScroll,
   isMouseUp,
-  MouseDown,
   MouseDragEnd,
   MouseDrop,
   MouseOut,
@@ -45,23 +44,15 @@ import {
   MouseParser,
   MouseParserLive,
 } from "../inputs/mouse";
-import { createOtelLayer } from "../otel";
 import type { RunnerEvent, RunnerEventMap, RunnerHooks } from "../run";
 import type { SelectionState } from "../types";
 import { parseColor } from "../utils";
 import { Library } from "../zig";
-import {
-  Elements,
-  ElementsLive,
-  type ElementElement,
-  type MethodParameters,
-  type Methods,
-  type MethodsObj,
-} from "./elements";
+import { Elements, ElementsLive, type ElementElement, type MethodParameters, type Methods } from "./elements";
 import type { BaseElement } from "./elements/base";
-import { Shutdown, ShutdownLive } from "./latch/shutdown";
-import { Selection, SelectionLive } from "./selection";
+import { Shutdown } from "./latch/shutdown";
 import type { PixelResolution } from "./utils";
+import { Selection, SelectionLive } from "./utils/selection";
 
 const DevToolsLive = DevTools.layerWebSocket().pipe(Layer.provide(BunSocket.layerWebSocketConstructor));
 
@@ -171,7 +162,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const renderer = yield* lib.createRenderer(config.width, config.height);
 
-    const needsUpdate = Effect.fn(function* () {});
     const capturedRenderable = yield* Ref.make<BaseElement<any> | null>(null);
 
     const rendering = yield* Ref.make(false);
@@ -230,7 +220,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           yield* lib.addToHitGrid(renderer, x, y, width, height, id);
         }
       }),
-      needsUpdate,
     });
 
     const start = Effect.fn(function* () {
@@ -920,7 +909,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           enabled: !cfg.debugOverlay.enabled,
         },
       }));
-      yield* needsUpdate();
     });
 
     const configureDebugOverlay = Effect.fn("cli.configureDebugOverlay")(function* () {
@@ -1459,7 +1447,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       createElement,
       add,
       start,
-      needsUpdate,
       getUseConsole,
       setUseConsole,
       isRunning,

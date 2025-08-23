@@ -1,10 +1,8 @@
-// import { TextAttributes, type ColorInput, RGBA } from "./types"
 import os from "os";
-import { FileSystem } from "@effect/platform";
-import type { BorderSides } from "@opentuee/ui/src/components/border";
-import { Brand, Config, Console, Effect, Match, Schema } from "effect";
+import { Brand, Effect, Match, Schema } from "effect";
 import { Collection, Custom, Input } from "./colors";
 import { CantParseHexColor, UnsupportedArchitecture, UnsupportedPlatform } from "./errors";
+import type { BorderSides } from "./renderer/utils/border";
 import * as TextAttributes from "./textattributes";
 import { RGBA, RGBAClass } from "./types";
 

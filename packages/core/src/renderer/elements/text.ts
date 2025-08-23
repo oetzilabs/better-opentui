@@ -9,12 +9,12 @@ import { isMouseDown, isMouseDrag, isMouseUp } from "../../inputs/mouse";
 import type { SelectionState } from "../../types";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import { StyledText } from "../styled-text";
 import { isPositionAbsolute, PositionAbsolute } from "../utils/position";
+import { StyledText } from "../utils/styled-text";
 import { base, type BaseElement } from "./base";
 import type { Binds, ElementOptions, RenderContextInterface } from "./utils";
 
-export interface TextOptions extends ElementOptions {
+export interface TextOptions extends ElementOptions<"text"> {
   content?: StyledText | string;
   onMouseEvent?: BaseElement<"text">["onMouseEvent"];
   onKeyboardEvent?: BaseElement<"text">["onKeyboardEvent"];
@@ -162,7 +162,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     }
   });
 
-  b.update = Effect.fn(function* () {
+  b.onUpdate = Effect.fn(function* (self) {
     const ctx = yield* Ref.get(binds.context);
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);

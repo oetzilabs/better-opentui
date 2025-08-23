@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { QueryPixelSize } from "../ansi";
+import { QueryPixelSize } from "../../ansi";
 
 export type PixelResolution = {
   width: number;

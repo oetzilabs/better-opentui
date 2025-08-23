@@ -15,7 +15,6 @@ import type { KeyboardEvent } from "../../events/keyboard";
 import type { MouseEvent } from "../../events/mouse";
 import type { SelectionState } from "../../types";
 import type { Library } from "../../zig";
-import { createTrackedNode, TrackedNode } from "../tracknode";
 import {
   isDimension,
   isFlexBasis,
@@ -31,9 +30,10 @@ import {
   PositionInput,
   PositionRelative,
 } from "../utils/position";
+import { createTrackedNode, TrackedNode } from "../utils/tracknode";
 import { ElementCounter, type ElementOptions } from "./utils";
 
-const validateOptions = Effect.fn(function* (id: string, options: ElementOptions) {
+const validateOptions = Effect.fn(function* <T extends string>(id: string, options: ElementOptions<T>) {
   if (typeof options.width === "number") {
     if (options.width < 0) {
       return yield* Effect.fail(new TypeError(`Invalid width for Renderable ${id}: ${options.width}`));
@@ -92,6 +92,7 @@ export type BaseElement<T extends string> = {
     container: BaseElement<any>,
     index?: number | undefined,
   ) => Effect.Effect<void, never, never>;
+  onUpdate: (self: BaseElement<T>) => Effect.Effect<void, Collection, Library>;
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
   onSelectionChanged: (selection: SelectionState | null) => Effect.Effect<boolean>;
   getSelection: () => Effect.Effect<{ start: number; end: number } | null>;
@@ -125,7 +126,7 @@ export type BaseElement<T extends string> = {
 
 export const base = Effect.fn(function* <T extends string>(
   type: T,
-  options: ElementOptions = {
+  options: ElementOptions<T> = {
     visible: true,
     selectable: true,
   },
@@ -300,7 +301,7 @@ export const base = Effect.fn(function* <T extends string>(
     }
   });
 
-  const setupMarginAndPadding = Effect.fn(function* (options: ElementOptions) {
+  const setupMarginAndPadding = Effect.fn(function* (options: ElementOptions<T>) {
     const node = layoutNode.yogaNode;
 
     if (isPercentageNumberMixed(options.margin)) {
@@ -344,7 +345,7 @@ export const base = Effect.fn(function* <T extends string>(
     }
   });
 
-  const setupYogaProperties = Effect.fn(function* (options: ElementOptions) {
+  const setupYogaProperties = Effect.fn(function* (options: ElementOptions<T>) {
     const node = layoutNode.yogaNode;
     const v = yield* Ref.get(visible);
     node.setDisplay(v ? Display.Flex : Display.None);
@@ -638,6 +639,14 @@ export const base = Effect.fn(function* <T extends string>(
     yield* Ref.set(focused, value);
   });
 
+  const onUpdate: BaseElement<any>["onUpdate"] = Effect.fn(function* () {
+    const es = yield* Ref.get(renderables);
+    yield* Effect.all(
+      es.map((e) => Effect.suspend(() => e.update())),
+      { concurrency: "unbounded", concurrentFinalizers: true },
+    );
+  });
+
   return {
     id,
     num,
@@ -657,7 +666,6 @@ export const base = Effect.fn(function* <T extends string>(
     renderables,
     ensureZIndexSorted,
     setVisible,
-    update,
     render,
     add: function (this, container: BaseElement<any>, index?: number) {
       return add(this, container, index);
@@ -668,14 +676,19 @@ export const base = Effect.fn(function* <T extends string>(
     shouldStartSelection,
     onSelectionChanged,
     onMouseEvent,
-    onKeyboardEvent,
     processMouseEvent: function (this, event: MouseEvent) {
       const handler = this.onMouseEvent;
       return processMouseEvent(handler, event);
     },
+    onKeyboardEvent,
     processKeyboardEvent: function (this, event: KeyboardEvent) {
       const handler = this.onKeyboardEvent;
       return processKeyboardEvent(handler, event);
+    },
+    onUpdate,
+    update: function (this) {
+      const handler = this.onUpdate;
+      return handler(this);
     },
     setFocused,
     destroy,
