@@ -3,6 +3,7 @@ import { BunSocket } from "@effect/platform-bun";
 import { Cause, Context, Duration, Effect, Exit, Fiber, Layer, Mailbox, Ref, Schedule, Schema } from "effect";
 import type { NoSuchElementException } from "effect/Cause";
 import {
+  isDumpHitGridCommand,
   isExitOnCtrlC,
   makeRoomForRenderer,
   moveCursor,
@@ -28,7 +29,7 @@ import {
 } from "../errors";
 import { KeyboardEvent } from "../events/keyboard";
 import { MouseEvent } from "../events/mouse";
-import { ParsedKey, parse as parseKey } from "../inputs/keyboard";
+import { isCtrlLetter, ParsedKey, parse as parseKey } from "../inputs/keyboard";
 import {
   isLeftMouseButton,
   isMouseDown,
@@ -502,6 +503,17 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             if (parsedKey) {
               if (isExitOnCtrlC(parsedKey.raw)) {
                 return yield* shutdown.run;
+              }
+              if (isDumpHitGridCommand(parsedKey.raw)) {
+                yield* lib.dumpHitGrid(renderer).pipe(
+                  Effect.catchAll((cause) =>
+                    Effect.gen(function* () {
+                      yield* Ref.update(errors, (errors) => [...errors, cause]);
+                      return yield* Effect.void;
+                    }),
+                  ),
+                );
+                return true;
               }
             }
 

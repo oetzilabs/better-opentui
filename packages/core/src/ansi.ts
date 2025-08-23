@@ -38,6 +38,9 @@ export const DisableSGRMouseMode = Schema.Literal("\x1b[?1006l").pipe(Schema.bra
 export const ExitOnCtrlC = Schema.Literal("\u0003").pipe(Schema.brand("ExitOnCtrlC"));
 export const isExitOnCtrlC = Schema.is(ExitOnCtrlC);
 
+export const DumpHitGridCommand = Schema.Literal("\u0007").pipe(Schema.brand("DumpHitGridCommand"));
+export const isDumpHitGridCommand = Schema.is(DumpHitGridCommand);
+
 export const scrollDown = Effect.fn(function* (lines: number) {
   return `\x1b[${lines}T`;
 });

@@ -104,10 +104,10 @@ export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = {}) 
   });
 
   b.update = Effect.fn("box.update")(function* () {
-    // const ctx = yield* Ref.get(binds.context);
-    // const { x, y } = yield* Ref.get(b.location);
-    // const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-    // yield* ctx.addToHitGrid(x, y, w, h, b.num);
+    const ctx = yield* Ref.get(binds.context);
+    const { x, y } = yield* Ref.get(b.location);
+    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
+    yield* ctx.addToHitGrid(x, y, w, h, b.num);
 
     const f = yield* Ref.get(b.focused);
     const pt = yield* Ref.get(plainTitle);

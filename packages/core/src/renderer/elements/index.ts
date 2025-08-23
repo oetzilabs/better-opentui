@@ -17,10 +17,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
     const context = yield* Ref.make<RenderContextInterface | null>(null);
 
-    const updateContext = Effect.fn(function* (ctx: RenderContextInterface) {
-      yield* Ref.set(context, ctx);
-    });
-
     const _root = Effect.fn(
       function* (ctx: RenderContextInterface) {
         yield* Ref.set(context, ctx);
@@ -37,7 +33,10 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       }
       const fn = group.bind(group, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
       const r = yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
-      yield* Ref.update(renderables, (es) => [...es, r]);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
       return r;
     });
     const _text = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof text>>) {
@@ -47,7 +46,10 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       }
       const fn = text.bind(text, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
       const r = yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
-      yield* Ref.update(renderables, (es) => [...es, r]);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
       return r;
     });
 
@@ -58,7 +60,10 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       }
       const fn = box.bind(box, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
       const r = yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
-      yield* Ref.update(renderables, (es) => [...es, r]);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
       return r;
     });
 

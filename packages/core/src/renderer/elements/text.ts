@@ -163,10 +163,10 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
   });
 
   b.update = Effect.fn(function* () {
-    // const ctx = yield* Ref.get(binds.context);
-    // const { x, y } = yield* Ref.get(b.location);
-    // const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-    // yield* ctx.addToHitGrid(x, y, w, h, b.num);
+    const ctx = yield* Ref.get(binds.context);
+    const { x, y } = yield* Ref.get(b.location);
+    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
+    yield* ctx.addToHitGrid(x, y, w, h, b.num);
   });
 
   b.render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {

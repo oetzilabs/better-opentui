@@ -42,20 +42,28 @@ export const Ctrl = Schema.Literal("Oa", "Ob", "Oc", "Od", "Oe", "[2^", "[3^", "
 // special keys
 export const Return = Schema.Literal("\r").pipe(Schema.brand("return"));
 export type Return = typeof Return.Type;
+export const isReturn = (name: string) => Schema.is(Return)(name);
 export const Enter = Schema.Literal("\n").pipe(Schema.brand("enter"));
 export type Enter = typeof Enter.Type;
+export const isEnter = (name: string) => Schema.is(Enter)(name);
 export const TabSpecial = Schema.Literal("\t").pipe(Schema.brand("tab"));
 export type TabSpecial = typeof TabSpecial.Type;
+export const isTabSpecial = (name: string) => Schema.is(TabSpecial)(name);
 export const Backspace = Schema.Literal("\b", "\x1b\b", "\x7f", "\x1b\x7f").pipe(Schema.brand("backspace"));
 export type Backspace = typeof Backspace.Type;
+export const isBackspace = (name: string) => Schema.is(Backspace)(name);
 export const Escape = Schema.Literal("\x1b", "\x1b\x1b").pipe(Schema.brand("escape"));
 export type Escape = typeof Escape.Type;
+export const isEscape = (name: string) => Schema.is(Escape)(name);
 export const Space = Schema.Literal(" ", "\x1b ").pipe(Schema.brand("space"));
 export type Space = typeof Space.Type;
+export const isSpace = (name: string) => Schema.is(Space)(name);
 export const CtrlLetter = Schema.Literal("\x1a").pipe(Schema.brand("ctrl+letter"));
 export type CtrlLetter = typeof CtrlLetter.Type;
+export const isCtrlLetter = (name: string) => Schema.is(CtrlLetter)(name);
 export const Number = Schema.Literal("0", "1", "2", "3", "4", "5", "6", "7", "8", "9").pipe(Schema.brand("number"));
 export type Number = typeof Number.Type;
+export const isNumber = (name: string) => Schema.is(Number)(name);
 export const LowerCaseLetter = Schema.Literal(
   "a",
   "b",
@@ -85,6 +93,7 @@ export const LowerCaseLetter = Schema.Literal(
   "z",
 ).pipe(Schema.brand("lowercaseletter"));
 export type LowerCaseLetter = typeof LowerCaseLetter.Type;
+export const isLowerCaseLetter = (name: string) => Schema.is(LowerCaseLetter)(name);
 export const UpperCaseLetter = Schema.Literal(
   "A",
   "B",
@@ -114,8 +123,10 @@ export const UpperCaseLetter = Schema.Literal(
   "Z",
 ).pipe(Schema.brand("uppercaseletter"));
 export type UpperCaseLetter = typeof UpperCaseLetter.Type;
+export const isUpperCaseLetter = (name: string) => Schema.is(UpperCaseLetter)(name);
 export const SpecialChar = Schema.String.pipe(Schema.brand("special"));
 export type SpecialChar = typeof SpecialChar.Type;
+export const isSpecialChar = (name: string) => Schema.is(SpecialChar)(name);
 
 export const Specials = Schema.Union(
   Return,

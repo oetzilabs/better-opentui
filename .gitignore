@@ -43,3 +43,5 @@ zig-out
 src/zig/lib
 screenshot-*.png
 .zig
+
+hitgrid_*.txt
