@@ -35,6 +35,7 @@ export const ElementCounterLive = ElementCounter.Default;
 
 export type ElementOptions = Partial<LayoutOptions> & {
   visible?: boolean;
+  focused?: boolean;
   selectable?: boolean;
   colors?: {
     fg?: Input;

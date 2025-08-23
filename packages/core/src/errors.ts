@@ -439,8 +439,16 @@ export class FailedToFreeYogaConfig extends Schema.TaggedError<FailedToFreeYogaC
   },
 ) {}
 
+export class MissingRenderContext extends Schema.TaggedError<MissingRenderContext>("MissingRenderContext")(
+  "MissingRenderContext",
+  {
+    cause: Schema.optional(Schema.Unknown),
+  },
+) {}
+
 // all errors
 export type Collection =
+  | MissingRenderContext
   | FailedToFreeYogaConfig
   | FailedToInsertChildTrackNode
   | FailedToSetTrackedNodeWidthAndHeight

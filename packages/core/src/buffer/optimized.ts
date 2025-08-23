@@ -1,9 +1,9 @@
 import { RGBA } from "@opentuee/core/src/types";
 import { packDrawOptions } from "@opentuee/core/src/utils";
 import { Library } from "@opentuee/core/src/zig";
-import { getBorderCharArrays, type BorderSides, type BorderStyle } from "@opentuee/ui/src/components/border";
 import { type Pointer } from "bun:ffi";
 import { Effect } from "effect";
+import { getBorderCharArrays, type BorderSides, type BorderStyle } from "../renderer/utils/border";
 import type { TextBuffer } from "./text";
 
 export class OptimizedBuffer {

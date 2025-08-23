@@ -1,6 +1,8 @@
 import { Effect, Ref } from "effect";
+import { MissingRenderContext } from "../../errors";
 import type { SelectionState } from "../../types";
 import type { BaseElement } from "./base";
+import { box } from "./box";
 import { group } from "./group";
 import { root } from "./root";
 import { text } from "./text";
@@ -13,16 +15,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
     const renderables = yield* Ref.make<BaseElement<any>[]>([]);
 
-    const context = yield* Ref.make<RenderContextInterface>({
-      width: Effect.fn(function* () {
-        return 0;
-      }),
-      height: Effect.fn(function* () {
-        return 0;
-      }),
-      addToHitGrid: Effect.fn(function* (x: number, y: number, width: number, height: number, id: number) {}),
-      needsUpdate: Effect.fn(function* () {}),
-    });
+    const context = yield* Ref.make<RenderContextInterface | null>(null);
 
     const updateContext = Effect.fn(function* (ctx: RenderContextInterface) {
       yield* Ref.set(context, ctx);
@@ -38,31 +31,56 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
     );
 
     const _group = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof group>>) {
-      const fn = group.bind(group, { context, cachedGlobalSelection });
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = group.bind(group, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
       const r = yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
       yield* Ref.update(renderables, (es) => [...es, r]);
       return r;
     });
     const _text = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof text>>) {
-      const fn = text.bind(text, { context, cachedGlobalSelection });
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = text.bind(text, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
       const r = yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
       yield* Ref.update(renderables, (es) => [...es, r]);
       return r;
     });
 
+    const _box = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof box>>) {
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = box.bind(box, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
+      const r = yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
+      yield* Ref.update(renderables, (es) => [...es, r]);
+      return r;
+    });
+
+    const getRenderable = Effect.fn(function* (id: number) {
+      const elements = yield* Ref.get(renderables);
+      return elements.find((e) => e.num === id);
+    });
+
     return {
-      updateContext,
+      box: _box,
       root: _root,
       group: _group,
       text: _text,
       renderables,
+      getRenderable,
     };
   }),
 }) {}
 
 export const ElementsLive = Elements.Default;
 
-export type MethodsObj = Omit<Elements, "updateContext" | "_tag" | "root" | "renderables">;
+export type MethodsObj = Omit<Elements, "updateContext" | "_tag" | "root" | "renderables" | "getRenderable">;
 
 export type Methods = keyof MethodsObj;
 

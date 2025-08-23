@@ -34,6 +34,7 @@ import {
   isMouseDown,
   isMouseDrag,
   isMouseMove,
+  isMouseScroll,
   isMouseUp,
   MouseDown,
   MouseDragEnd,
@@ -224,7 +225,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       }),
       addToHitGrid: Effect.fn(function* (x: number, y: number, width: number, height: number, id: number) {
         const cr = yield* Ref.get(capturedRenderable);
-        if (id !== cr?.id) {
+        if (id !== cr?.num) {
           yield* lib.addToHitGrid(renderer, x, y, width, height, id);
         }
       }),
@@ -626,7 +627,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const handleMouseData = Effect.fn("cli.handleMouseData")(function* (data: Buffer) {
       const mouseEvent = yield* mouseParser.parse(data);
 
-      yield* Effect.annotateCurrentSpan("mouseEvent", mouseEvent);
+      yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseEvent", mouseEvent);
       if (mouseEvent) {
         const sh = yield* Ref.get(_splitHeight);
         if (sh > 0) {
@@ -637,12 +638,25 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           mouseEvent.y -= ro;
         }
 
+        if (isMouseScroll(mouseEvent.type)) {
+          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseScroll", mouseEvent);
+          const maybeRenderableId = yield* lib.checkHit(renderer, mouseEvent.x, mouseEvent.y);
+          const maybeRenderable = yield* elements.getRenderable(maybeRenderableId);
+
+          if (maybeRenderable) {
+            const event = new MouseEvent(maybeRenderable, mouseEvent);
+            yield* maybeRenderable.processMouseEvent(event);
+          }
+          return true;
+        }
+
         const maybeRenderableId = yield* lib.checkHit(renderer, mouseEvent.x, mouseEvent.y);
         const lrn = yield* Ref.get(lastOverRenderableNum);
         const sameElement = maybeRenderableId === lrn;
         yield* Ref.set(lastOverRenderableNum, maybeRenderableId);
-        const maybeRenderable = yield* root.getRenderable(maybeRenderableId);
+        const maybeRenderable = yield* elements.getRenderable(maybeRenderableId);
         if (isMouseDown(mouseEvent.type) && isLeftMouseButton(mouseEvent.button)) {
+          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDown", mouseEvent);
           if (maybeRenderable) {
             const sel = yield* Ref.get(maybeRenderable.selectable);
             if (sel) {
@@ -654,30 +668,34 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             }
           }
         }
-        let isS = yield* currentSelection.isSelecting();
-        if (isMouseDrag(mouseEvent.type) && isS) {
+        let isSelecting = yield* currentSelection.isSelecting();
+        const selectionState = yield* currentSelection.get();
+        if (isMouseDrag(mouseEvent.type) && isSelecting) {
+          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDrag", mouseEvent);
           yield* updateSelection(maybeRenderable!, mouseEvent.x, mouseEvent.y);
           return true;
         }
 
-        if (isMouseUp(mouseEvent.type) && isS) {
+        if (isMouseUp(mouseEvent.type) && isSelecting) {
+          yield* Effect.annotateCurrentSpan("mouseUp", mouseEvent);
           yield* finishSelection();
           return true;
         }
-        if (isMouseDown(mouseEvent.type) && isLeftMouseButton(mouseEvent.button) && isS) {
+        if (isMouseDown(mouseEvent.type) && isLeftMouseButton(mouseEvent.button) && selectionState) {
+          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDown", mouseEvent);
           yield* clearSelection();
         }
+        const cr = yield* Ref.get(capturedRenderable);
 
         if (!sameElement && (isMouseDrag(mouseEvent.type) || isMouseMove(mouseEvent.type))) {
+          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDrag|cli.handleMouseData.mouseMove", mouseEvent);
           const lor = yield* Ref.get(lastOverRenderable);
-          const cr = yield* Ref.get(capturedRenderable);
           if (lor && lor !== cr) {
             const event = new MouseEvent(lor, { ...mouseEvent, type: MouseOut.make("out") });
             yield* lor.processMouseEvent(event);
           }
           yield* Ref.set(lastOverRenderable, maybeRenderable);
           if (maybeRenderable) {
-            const cr = yield* Ref.get(capturedRenderable);
             const event = new MouseEvent(maybeRenderable, {
               ...mouseEvent,
               type: MouseOver.make("over"),
@@ -687,15 +705,15 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           }
         }
 
-        const cr = yield* Ref.get(capturedRenderable);
-
-        if (cr && isMouseUp(mouseEvent.type)) {
+        if (cr && !isMouseUp(mouseEvent.type)) {
+          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseUp", mouseEvent);
           const event = new MouseEvent(cr, mouseEvent);
           yield* cr.processMouseEvent(event);
           return true;
         }
 
         if (cr && isMouseUp(mouseEvent.type)) {
+          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDragEnd", mouseEvent);
           const event = new MouseEvent(cr, { ...mouseEvent, type: MouseDragEnd.make("drag-end") });
           yield* cr.processMouseEvent(event);
           yield* cr.processMouseEvent(new MouseEvent(cr, mouseEvent));
@@ -708,7 +726,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             yield* maybeRenderable.processMouseEvent(event);
           }
           yield* Ref.set(lastOverRenderable, cr);
-          yield* Ref.set(lastOverRenderableNum, cr.id); // opentui has `.num` instead of `.id`
+          yield* Ref.set(lastOverRenderableNum, cr.num);
           yield* Ref.set(capturedRenderable, null);
         }
 
@@ -1056,10 +1074,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const ir = yield* Ref.get(_isRunning);
       if (!ir) return;
       const l = updateLoop();
+      const tfps = yield* Ref.get(targetFps);
       const fiber = yield* Effect.fork(
         l.pipe(
           // We need to repeat the loop to keep the fiber alive
-          Effect.forever,
+          // Effect.forever,
+          Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps))),
           // Effect.retry(Schedule.recurs(10)),
         ),
       );
@@ -1251,7 +1271,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const hasSelection = Effect.fn("cli.hasSelection")(function* () {
-      return yield* currentSelection.isActive();
+      const ss = yield* currentSelection.get();
+      return ss !== null;
     });
 
     const startSelection = Effect.fn("cli.startSelection")(function* (

@@ -40,6 +40,7 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
 
     const disable = Effect.fn(function* () {
       yield* Ref.set(_active, false);
+      yield* Ref.set(selectionState, null);
     });
 
     const isActive = Effect.fn(function* () {

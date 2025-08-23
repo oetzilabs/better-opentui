@@ -5,6 +5,7 @@ import { TextBuffer, TextChunkSchema } from "../../buffer/text";
 import { Colors } from "../../colors";
 import type { KeyboardEvent } from "../../events/keyboard";
 import type { MouseEvent } from "../../events/mouse";
+import { isMouseDown, isMouseDrag, isMouseUp } from "../../inputs/mouse";
 import type { SelectionState } from "../../types";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
@@ -22,6 +23,22 @@ export interface TextOptions extends ElementOptions {
 export const text = Effect.fn(function* (binds: Binds, content: string, options: TextOptions = {}) {
   const lib = yield* Library;
   const b = yield* base("text", options);
+
+  b.onMouseEvent = Effect.fn("text.onMouseEvent")(function* (event) {
+    yield* Effect.annotateCurrentSpan("text.onMouseEvent", event);
+    const fn = options.onMouseEvent ?? Effect.fn(function* (event) {});
+    yield* fn(event);
+    if (event.source) {
+      if (event.source.id === b.id) {
+        if (isMouseDown(event.type) || isMouseDrag(event.type) || isMouseUp(event.type)) {
+          yield* event.source.setFocused(true);
+        } else {
+          yield* event.source.setFocused(false);
+        }
+      }
+    }
+  });
+
   const textEncoder = new TextEncoder();
   const chunk = TextChunkSchema.make({
     __isChunk: true as const,
@@ -146,10 +163,10 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
   });
 
   b.update = Effect.fn(function* () {
-    const ctx = yield* Ref.get(binds.context);
-    const { x, y } = yield* Ref.get(b.location);
-    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-    yield* ctx.addToHitGrid(x, y, w, h, b.id);
+    // const ctx = yield* Ref.get(binds.context);
+    // const { x, y } = yield* Ref.get(b.location);
+    // const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
+    // yield* ctx.addToHitGrid(x, y, w, h, b.num);
   });
 
   b.render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
@@ -165,29 +182,6 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
       height: h,
     };
     yield* lib.bufferDrawTextBuffer(buffer.ptr, textBuffer.ptr, loc.x, loc.y, clipRect);
-  });
-
-  b.onMouseEvent = Effect.fn(function* (event: MouseEvent) {
-    if (options.onMouseEvent) {
-      yield* options.onMouseEvent(event);
-    }
-  });
-  b.onKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
-    if (options.onKeyboardEvent) {
-      yield* options.onKeyboardEvent(event);
-    }
-  });
-
-  b.processMouseEvent = Effect.fn(function* (event: MouseEvent) {
-    if (!event.defaultPrevented) {
-      yield* b.onMouseEvent(event);
-    }
-  });
-
-  b.processKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
-    if (!event.defaultPrevented) {
-      yield* b.onKeyboardEvent(event);
-    }
   });
 
   const setContent = Effect.fn(function* (value: string) {

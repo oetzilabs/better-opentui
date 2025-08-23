@@ -1,9 +1,6 @@
 import type { OptimizedBuffer } from "@opentuee/core/src/buffer/optimized";
 import { Colors, Input } from "@opentuee/core/src/colors";
 import { Renderable, type RenderableOptions } from "@opentuee/core/src/renderer/renderable-3";
-import { RGBA } from "@opentuee/core/src/types";
-import { Effect } from "effect";
-import { Edge } from "yoga-layout";
 import {
   borderCharsToArray,
   getBorderSides,
@@ -11,7 +8,10 @@ import {
   type BorderSides,
   type BorderSidesConfig,
   type BorderStyle,
-} from "./border";
+} from "@opentuee/core/src/renderer/utils/border";
+import { RGBA } from "@opentuee/core/src/types";
+import { Effect } from "effect";
+import { Edge } from "yoga-layout";
 
 export interface BoxOptions extends RenderableOptions {
   backgroundColor?: Input;

@@ -1,9 +1,6 @@
 import { Effect, Ref } from "effect";
 import { Direction } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
-import type { KeyboardEvent } from "../../events/keyboard";
-import type { MouseEvent } from "../../events/mouse";
-import type { SelectionState } from "../../types";
 import { base } from "./base";
 
 export const root = Effect.fn(function* () {
@@ -14,18 +11,34 @@ export const root = Effect.fn(function* () {
     b.layoutNode.yogaNode.calculateLayout(width, height, Direction.LTR);
   });
 
+  b.onMouseEvent = Effect.fn("root.onMouseEvent")(function* (event) {
+    yield* Effect.annotateCurrentSpan("root.onMouseEvent", event);
+    const es = yield* Ref.get(b.renderables);
+    yield* Effect.all(
+      es.map((e) => Effect.suspend(() => e.onMouseEvent(event)), {
+        concurrency: "unbounded",
+        concurrentFinalizers: true,
+      }),
+    );
+  });
+
   b.update = Effect.fn(function* () {
     if (b.layoutNode.yogaNode.isDirty()) {
       yield* calculateLayout();
     }
     yield* b.updateFromLayout();
+
+    const es = yield* Ref.get(b.renderables);
+    yield* Effect.all(
+      es.map((e) => Effect.suspend(() => e.update()), { concurrency: "unbounded", concurrentFinalizers: true }),
+    );
   });
 
   b.render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
     const elements = yield* Ref.get(b.renderables);
     yield* Effect.all(
       elements.map((e) => Effect.suspend(() => e.render(buffer, deltaTime))),
-      { concurrency: "unbounded" },
+      { concurrency: "unbounded", concurrentFinalizers: true },
     );
   });
 

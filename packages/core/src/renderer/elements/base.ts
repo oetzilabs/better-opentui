@@ -33,7 +33,7 @@ import {
 } from "../utils/position";
 import { ElementCounter, type ElementOptions } from "./utils";
 
-const validateOptions = Effect.fn(function* (id: number, options: ElementOptions) {
+const validateOptions = Effect.fn(function* (id: string, options: ElementOptions) {
   if (typeof options.width === "number") {
     if (options.width < 0) {
       return yield* Effect.fail(new TypeError(`Invalid width for Renderable ${id}: ${options.width}`));
@@ -49,7 +49,8 @@ const validateOptions = Effect.fn(function* (id: number, options: ElementOptions
 
 export type BaseElement<T extends string> = {
   type: T;
-  id: number;
+  id: string;
+  num: number;
   selectable: Ref.Ref<boolean>;
   parent: Ref.Ref<BaseElement<any> | null>;
   visible: Ref.Ref<boolean>;
@@ -79,6 +80,7 @@ export type BaseElement<T extends string> = {
   zIndex: Ref.Ref<number>;
   renderables: Ref.Ref<BaseElement<any>[]>;
   yogaConfig: YogaConfig;
+  focused: Ref.Ref<boolean>;
   ensureZIndexSorted: () => Effect.Effect<void>;
   getElements: () => Effect.Effect<BaseElement<any>[]>;
   getElementsCount: () => Effect.Effect<number>;
@@ -109,7 +111,16 @@ export type BaseElement<T extends string> = {
   updateFromLayout: () => Effect.Effect<void, Collection, Library>;
   onMouseEvent: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
   onKeyboardEvent: (event: KeyboardEvent) => Effect.Effect<void, Collection, Library>;
-  getRenderable: (id: number) => Effect.Effect<BaseElement<any> | undefined, Collection, Library>;
+  getRenderable: (id: string) => Effect.Effect<BaseElement<any> | undefined, Collection, Library>;
+  setBackgroundColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
+  setForegroundColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
+  setSelectionBackgroundColor: (
+    color: ((oldColor: Input) => Input) | Input,
+  ) => Effect.Effect<void, Collection, Library>;
+  setSelectionForegroundColor: (
+    color: ((oldColor: Input) => Input) | Input,
+  ) => Effect.Effect<void, Collection, Library>;
+  setFocused: (value: boolean) => Effect.Effect<void, Collection, Library>;
 };
 
 export const base = Effect.fn(function* <T extends string>(
@@ -119,8 +130,10 @@ export const base = Effect.fn(function* <T extends string>(
     selectable: true,
   },
 ) {
+  // id random string
+  const id = Math.random().toString(36).slice(2);
   const counter = yield* ElementCounter;
-  const id = yield* counter.getNext();
+  const num = yield* counter.getNext();
   const visible = yield* Ref.make(options.visible ?? true);
   yield* validateOptions(id, options);
   const location = yield* Ref.make<{
@@ -129,13 +142,24 @@ export const base = Effect.fn(function* <T extends string>(
     _x: PositionInput;
     _y: PositionInput;
     type: PositionType;
-  }>({ _x: options.left ?? 0, _y: options.top ?? 0, x: 0, y: 0, type: options.position ?? PositionAbsolute.make(2) });
+  }>({
+    _x: options.left ?? 0,
+    _y: options.top ?? 0,
+    x: typeof options.left === "number" ? options.left : 0,
+    y: typeof options.top === "number" ? options.top : 0,
+    type: options.position ?? PositionAbsolute.make(2),
+  });
   const dimensions = yield* Ref.make<{
     widthValue: number;
     heightValue: number;
     width: number | "auto" | `${number}%`;
     height: number | "auto" | `${number}%`;
-  }>({ width: "auto", height: "auto", widthValue: 0, heightValue: 0 });
+  }>({
+    width: options.width ?? "auto",
+    height: options.height ?? "auto",
+    widthValue: typeof options.width === "number" ? options.width : 0,
+    heightValue: typeof options.height === "number" ? options.height : 0,
+  });
   const selectable = yield* Ref.make(options.selectable ?? true);
   const parent = yield* Ref.make<BaseElement<any> | null>(null);
   const colors = yield* Ref.make({
@@ -152,10 +176,43 @@ export const base = Effect.fn(function* <T extends string>(
   const zIndex = yield* Ref.make(options.zIndex ?? 0);
   const renderables = yield* Ref.make<BaseElement<any>[]>([]);
   const position = yield* Ref.make<Position>({});
+  const focused = yield* Ref.make(options.focused ?? false);
   const layoutNode = createTrackedNode();
   const yogaConfig = Yoga.Config.create();
   yogaConfig.setUseWebDefaults(false);
   yogaConfig.setPointScaleFactor(1);
+
+  const setBackgroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
+    if (typeof color === "function") {
+      yield* Ref.update(colors, (c) => ({ ...c, bg: color(c.bg) }));
+    } else {
+      yield* Ref.update(colors, (c) => ({ ...c, bg: color }));
+    }
+  });
+
+  const setForegroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
+    if (typeof color === "function") {
+      yield* Ref.update(colors, (c) => ({ ...c, fg: color(c.fg) }));
+    } else {
+      yield* Ref.update(colors, (c) => ({ ...c, fg: color }));
+    }
+  });
+
+  const setSelectionBackgroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
+    if (typeof color === "function") {
+      yield* Ref.update(colors, (c) => ({ ...c, selectableBg: color(c.selectableBg) }));
+    } else {
+      yield* Ref.update(colors, (c) => ({ ...c, selectableBg: color }));
+    }
+  });
+
+  const setSelectionForegroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
+    if (typeof color === "function") {
+      yield* Ref.update(colors, (c) => ({ ...c, selectableFg: color(c.selectableFg) }));
+    } else {
+      yield* Ref.update(colors, (c) => ({ ...c, selectableFg: color }));
+    }
+  });
 
   const ensureZIndexSorted = Effect.fn(function* () {
     const needsSort = yield* Ref.get(needsZIndexSort);
@@ -438,11 +495,11 @@ export const base = Effect.fn(function* <T extends string>(
     }
   });
 
-  const update = Effect.fn(function* () {
+  const update = Effect.fn("base.update")(function* () {
     const es = yield* Ref.get(renderables);
-    for (const element of es) {
-      yield* Effect.suspend(() => element.update());
-    }
+    yield* Effect.all(
+      es.map((e) => Effect.suspend(() => e.update()), { concurrency: "unbounded", concurrentFinalizers: true }),
+    );
   });
 
   const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
@@ -482,10 +539,13 @@ export const base = Effect.fn(function* <T extends string>(
 
   const processMouseEvent = Effect.fn(function* (handler: BaseElement<any>["onMouseEvent"], event: MouseEvent) {
     yield* handler(event);
-    if (!event.defaultPrevented) {
-      const es = yield* Ref.get(renderables);
-      yield* Effect.all(es.map((e) => Effect.suspend(() => e.processMouseEvent(event))));
-    }
+    // if (!event.defaultPrevented) {
+    //   const es = yield* Ref.get(renderables);
+    //   yield* Effect.all(
+    //     es.map((e) => Effect.suspend(() => e.processMouseEvent(event))),
+    //     { concurrency: "unbounded", concurrentFinalizers: true },
+    //   );
+    // }
   });
 
   const processKeyboardEvent = Effect.fn(function* (
@@ -569,15 +629,21 @@ export const base = Effect.fn(function* <T extends string>(
     return count;
   });
 
-  const getRenderable = Effect.fn(function* (id: number) {
+  const getRenderable = Effect.fn(function* (id: string) {
     const elements = yield* Ref.get(renderables);
     return elements.find((e) => e.id === id);
   });
 
+  const setFocused = Effect.fn(function* (value: boolean) {
+    yield* Ref.set(focused, value);
+  });
+
   return {
     id,
+    num,
     type,
     visible,
+    focused,
     colors,
     attributes,
     parent,
@@ -611,11 +677,16 @@ export const base = Effect.fn(function* <T extends string>(
       const handler = this.onKeyboardEvent;
       return processKeyboardEvent(handler, event);
     },
+    setFocused,
     destroy,
     getElements,
     getElementsCount,
     onResize,
     updateFromLayout,
     location,
+    setBackgroundColor,
+    setForegroundColor,
+    setSelectionBackgroundColor,
+    setSelectionForegroundColor,
   } satisfies BaseElement<T>;
 });

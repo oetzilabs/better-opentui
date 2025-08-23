@@ -4,9 +4,9 @@
 // import { resolveRenderLib, type RenderLib } from "./zig";
 import { type Pointer } from "bun:ffi";
 import { Context, Effect, Layer, Ref } from "effect";
-import { BorderChars, type BorderDrawOptions, type BorderSidesConfig } from "../../ui/src/components/border";
 import { Fragment, type StyledText } from "../../ui/src/components/fragment";
 import { MissingBackgroundColor, OptimizedBufferDrawTextLocalInvalidText } from "./errors";
+import { BorderChars, type BorderDrawOptions, type BorderSidesConfig } from "./renderer/utils/border";
 import { RGBAClass, RGBAv2 } from "./types";
 import { createTextAttributes, parseColor } from "./utils";
 import { RenderLib } from "./zig";
