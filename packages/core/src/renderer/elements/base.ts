@@ -1,13 +1,15 @@
 import { Effect, Ref } from "effect";
-import { Display, Edge, PositionType } from "yoga-layout";
+import Yoga, { Display, Edge, PositionType, type Config as YogaConfig } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, Input } from "../../colors";
-import type {
-  CantParseHexColor,
-  Collection,
-  RendererFailedToDestroyOptimizedBuffer,
-  RendererFailedToDestroyTextBuffer,
-  TrackedNodeDestroyed,
+import {
+  FailedToFreeYogaConfig,
+  FailedToFreeYogaNode,
+  type CantParseHexColor,
+  type Collection,
+  type RendererFailedToDestroyOptimizedBuffer,
+  type RendererFailedToDestroyTextBuffer,
+  type TrackedNodeDestroyed,
 } from "../../errors";
 import type { KeyboardEvent } from "../../events/keyboard";
 import type { MouseEvent } from "../../events/mouse";
@@ -76,6 +78,7 @@ export type BaseElement<T extends string> = {
   layoutNode: TrackedNode;
   zIndex: Ref.Ref<number>;
   renderables: Ref.Ref<BaseElement<any>[]>;
+  yogaConfig: YogaConfig;
   ensureZIndexSorted: () => Effect.Effect<void>;
   getElements: () => Effect.Effect<BaseElement<any>[]>;
   getElementsCount: () => Effect.Effect<number>;
@@ -85,21 +88,28 @@ export type BaseElement<T extends string> = {
   add: (
     this: BaseElement<T>,
     container: BaseElement<any>,
-    index?: number | undefined
+    index?: number | undefined,
   ) => Effect.Effect<void, never, never>;
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
-  onSelectionChanged: (selection: SelectionState | null, width: number, height: number) => Effect.Effect<boolean>;
+  onSelectionChanged: (selection: SelectionState | null) => Effect.Effect<boolean>;
   getSelection: () => Effect.Effect<{ start: number; end: number } | null>;
   getSelectedText: () => Effect.Effect<string>;
-  processMouseEvent: (event: MouseEvent) => Effect.Effect<void>;
-  processKeyboardEvent: (event: KeyboardEvent) => Effect.Effect<void>;
+  processMouseEvent: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
+  processKeyboardEvent: (event: KeyboardEvent) => Effect.Effect<void, Collection, Library>;
   destroy: () => Effect.Effect<
     void,
-    RendererFailedToDestroyTextBuffer | RendererFailedToDestroyOptimizedBuffer | TrackedNodeDestroyed,
+    | RendererFailedToDestroyTextBuffer
+    | RendererFailedToDestroyOptimizedBuffer
+    | TrackedNodeDestroyed
+    | FailedToFreeYogaConfig
+    | FailedToFreeYogaNode,
     Library
   >;
   onResize: (width: number, height: number) => Effect.Effect<void, CantParseHexColor, Library>;
   updateFromLayout: () => Effect.Effect<void, Collection, Library>;
+  onMouseEvent: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
+  onKeyboardEvent: (event: KeyboardEvent) => Effect.Effect<void, Collection, Library>;
+  getRenderable: (id: number) => Effect.Effect<BaseElement<any> | undefined, Collection, Library>;
 };
 
 export const base = Effect.fn(function* <T extends string>(
@@ -107,7 +117,7 @@ export const base = Effect.fn(function* <T extends string>(
   options: ElementOptions = {
     visible: true,
     selectable: true,
-  }
+  },
 ) {
   const counter = yield* ElementCounter;
   const id = yield* counter.getNext();
@@ -129,10 +139,10 @@ export const base = Effect.fn(function* <T extends string>(
   const selectable = yield* Ref.make(options.selectable ?? true);
   const parent = yield* Ref.make<BaseElement<any> | null>(null);
   const colors = yield* Ref.make({
-    fg: options.colors?.fg ?? Colors.White,
-    bg: options.colors?.bg ?? Colors.Black,
-    selectableFg: options.colors?.selectableFg ?? Colors.White,
-    selectableBg: options.colors?.selectableBg ?? Colors.Black,
+    fg: options.colors?.fg ?? Colors.Black,
+    bg: options.colors?.bg ?? Colors.Transparent,
+    selectableFg: options.colors?.selectableFg ?? Colors.Transparent,
+    selectableBg: options.colors?.selectableBg ?? Colors.Transparent,
   });
   const attributes = yield* Ref.make(options.attributes ?? 0);
   const _yogaPerformancePositionUpdated = yield* Ref.make(false);
@@ -143,6 +153,9 @@ export const base = Effect.fn(function* <T extends string>(
   const renderables = yield* Ref.make<BaseElement<any>[]>([]);
   const position = yield* Ref.make<Position>({});
   const layoutNode = createTrackedNode();
+  const yogaConfig = Yoga.Config.create();
+  yogaConfig.setUseWebDefaults(false);
+  yogaConfig.setPointScaleFactor(1);
 
   const ensureZIndexSorted = Effect.fn(function* () {
     const needsSort = yield* Ref.get(needsZIndexSort);
@@ -449,23 +462,37 @@ export const base = Effect.fn(function* <T extends string>(
     lineWidths: [],
   };
 
-  const onMouseEvent = Effect.fn(function* (event: MouseEvent) {});
-  const onKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {});
+  const onMouseEvent: BaseElement<any>["onMouseEvent"] =
+    options.onMouseEvent ??
+    Effect.fn("base.onMouseEvent")(function* (event: MouseEvent) {
+      if (!event.defaultPrevented) {
+        const es = yield* Ref.get(renderables);
+        yield* Effect.all(es.map((e) => Effect.suspend(() => e.processMouseEvent(event))));
+      }
+    });
 
-  const processMouseEvent = Effect.fn(function* (event: MouseEvent) {
-    yield* onMouseEvent(event);
-    const p = yield* Ref.get(parent);
-    if (p && !event.defaultPrevented) {
-      yield* Effect.suspend(() => p.processMouseEvent(event));
-    }
+  const onKeyboardEvent: BaseElement<any>["onKeyboardEvent"] =
+    options.onKeyboardEvent ??
+    Effect.fn("base.onKeyboardEvent")(function* (event: KeyboardEvent) {
+      if (!event.defaultPrevented) {
+        const es = yield* Ref.get(renderables);
+        yield* Effect.all(es.map((e) => Effect.suspend(() => e.processKeyboardEvent(event))));
+      }
+    });
+
+  const processMouseEvent = Effect.fn(function* (handler: BaseElement<any>["onMouseEvent"], event: MouseEvent) {
+    yield* handler(event);
     if (!event.defaultPrevented) {
       const es = yield* Ref.get(renderables);
       yield* Effect.all(es.map((e) => Effect.suspend(() => e.processMouseEvent(event))));
     }
   });
 
-  const processKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
-    yield* onKeyboardEvent(event);
+  const processKeyboardEvent = Effect.fn(function* (
+    handler: BaseElement<any>["onKeyboardEvent"],
+    event: KeyboardEvent,
+  ) {
+    yield* handler(event);
     const p = yield* Ref.get(parent);
     if (p && !event.defaultPrevented) {
       yield* Effect.suspend(() => p.processKeyboardEvent(event));
@@ -498,7 +525,7 @@ export const base = Effect.fn(function* <T extends string>(
     return localX >= 0 && localX < width && localY >= 0 && localY < height;
   });
 
-  const onSelectionChanged = Effect.fn(function* (selection: SelectionState | null, width: number, height: number = 1) {
+  const onSelectionChanged = Effect.fn(function* (selection: SelectionState | null) {
     return false;
   });
 
@@ -515,8 +542,13 @@ export const base = Effect.fn(function* <T extends string>(
     const elements = yield* Ref.get(renderables);
     yield* Effect.all(
       elements.map((r) => Effect.suspend(() => r.destroy())),
-      { concurrency: "unbounded", concurrentFinalizers: true }
+      { concurrency: "unbounded", concurrentFinalizers: true },
     );
+    yield* layoutNode.destroy();
+    yield* Effect.try({
+      try: () => yogaConfig.free(),
+      catch: (cause) => new FailedToFreeYogaConfig({ cause }),
+    });
   });
 
   const getElements = Effect.fn(function* () {
@@ -537,6 +569,11 @@ export const base = Effect.fn(function* <T extends string>(
     return count;
   });
 
+  const getRenderable = Effect.fn(function* (id: number) {
+    const elements = yield* Ref.get(renderables);
+    return elements.find((e) => e.id === id);
+  });
+
   return {
     id,
     type,
@@ -547,6 +584,7 @@ export const base = Effect.fn(function* <T extends string>(
     selectable,
     dimensions,
     layoutNode,
+    yogaConfig,
     localSelection,
     lineInfo,
     zIndex,
@@ -560,10 +598,19 @@ export const base = Effect.fn(function* <T extends string>(
     },
     getSelection,
     getSelectedText,
+    getRenderable,
     shouldStartSelection,
     onSelectionChanged,
-    processMouseEvent,
-    processKeyboardEvent,
+    onMouseEvent,
+    onKeyboardEvent,
+    processMouseEvent: function (this, event: MouseEvent) {
+      const handler = this.onMouseEvent;
+      return processMouseEvent(handler, event);
+    },
+    processKeyboardEvent: function (this, event: KeyboardEvent) {
+      const handler = this.onKeyboardEvent;
+      return processKeyboardEvent(handler, event);
+    },
     destroy,
     getElements,
     getElementsCount,

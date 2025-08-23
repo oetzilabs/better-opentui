@@ -54,6 +54,10 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
       yield* Ref.set(_selecting, selecting);
     });
 
+    const get = Effect.fn(function* () {
+      return yield* Ref.get(selectionState);
+    });
+
     const getSelectedText = Effect.gen(function* () {
       const selectedRenderables = yield* Ref.get(selectedRenderablesRef);
 
@@ -64,7 +68,7 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
       const sortedSelectedTexts = yield* Effect.all(
         selectedRenderables.map(
           Effect.fn(function* (renderable: BaseElement<any>) {
-            const  { x, y } = yield* Ref.get(renderable.location);
+            const { x, y } = yield* Ref.get(renderable.location);
 
             return { x, y, id: renderable.id };
           }),
@@ -113,6 +117,7 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
       setSelecting,
       enable,
       disable,
+      get,
     } as const;
   }),
 }) {}

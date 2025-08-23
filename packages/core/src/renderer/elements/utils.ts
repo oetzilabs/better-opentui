@@ -4,6 +4,7 @@ import type { RendererFailedToAddToHitGrid } from "../../errors";
 import type { SelectionState } from "../../types";
 import type { Library } from "../../zig";
 import type { LayoutOptions } from "../layout";
+import type { BaseElement } from "./base";
 
 export interface RenderContextInterface {
   addToHitGrid: (
@@ -42,6 +43,8 @@ export type ElementOptions = Partial<LayoutOptions> & {
     selectableBg?: Input;
   };
   attributes?: number;
+  onMouseEvent?: BaseElement<any>["onMouseEvent"];
+  onKeyboardEvent?: BaseElement<any>["onKeyboardEvent"];
 };
 
 export interface Binds {
@@ -53,7 +56,7 @@ export type RemoveBindsFromArgs<T extends any[]> = T extends [infer Head, ...inf
   ? Head extends Binds
     ? RemoveBindsFromArgs<Tail> // skip it
     : [Head, ...Tail]
-  : [];
+  : T;
 
 export type BindsToArgs<T extends any[]> = T extends [infer Head, ...infer Tail]
   ? [Head extends Binds ? Binds : Head, ...BindsToArgs<Tail>]

@@ -66,7 +66,38 @@ export const Collection = {
   BrightCyan,
   BrightMagenta,
   BrightWhite,
-};
+} as const;
+
+export const NonCustomCollection = {
+  Black,
+  White,
+  Red,
+  Green,
+  Blue,
+  Yellow,
+  Cyan,
+  Magenta,
+  Silver,
+  Gray,
+  Grey,
+  Maroon,
+  Olive,
+  Lime,
+  Aqua,
+  Teal,
+  Navy,
+  Fuchsia,
+  Purple,
+  Orange,
+  BrightBlack,
+  BrightRed,
+  BrightGreen,
+  BrightBlue,
+  BrightYellow,
+  BrightCyan,
+  BrightMagenta,
+  BrightWhite,
+} as const;
 
 export const NonCustom = Schema.Union(
   Black,
@@ -167,4 +198,12 @@ export const Colors = {
   BrightCyan: BrightCyan.make("#66FFFF"),
   BrightMagenta: BrightMagenta.make("#FF66FF"),
   BrightWhite: BrightWhite.make("#FFFFFF"),
-};
+  is: (name: keyof typeof Collection, color: Input) => {
+    if (name === "Custom") return Schema.is(Custom)(color);
+    if (name === "Transparent") return Schema.is(Transparent)(color);
+    // @ts-ignore
+    return Schema.is(NonCustomCollection[name])(color);
+  },
+} as const;
+
+// I want to check if a color is a specific colorname

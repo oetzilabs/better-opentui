@@ -10,11 +10,13 @@ import { parseColor } from "../../utils";
 import { Library } from "../../zig";
 import { StyledText } from "../styled-text";
 import { isPositionAbsolute, PositionAbsolute } from "../utils/position";
-import { base } from "./base";
+import { base, type BaseElement } from "./base";
 import type { Binds, ElementOptions, RenderContextInterface } from "./utils";
 
 export interface TextOptions extends ElementOptions {
   content?: StyledText | string;
+  onMouseEvent?: BaseElement<"text">["onMouseEvent"];
+  onKeyboardEvent?: BaseElement<"text">["onKeyboardEvent"];
 }
 
 export const text = Effect.fn(function* (binds: Binds, content: string, options: TextOptions = {}) {
@@ -48,7 +50,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     width: number,
     widthMode: MeasureMode,
     height: number,
-    heightMode: MeasureMode
+    heightMode: MeasureMode,
   ): { width: number; height: number } => {
     const maxLineWidth = Math.max(...b.lineInfo.lineWidths, 0);
     const numLines = b.lineInfo.lineStarts.length || 1;
@@ -76,12 +78,12 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
 
   yield* Effect.sync(() => b.layoutNode.yogaNode.setMeasureFunc(measureFunc));
 
-  const reevaluateSelection = Effect.fn(function* (width: number, height: number) {
+  const reevaluateSelection = Effect.fn(function* () {
     const cgs = yield* Ref.get(binds.cachedGlobalSelection);
     if (!cgs) {
       return false;
     }
-    return yield* onSelectionChanged(cgs, width, height);
+    return yield* onSelectionChanged(cgs);
   });
 
   const updateTextBuffer = Effect.fn(function* () {
@@ -129,8 +131,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
       }));
       b.layoutNode.yogaNode.markDirty();
     }
-    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-    const changed = reevaluateSelection(w, h);
+    const changed = reevaluateSelection();
     if (changed) {
       yield* syncSelectionToTextBuffer();
     }
@@ -138,7 +139,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
   yield* updateTextInfo();
 
   b.onResize = Effect.fn(function* (width: number, height: number) {
-    const changed = yield* reevaluateSelection(width, height);
+    const changed = yield* reevaluateSelection();
     if (changed) {
       yield* syncSelectionToTextBuffer();
     }
@@ -166,22 +167,26 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     yield* lib.bufferDrawTextBuffer(buffer.ptr, textBuffer.ptr, loc.x, loc.y, clipRect);
   });
 
-  const onMouseEvent = Effect.fn(function* (event: MouseEvent) {});
-  const onKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {});
-
-  const processMouseEvent = Effect.fn(function* (event: MouseEvent) {
-    yield* onMouseEvent(event);
-    // if (!event.defaultPrevented) {
-    //   const es = yield* Ref.get(b.renderables);
-    //   yield* Effect.all(es.map((e) => Effect.suspend(() => e.processMouseEvent(event))));
-    // }
+  b.onMouseEvent = Effect.fn(function* (event: MouseEvent) {
+    if (options.onMouseEvent) {
+      yield* options.onMouseEvent(event);
+    }
+  });
+  b.onKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
+    if (options.onKeyboardEvent) {
+      yield* options.onKeyboardEvent(event);
+    }
   });
 
-  const processKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
-    yield* onKeyboardEvent(event);
-    const p = yield* Ref.get(b.parent);
-    if (p && !event.defaultPrevented) {
-      yield* Effect.suspend(() => p.processKeyboardEvent(event));
+  b.processMouseEvent = Effect.fn(function* (event: MouseEvent) {
+    if (!event.defaultPrevented) {
+      yield* b.onMouseEvent(event);
+    }
+  });
+
+  b.processKeyboardEvent = Effect.fn(function* (event: KeyboardEvent) {
+    if (!event.defaultPrevented) {
+      yield* b.onKeyboardEvent(event);
     }
   });
 
@@ -205,21 +210,22 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     return localX >= 0 && localX < w && localY >= 0 && localY < h;
   });
 
-  const onSelectionChanged = Effect.fn(function* (selection: SelectionState | null, width: number, height: number = 1) {
+  const onSelectionChanged = Effect.fn(function* (selection: SelectionState | null) {
     const previousSelection = yield* Ref.get(b.localSelection);
     if (!selection?.isActive) {
       yield* Ref.set(b.localSelection, null);
       return previousSelection !== null;
     }
     const p = yield* Ref.get(b.location);
-    const myEndY = p.y + height - 1;
+    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
+    const myEndY = p.y + h - 1;
 
     if (myEndY < selection.anchor.y || p.y > selection.focus.y) {
       yield* Ref.set(b.localSelection, null);
       return previousSelection !== null;
     }
 
-    if (height === 1) {
+    if (h === 1) {
       const textLength = content.length;
 
       // Entire line is selected
@@ -314,8 +320,6 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     getSelectedText,
     shouldStartSelection,
     onSelectionChanged,
-    processMouseEvent,
-    processKeyboardEvent,
     setContent,
     destroy,
   };

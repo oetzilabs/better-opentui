@@ -197,10 +197,15 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
     Match.exhaustive,
   );
 
+  // Drop mouse sequences immediately. Somehow they cause issues with the keyboardhandlers
+  if (/^(?:\x1b\[M|\x1b\[<|\x1b\[\d+;\d+[mM]|\x1b\[<\d+;\d+;\d+[mM])/.test(parsed1)) {
+    return null;
+  }
+
   let result = Match.value(parsed1).pipe(
     Match.when(Schema.is(KeyNames), (s) => {
       return ParsedKey.make({
-        name: "",
+        name: Schema.is(Ctrl)(s) ? "ctrl" : Schema.is(Shift)(s) ? "shift" : metaKeyCodeRe.test(s) ? "meta" : "",
         ctrl: Schema.is(Ctrl)(s),
         meta: metaKeyCodeRe.test(s),
         shift: Schema.is(Shift)(s),

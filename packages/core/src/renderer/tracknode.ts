@@ -229,7 +229,6 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
 
   destroy = () =>
     Effect.gen(this, function* () {
-      yield* Console.log("Destroying node", this.id);
       if (this._destroyed) {
         return;
       }

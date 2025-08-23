@@ -6,7 +6,7 @@ export class MouseEvent {
   public readonly button: number;
   public readonly x: number;
   public readonly y: number;
-  public readonly source?: BaseElement<any>;
+  public readonly source?: BaseElement<any> | null;
   public readonly modifiers: {
     shift: boolean;
     alt: boolean;
@@ -20,7 +20,7 @@ export class MouseEvent {
     return this._defaultPrevented;
   }
 
-  constructor(target: BaseElement<any> | null, attributes: RawMouseEvent & { source?: BaseElement<any> }) {
+  constructor(target: BaseElement<any> | null, attributes: RawMouseEvent & { source?: BaseElement<any> | null }) {
     this.target = target;
     this.type = attributes.type;
     this.button = attributes.button;

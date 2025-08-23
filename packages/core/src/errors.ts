@@ -432,8 +432,16 @@ export class FailedToInsertChildTrackNode extends Schema.TaggedError<FailedToIns
   cause: Schema.optional(Schema.Unknown),
 }) {}
 
+export class FailedToFreeYogaConfig extends Schema.TaggedError<FailedToFreeYogaConfig>("FailedToFreeYogaConfig")(
+  "FailedToFreeYogaConfig",
+  {
+    cause: Schema.optional(Schema.Unknown),
+  },
+) {}
+
 // all errors
 export type Collection =
+  | FailedToFreeYogaConfig
   | FailedToInsertChildTrackNode
   | FailedToSetTrackedNodeWidthAndHeight
   | ParentTrackedNodeDestroyed

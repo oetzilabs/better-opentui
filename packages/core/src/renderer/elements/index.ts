@@ -1,5 +1,6 @@
 import { Effect, Ref } from "effect";
 import type { SelectionState } from "../../types";
+import type { BaseElement } from "./base";
 import { group } from "./group";
 import { root } from "./root";
 import { text } from "./text";
@@ -9,6 +10,8 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
   dependencies: [ElementCounterLive],
   effect: Effect.gen(function* () {
     const cachedGlobalSelection = yield* Ref.make<SelectionState | null>(null);
+
+    const renderables = yield* Ref.make<BaseElement<any>[]>([]);
 
     const context = yield* Ref.make<RenderContextInterface>({
       width: Effect.fn(function* () {
@@ -36,11 +39,15 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
     const _group = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof group>>) {
       const fn = group.bind(group, { context, cachedGlobalSelection });
-      return yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
+      const r = yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
+      yield* Ref.update(renderables, (es) => [...es, r]);
+      return r;
     });
     const _text = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof text>>) {
       const fn = text.bind(text, { context, cachedGlobalSelection });
-      return yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
+      const r = yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
+      yield* Ref.update(renderables, (es) => [...es, r]);
+      return r;
     });
 
     return {
@@ -48,13 +55,14 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       root: _root,
       group: _group,
       text: _text,
+      renderables,
     };
   }),
 }) {}
 
 export const ElementsLive = Elements.Default;
 
-export type MethodsObj = Omit<Elements, "updateContext" | "_tag" | "root">;
+export type MethodsObj = Omit<Elements, "updateContext" | "_tag" | "root" | "renderables">;
 
 export type Methods = keyof MethodsObj;
 
