@@ -2,7 +2,7 @@ import { Effect, Ref } from "effect";
 import { MeasureMode, PositionType } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { TextBuffer, TextChunkSchema } from "../../buffer/text";
-import { Colors } from "../../colors";
+import { Colors, Input } from "../../colors";
 import type { Collection } from "../../errors";
 import type { KeyboardEvent } from "../../events/keyboard";
 import type { MouseEvent } from "../../events/mouse";
@@ -227,7 +227,8 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
   });
 
   const onSelectionChanged = Effect.fn(
-    function* (selection: SelectionState | null, width: number, height: number) {
+    function* (selection: SelectionState | null, w: number, h: number) {
+      if (!selection) return false;
       const previousSelection = yield* Ref.get(b.localSelection);
       if (!selection?.isActive) {
         yield* Ref.set(b.localSelection, null);
@@ -235,7 +236,6 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
         return previousSelection !== null;
       }
       const p = yield* Ref.get(b.location);
-      const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
       const myEndY = p.y + h - 1;
 
       if (myEndY < selection.anchor.y || p.y > selection.focus.y) {
@@ -245,7 +245,8 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
       }
 
       if (h === 1) {
-        const textLength = content.length;
+        const content = yield* Ref.get(_content);
+        const textLength = content.toString().length;
 
         // Entire line is selected
         if (p.y > selection.anchor.y && p.y < selection.focus.y) {
@@ -326,7 +327,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     (effect) => effect.pipe(Effect.catchAll(() => Effect.succeed(false))),
   );
 
-  const destroy = Effect.fn(function* () {
+  b.destroy = Effect.fn(function* () {
     yield* textBuffer.destroy();
   });
 
@@ -337,6 +338,37 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     return c.toString().slice(local.start, local.end);
   });
 
+  b.toString = Effect.fn(function* () {
+    const c = yield* Ref.get(_content);
+    return c.toString();
+  });
+
+  const setBackgroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
+    let colors;
+    if (typeof color === "function") {
+      colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, bg: color(c.bg) }));
+    } else {
+      colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, bg: color }));
+    }
+
+    const parsedColor = yield* parseColor(colors.bg);
+    // set color on the text buffer
+    yield* textBuffer.setDefaultBg(parsedColor);
+  });
+
+  const setForegroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
+    let colors;
+    if (typeof color === "function") {
+      colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, fg: color(c.fg) }));
+    } else {
+      colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, fg: color }));
+    }
+
+    const parsedColor = yield* parseColor(colors.fg);
+    // set color on the text buffer
+    yield* textBuffer.setDefaultFg(parsedColor);
+  });
+
   return {
     ...b,
     getSelectedText,
@@ -344,6 +376,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     onSelectionChanged: onSelectionChanged as BaseElement<"text", TextElement>["onSelectionChanged"],
     setContent,
     getContent,
-    destroy,
+    setBackgroundColor,
+    setForegroundColor,
   } satisfies TextElement;
 });

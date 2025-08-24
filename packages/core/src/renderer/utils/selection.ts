@@ -41,6 +41,8 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
 
     const disable = Effect.fn(function* () {
       yield* Ref.set(_active, false);
+      yield* Ref.set(_selecting, false);
+      yield* Ref.set(selectedRenderablesRef, []);
       yield* Ref.set(selectionState, null);
     });
 
@@ -49,7 +51,9 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
     });
 
     const isSelecting = Effect.fn(function* () {
-      return yield* Ref.get(_selecting);
+      const s = yield* Ref.get(_selecting);
+      const a = yield* Ref.get(_active);
+      return s && a;
     });
 
     const setSelecting = Effect.fn(function* (selecting: boolean) {
@@ -63,18 +67,14 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
     const getSelectedText = Effect.gen(function* () {
       const selectedRenderables = yield* Ref.get(selectedRenderablesRef);
 
-      // Gather {x,y,id} for each renderable by running its getX/getY Effects.
-      // Support two common shapes:
-      // 1) renderable.getX is a function returning an Effect (call it)
-      // 2) renderable.getX is itself an Effect (yield it directly)
       const sortedSelectedTexts = yield* Effect.all(
         selectedRenderables.map(
           Effect.fn(function* (renderable: BaseElement<any, any>) {
             const { x, y } = yield* Ref.get(renderable.location);
 
             return { x, y, id: renderable.id };
-          })
-        )
+          }),
+        ),
       );
 
       const selectedTexts = sortedSelectedTexts.sort((a, b) => {
@@ -82,10 +82,9 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
         return a.x - b.x;
       });
 
-      let selectedTexts2 = yield* Effect.all(
-        selectedTexts.map((r) => selectedRenderables.find((el) => el.id === r.id)!.getSelectedText())
+      const selectedTexts2 = yield* Effect.all(
+        selectedTexts.map((r) => selectedRenderables.find((el) => el.id === r.id)!).map((e) => e.toString()),
       );
-      selectedTexts2 = selectedTexts2.filter((t) => t);
 
       // The original code returns selected elements joined with "\n".
       // If Element has a text property or toString, adjust here accordingly.

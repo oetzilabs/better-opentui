@@ -1,8 +1,8 @@
 import { RGBA } from "@opentuee/core/src/types";
 import { Library } from "@opentuee/core/src/zig";
-import type { StyledText } from "@opentuee/ui/src/components/styled-text";
 import { type Pointer } from "bun:ffi";
 import { Effect, Schema } from "effect";
+import type { StyledText } from "../renderer/utils/styled-text";
 
 export class TextBuffer {
   private bufferPtr: Pointer;

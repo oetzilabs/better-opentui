@@ -8,7 +8,7 @@ import { createOtelLayer } from "./otel";
 import { Shutdown, ShutdownLive } from "./renderer/latch/shutdown";
 
 export type SetupFunction = (
-  cli: CliRenderer
+  cli: CliRenderer,
 ) => Effect.Effect<void, Errors.Collection | TypeError, Library | CliRenderer>;
 
 export interface RunnerEventMap {
@@ -30,6 +30,7 @@ export type RunnerHooks = {
 };
 export type RunOptions = RunnerHooks & {
   setup: SetupFunction;
+  debug?: boolean;
 };
 
 export const run = (options: RunOptions) =>
@@ -40,8 +41,11 @@ export const run = (options: RunOptions) =>
     let onPanic: HookFunction<"panic"> = Effect.fn(function* (_cause: Cause.Cause<unknown>) {});
 
     yield* cli.setupTerminal(latch, {
-      on: options.on,
-      off: options.off,
+      debug: options.debug,
+      hooks: {
+        on: options.on,
+        off: options.off,
+      },
     });
 
     if (options.on && options.on.panic) {
@@ -56,7 +60,7 @@ export const run = (options: RunOptions) =>
           yield* options.on.exit({ type: "exit", code: 0, cause: exit });
         }
       },
-      (effect) => effect.pipe(Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))))
+      (effect) => effect.pipe(Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause)))),
     );
 
     yield* Effect.addFinalizer((exit) => finalizer(exit));
@@ -81,5 +85,5 @@ export const run = (options: RunOptions) =>
     Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))),
     Effect.provide([ShutdownLive, LibraryLive, Logger.pretty, createOtelLayer("opentuee")]),
     Effect.provide(BunContext.layer),
-    Effect.scoped
+    Effect.scoped,
   );

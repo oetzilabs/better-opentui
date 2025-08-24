@@ -64,6 +64,16 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         es.push(r);
         return es;
       });
+      const initialLocation = yield* Ref.get(r.location);
+      const initialDimensions = yield* Ref.get(r.dimensions);
+
+      yield* ctx.addToHitGrid(
+        initialLocation.x,
+        initialLocation.y,
+        initialDimensions.widthValue,
+        initialDimensions.heightValue,
+        r.num,
+      );
       return r;
     });
 

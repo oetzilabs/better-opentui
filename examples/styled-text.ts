@@ -10,8 +10,9 @@ import { Effect } from "effect";
 if (import.meta.main) {
   BunRuntime.runMain(
     run({
+      debug: true,
       setup: Effect.fn("run.setup")(function* (cli) {
-        yield* cli.setBackgroundColor(Colors.White);
+        yield* cli.setBackgroundColor(Colors.Transparent);
         const parentContainer = yield* cli.createElement("group");
 
         const box = yield* cli.createElement("box", {
@@ -21,7 +22,7 @@ if (import.meta.main) {
           width: 40,
           height: 10,
           colors: {
-            bg: Colors.Transparent,
+            bg: Colors.Gray,
           },
           border: true,
           borderStyle: "rounded",

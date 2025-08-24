@@ -14,7 +14,7 @@ import {
 import type { KeyboardEvent } from "../../events/keyboard";
 import type { MouseEvent } from "../../events/mouse";
 import type { SelectionState } from "../../types";
-import type { Library } from "../../zig";
+import { Library } from "../../zig";
 import {
   isDimension,
   isFlexBasis,
@@ -93,6 +93,7 @@ export type BaseElement<T extends string, E> = {
     container: BaseElement<any, E>,
     index?: number | undefined,
   ) => Effect.Effect<void, never, never>;
+  setLocation: (loc: { x: number; y: number }) => Effect.Effect<void, never, never>;
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
   onSelectionChanged: (selection: SelectionState | null, w: number, h: number) => Effect.Effect<boolean>;
   getSelection: () => Effect.Effect<{ start: number; end: number } | null>;
@@ -113,8 +114,12 @@ export type BaseElement<T extends string, E> = {
   onMouseEvent: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
   onKeyboardEvent: (event: KeyboardEvent) => Effect.Effect<void, Collection, Library>;
   getRenderable: (id: string) => Effect.Effect<BaseElement<any, E> | undefined, Collection, Library>;
-  setBackgroundColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
-  setForegroundColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
+  setBackgroundColor: (
+    color: ((oldColor: Input) => Input) | Input,
+  ) => Effect.Effect<void, Collection | CantParseHexColor, Library>;
+  setForegroundColor: (
+    color: ((oldColor: Input) => Input) | Input,
+  ) => Effect.Effect<void, Collection | CantParseHexColor, Library>;
   setSelectionBackgroundColor: (
     color: ((oldColor: Input) => Input) | Input,
   ) => Effect.Effect<void, Collection, Library>;
@@ -122,6 +127,7 @@ export type BaseElement<T extends string, E> = {
     color: ((oldColor: Input) => Input) | Input,
   ) => Effect.Effect<void, Collection, Library>;
   setFocused: (value: boolean) => Effect.Effect<void, Collection, Library>;
+  toString: () => Effect.Effect<string, Collection, Library>;
 };
 
 export const base = Effect.fn(function* <T extends string, E>(
@@ -647,6 +653,22 @@ export const base = Effect.fn(function* <T extends string, E>(
     );
   });
 
+  const setLocation = Effect.fn(function* (loc: { x: number; y: number }) {
+    yield* Ref.update(location, (l) => ({
+      ...l,
+      _x: loc.x,
+      _y: loc.y,
+      x: loc.x,
+      y: loc.y,
+    }));
+  });
+
+  const toString = Effect.fn(function* () {
+    const es = yield* Ref.get(renderables);
+    const texts = yield* Effect.all(es.map((e) => Effect.suspend(() => e.toString())));
+    return texts.join("\n");
+  });
+
   return {
     id,
     num,
@@ -670,6 +692,7 @@ export const base = Effect.fn(function* <T extends string, E>(
     add: function (this, container: BaseElement<any, any>, index?: number) {
       return add(this, container, index);
     },
+    setLocation,
     getSelection,
     getSelectedText,
     getRenderable,
@@ -701,5 +724,6 @@ export const base = Effect.fn(function* <T extends string, E>(
     setForegroundColor,
     setSelectionBackgroundColor,
     setSelectionForegroundColor,
+    toString,
   } satisfies BaseElement<T, E>;
 });
