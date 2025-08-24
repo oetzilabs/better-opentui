@@ -83,7 +83,7 @@ export class Selection extends Effect.Service<Selection>()("Selection", {
       });
 
       const selectedTexts2 = yield* Effect.all(
-        selectedTexts.map((r) => selectedRenderables.find((el) => el.id === r.id)!).map((e) => e.toString()),
+        selectedTexts.map((r) => selectedRenderables.find((el) => el.id === r.id)!).map((e) => e.getSelectedText()),
       );
 
       // The original code returns selected elements joined with "\n".
