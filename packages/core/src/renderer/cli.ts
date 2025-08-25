@@ -718,9 +718,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         const maybeRenderable = yield* elements.getRenderable(maybeRenderableId);
         if (isMouseDown(mouseEvent.type) && isLeftMouseButton(mouseEvent.button)) {
           yield* debugBox.setForegroundColor(Colors.White);
-          yield* debugBox.setContent(`MDo (${maybeRenderableId})`);
           yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDown", mouseEvent);
           if (maybeRenderable) {
+            yield* debugBox.setContent(`MDo (${maybeRenderableId})`);
             const sel = yield* Ref.get(maybeRenderable.selectable);
             if (sel) {
               const sss = yield* maybeRenderable.shouldStartSelection(mouseEvent.x, mouseEvent.y);
@@ -734,6 +734,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         let isSelecting = yield* currentSelection.isSelecting();
         const selectionState = yield* currentSelection.get();
         if (isMouseDrag(mouseEvent.type) && isSelecting) {
+          yield* debugBox.setContent(`MDrag (${maybeRenderableId})`);
           yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDrag", mouseEvent);
           yield* updateSelection(maybeRenderable, mouseEvent.x, mouseEvent.y);
           return true;
@@ -765,9 +766,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             const event = new MouseEvent(lor, { ...mouseEvent, type: MouseOut.make("out") });
             yield* lor.processMouseEvent(event);
           }
-          yield* debugBox.setContent(`NSE (${maybeRenderableId} [${maybeRenderable?.type ?? ""}]) (${lrn})`);
           yield* Ref.set(lastOverRenderable, maybeRenderable);
           if (maybeRenderable) {
+            yield* debugBox.setContent(`NSE (${maybeRenderableId} [${maybeRenderable?.type ?? ""}]) (${lrn})`);
             const event = new MouseEvent(maybeRenderable, {
               ...mouseEvent,
               type: MouseOver.make("over"),
@@ -838,7 +839,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         type: "keydown",
       });
 
-      yield* root.processKeyboardEvent(keyboardEvent);
+      // yield* root.processKeyboardEvent(keyboardEvent);
 
       return true;
     });
@@ -1397,7 +1398,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         containers.push(p || root);
         return containers;
       });
-      yield* currentSelection.create({ x, y }, { x, y });
       yield* currentSelection.enable();
       yield* currentSelection.setSelecting(true);
 
@@ -1417,7 +1417,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     ) {
       yield* currentSelection.setFocus({ x, y });
       const scs = yield* Ref.get(selectionContainers);
-
       if (scs.length > 0) {
         const currentContainer = scs[scs.length - 1]!;
 
@@ -1457,8 +1456,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           }
         }
       }
-
-      yield* currentSelection.create({ x, y }, { x, y });
 
       yield* notifySelectablesOfSelectionChange();
     });

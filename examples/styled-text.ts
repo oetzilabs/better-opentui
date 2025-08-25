@@ -71,7 +71,10 @@ if (import.meta.main) {
           zIndex: 1,
           onUpdate: Effect.fn("text.onUpdate")(function* (self: TextElement) {
             const elementCount = yield* cli.getElementCount();
-            yield* self.setContent(`Amount of elements: ${elementCount - 1} (root is not counted)`);
+            const selection = yield* cli.getSelection();
+            yield* self.setContent(
+              `Amount of elements: ${elementCount - 1} (root is not counted), selection: ${selection}`,
+            );
           }),
         });
 

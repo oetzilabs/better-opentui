@@ -3,7 +3,7 @@ import { MeasureMode, PositionType } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { TextBuffer, TextChunkSchema } from "../../buffer/text";
 import { Colors, Input } from "../../colors";
-import type { Collection } from "../../errors";
+import type { CantParseHexColor, Collection } from "../../errors";
 import type { KeyboardEvent } from "../../events/keyboard";
 import type { MouseEvent } from "../../events/mouse";
 import { isMouseDown, isMouseDrag, isMouseUp } from "../../inputs/mouse";
@@ -19,7 +19,6 @@ export interface TextElement extends BaseElement<"text", TextElement> {
   setContent: (content: string | StyledText) => Effect.Effect<void, Collection, Library>;
   getContent: () => Effect.Effect<StyledText, Collection, Library>;
   onUpdate: (self: TextElement) => Effect.Effect<void, Collection, Library>;
-  onSelectionChanged: (selection: SelectionState | null, w: number, h: number) => Effect.Effect<boolean>;
 }
 
 export type TextOptions = ElementOptions<"text", TextElement> & {
@@ -120,7 +119,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     if (!cgs) {
       return false;
     }
-    return yield* onSelectionChanged(cgs, w, h);
+    return yield* b.onSelectionChanged(cgs, w, h);
   });
 
   const updateTextBuffer = Effect.fn(function* () {
@@ -218,7 +217,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     return yield* Ref.get(_content);
   });
 
-  const shouldStartSelection = Effect.fn(function* (x: number, y: number) {
+  b.shouldStartSelection = Effect.fn(function* (x: number, y: number) {
     const p = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
     const localX = x - p.x;
@@ -226,106 +225,103 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     return localX >= 0 && localX < w && localY >= 0 && localY < h;
   });
 
-  const onSelectionChanged = Effect.fn(
-    function* (selection: SelectionState | null, w: number, h: number) {
-      if (!selection) return false;
-      const previousSelection = yield* Ref.get(b.localSelection);
-      if (!selection?.isActive) {
-        yield* Ref.set(b.localSelection, null);
-        yield* syncSelectionToTextBuffer();
-        return previousSelection !== null;
+  b.onSelectionChanged = Effect.fn(function* (selection: SelectionState | null, w: number, h: number) {
+    if (!selection) return false;
+    const previousSelection = yield* Ref.get(b.localSelection);
+    if (!selection?.isActive) {
+      yield* Ref.set(b.localSelection, null);
+      yield* syncSelectionToTextBuffer();
+      return previousSelection !== null;
+    }
+    const p = yield* Ref.get(b.location);
+    const myEndY = p.y + h - 1;
+
+    if (myEndY < selection.anchor.y || p.y > selection.focus.y) {
+      yield* Ref.set(b.localSelection, null);
+      yield* syncSelectionToTextBuffer();
+      return previousSelection !== null;
+    }
+
+    if (h === 1) {
+      const content = yield* Ref.get(_content);
+      const textLength = content.toString().length;
+
+      // Entire line is selected
+      if (p.y > selection.anchor.y && p.y < selection.focus.y) {
+        yield* Ref.set(b.localSelection, { start: 0, end: textLength });
       }
-      const p = yield* Ref.get(b.location);
-      const myEndY = p.y + h - 1;
 
-      if (myEndY < selection.anchor.y || p.y > selection.focus.y) {
-        yield* Ref.set(b.localSelection, null);
-        yield* syncSelectionToTextBuffer();
-        return previousSelection !== null;
+      // Selection spans this single line
+      if (p.y === selection.anchor.y && p.y === selection.focus.y) {
+        const start = Math.max(0, Math.min(selection.anchor.x - p.x, textLength));
+        const end = Math.max(0, Math.min(selection.focus.x - p.x, textLength));
+        yield* Ref.set(b.localSelection, start < end ? { start, end } : null);
       }
 
-      if (h === 1) {
-        const content = yield* Ref.get(_content);
-        const textLength = content.toString().length;
+      // Line is at start of selection
+      if (p.y === selection.anchor.y) {
+        const start = Math.max(0, Math.min(selection.anchor.x - p.x, textLength));
+        yield* Ref.set(b.localSelection, start < textLength ? { start, end: textLength } : null);
+      }
 
-        // Entire line is selected
-        if (p.y > selection.anchor.y && p.y < selection.focus.y) {
-          yield* Ref.set(b.localSelection, { start: 0, end: textLength });
-        }
+      // Line is at end of selection
+      if (p.y === selection.focus.y) {
+        const end = Math.max(0, Math.min(selection.focus.x - p.x, textLength));
+        yield* Ref.set(b.localSelection, end > 0 ? { start: 0, end } : null);
+      }
+    } else {
+      const textLength = content.length;
 
-        // Selection spans this single line
-        if (p.y === selection.anchor.y && p.y === selection.focus.y) {
-          const start = Math.max(0, Math.min(selection.anchor.x - p.x, textLength));
-          const end = Math.max(0, Math.min(selection.focus.x - p.x, textLength));
-          yield* Ref.set(b.localSelection, start < end ? { start, end } : null);
-        }
+      let selectionStart: number | null = null;
+      let selectionEnd: number | null = null;
 
-        // Line is at start of selection
-        if (p.y === selection.anchor.y) {
-          const start = Math.max(0, Math.min(selection.anchor.x - p.x, textLength));
-          yield* Ref.set(b.localSelection, start < textLength ? { start, end: textLength } : null);
-        }
+      for (let i = 0; i < b.lineInfo.lineStarts.length; i++) {
+        const lineY = p.y + i;
 
-        // Line is at end of selection
-        if (p.y === selection.focus.y) {
-          const end = Math.max(0, Math.min(selection.focus.x - p.x, textLength));
-          yield* Ref.set(b.localSelection, end > 0 ? { start: 0, end } : null);
-        }
-      } else {
-        const textLength = content.length;
+        if (lineY < selection.anchor.y || lineY > selection.focus.y) continue;
 
-        let selectionStart: number | null = null;
-        let selectionEnd: number | null = null;
+        const lineStart = b.lineInfo.lineStarts[i];
+        const lineEnd = i < b.lineInfo.lineStarts.length - 1 ? b.lineInfo.lineStarts[i + 1] - 1 : textLength;
+        const lineWidth = b.lineInfo.lineWidths[i];
 
-        for (let i = 0; i < b.lineInfo.lineStarts.length; i++) {
-          const lineY = p.y + i;
-
-          if (lineY < selection.anchor.y || lineY > selection.focus.y) continue;
-
-          const lineStart = b.lineInfo.lineStarts[i];
-          const lineEnd = i < b.lineInfo.lineStarts.length - 1 ? b.lineInfo.lineStarts[i + 1] - 1 : textLength;
-          const lineWidth = b.lineInfo.lineWidths[i];
-
-          if (lineY > selection.anchor.y && lineY < selection.focus.y) {
-            // Entire line is selected
-            if (selectionStart === null) selectionStart = lineStart;
+        if (lineY > selection.anchor.y && lineY < selection.focus.y) {
+          // Entire line is selected
+          if (selectionStart === null) selectionStart = lineStart;
+          selectionEnd = lineEnd;
+        } else if (lineY === selection.anchor.y && lineY === selection.focus.y) {
+          // Selection starts and ends on this line
+          const localStartX = Math.max(0, Math.min(selection.anchor.x - p.x, lineWidth));
+          const localEndX = Math.max(0, Math.min(selection.focus.x - p.x, lineWidth));
+          if (localStartX < localEndX) {
+            selectionStart = lineStart + localStartX;
+            selectionEnd = lineStart + localEndX;
+          }
+        } else if (lineY === selection.anchor.y) {
+          // Selection starts on this line
+          const localStartX = Math.max(0, Math.min(selection.anchor.x - p.x, lineWidth));
+          if (localStartX < lineWidth) {
+            selectionStart = lineStart + localStartX;
             selectionEnd = lineEnd;
-          } else if (lineY === selection.anchor.y && lineY === selection.focus.y) {
-            // Selection starts and ends on this line
-            const localStartX = Math.max(0, Math.min(selection.anchor.x - p.x, lineWidth));
-            const localEndX = Math.max(0, Math.min(selection.focus.x - p.x, lineWidth));
-            if (localStartX < localEndX) {
-              selectionStart = lineStart + localStartX;
-              selectionEnd = lineStart + localEndX;
-            }
-          } else if (lineY === selection.anchor.y) {
-            // Selection starts on this line
-            const localStartX = Math.max(0, Math.min(selection.anchor.x - p.x, lineWidth));
-            if (localStartX < lineWidth) {
-              selectionStart = lineStart + localStartX;
-              selectionEnd = lineEnd;
-            }
-          } else if (lineY === selection.focus.y) {
-            // Selection ends on this line
-            const localEndX = Math.max(0, Math.min(selection.focus.x - p.x, lineWidth));
-            if (localEndX > 0) {
-              if (selectionStart === null) selectionStart = lineStart;
-              selectionEnd = lineStart + localEndX;
-            }
+          }
+        } else if (lineY === selection.focus.y) {
+          // Selection ends on this line
+          const localEndX = Math.max(0, Math.min(selection.focus.x - p.x, lineWidth));
+          if (localEndX > 0) {
+            if (selectionStart === null) selectionStart = lineStart;
+            selectionEnd = lineStart + localEndX;
           }
         }
       }
+    }
 
-      yield* syncSelectionToTextBuffer();
-      const ls = yield* Ref.get(b.localSelection);
-      return (
-        (ls !== null) !== (previousSelection !== null) ||
-        ls?.start !== previousSelection?.start ||
-        ls?.end !== previousSelection?.end
-      );
-    },
-    (effect) => effect.pipe(Effect.catchAll(() => Effect.succeed(false))),
-  );
+    yield* syncSelectionToTextBuffer();
+    const ls = yield* Ref.get(b.localSelection);
+    return (
+      (ls !== null) !== (previousSelection !== null) ||
+      ls?.start !== previousSelection?.start ||
+      ls?.end !== previousSelection?.end
+    );
+  });
 
   b.destroy = Effect.fn(function* () {
     yield* textBuffer.destroy();
@@ -369,14 +365,33 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     yield* textBuffer.setDefaultFg(parsedColor);
   });
 
+  const setSelectionBackgroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
+    let colors;
+    if (typeof color === "function") {
+      colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableBg: color(c.selectableBg) }));
+    } else {
+      colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableBg: color }));
+    }
+  });
+
+  const setSelectionForegroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
+    let colors;
+    if (typeof color === "function") {
+      colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableFg: color(c.selectableFg) }));
+    } else {
+      colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableFg: color }));
+    }
+  });
+
   return {
     ...b,
     getSelectedText,
-    shouldStartSelection,
-    onSelectionChanged: onSelectionChanged as BaseElement<"text", TextElement>["onSelectionChanged"],
+    // onSelectionChanged: onSelectionChanged as BaseElement<"text", TextElement>["onSelectionChanged"],
     setContent,
     getContent,
     setBackgroundColor,
     setForegroundColor,
+    setSelectionBackgroundColor,
+    setSelectionForegroundColor,
   } satisfies TextElement;
 });
