@@ -1404,12 +1404,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       x: number,
       y: number,
     ) {
-      const ss = yield* Ref.get(selectionState);
+      let ss = yield* Ref.get(selectionState);
       if (ss) {
-        yield* Ref.update(selectionState, (ss2) => ({
-          ...ss,
+        ss = (yield* Ref.updateAndGet(selectionState, (ss2) => ({
+          ...ss!,
           focus: { x, y },
-        }));
+        })))!;
         let scs = yield* Ref.get(selectionContainers);
         if (scs.length > 0) {
           const currentContainer = scs[scs.length - 1];
@@ -1422,7 +1422,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
               return containers;
             });
           } else if (currentRenderable && scs.length > 1) {
-            let containerIndex = scs.indexOf(currentRenderable);
+            let containerIndex = scs.findIndex((c) => c.id === currentRenderable.id);
 
             if (containerIndex === -1) {
               const p = yield* Ref.get(currentRenderable.parent);
@@ -1437,10 +1437,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
               });
             }
           }
-          const cs = yield* Ref.get(currentSelection);
-          if (cs) {
-            yield* Ref.set(currentSelection, new Selection(ss.anchor, ss.focus));
-          }
+        }
+        const cs = yield* Ref.get(currentSelection);
+        if (cs) {
+          yield* Ref.set(currentSelection, new Selection(ss.anchor, ss.focus));
         }
       }
 
@@ -1494,23 +1494,19 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const renderables = yield* Ref.get(elements.renderables);
 
       const scs = yield* Ref.get(selectionContainers);
+
       for (const renderable of renderables) {
         const v = yield* Ref.get(renderable.visible);
         const s = yield* Ref.get(renderable.selectable);
         if (v && s) {
           const currentContainer = scs.length > 0 ? scs[scs.length - 1] : null;
           let hasSelection = false;
-          if (!currentContainer) {
+          if (!currentContainer || (yield* isWithinContainer(renderable, currentContainer))) {
             hasSelection = yield* renderable.onSelectionChanged(normalizedSelection);
           } else {
-            const iwc = yield* isWithinContainer(renderable, currentContainer);
-            if (iwc) {
-              hasSelection = yield* renderable.onSelectionChanged(normalizedSelection);
-            } else {
-              hasSelection = yield* renderable.onSelectionChanged(
-                normalizedSelection ? { ...normalizedSelection, isActive: false } : null,
-              );
-            }
+            hasSelection = yield* renderable.onSelectionChanged(
+              normalizedSelection ? { ...normalizedSelection, isActive: false } : null,
+            );
           }
 
           if (hasSelection) {

@@ -133,7 +133,6 @@ export class TextBuffer {
   public setSelection = (start: number, end: number, bgColor?: RGBA, fgColor?: RGBA) =>
     Effect.gen(this, function* () {
       const lib = yield* Library;
-      console.log({ start, end, bgColor, fgColor });
       yield* lib.textBufferSetSelection(this.bufferPtr, start, end, bgColor || null, fgColor || null);
     });
 

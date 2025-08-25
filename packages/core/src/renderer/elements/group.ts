@@ -17,7 +17,7 @@ export const group = Effect.fn(function* (
   binds: Binds,
   options: GroupOptions = {
     visible: true,
-    selectable: true,
+    selectable: false,
   },
 ) {
   const b = yield* base("group", {
@@ -25,7 +25,7 @@ export const group = Effect.fn(function* (
     width: "auto",
     height: "auto",
     visible: true,
-    selectable: true,
+    selectable: false,
   });
 
   b.onMouseEvent = Effect.fn("group.onMouseEvent")(function* (event) {

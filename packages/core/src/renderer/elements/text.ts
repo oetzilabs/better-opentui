@@ -215,7 +215,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
   b.onSelectionChanged = Effect.fn(function* (selection: SelectionState | null) {
     const { widthValue: width, heightValue: height } = yield* Ref.get(b.dimensions);
 
-    const changed = selectionHelper.onSelectionChanged(selection, width, height);
+    const changed = yield* selectionHelper.onSelectionChanged(selection, width, height);
     if (changed) {
       yield* syncSelectionToTextBuffer();
     }
