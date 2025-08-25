@@ -1,6 +1,6 @@
 import { BunRuntime } from "@effect/platform-bun";
 import { Colors } from "@opentuee/core/src/colors";
-import { isMouseOver } from "@opentuee/core/src/inputs/mouse";
+import { isMouseDown, isMouseDrag, isMouseOver, isMouseUp } from "@opentuee/core/src/inputs/mouse";
 import type { BaseElement } from "@opentuee/core/src/renderer/elements/base";
 import type { TextElement } from "@opentuee/core/src/renderer/elements/text";
 import { PositionAbsolute } from "@opentuee/core/src/renderer/utils/position";
@@ -10,7 +10,7 @@ import { Effect } from "effect";
 if (import.meta.main) {
   BunRuntime.runMain(
     run({
-      debug: true,
+      // debug: true,
       setup: Effect.fn("run.setup")(function* (cli) {
         yield* cli.setBackgroundColor(Colors.Transparent);
         const parentContainer = yield* cli.createElement("group");
@@ -29,18 +29,6 @@ if (import.meta.main) {
           borderColor: Colors.Maroon,
           focusedBorderColor: Colors.Red,
           zIndex: 2,
-          onMouseEvent: Effect.fn("text.onMouseEvent")(function* (event) {
-            event.preventDefault();
-            if (isMouseOver(event.type) && event.source) {
-              yield* event.source.setBackgroundColor((c) => {
-                if (Colors.is("Yellow", c)) {
-                  return Colors.Fuchsia;
-                } else {
-                  return Colors.Yellow;
-                }
-              });
-            }
-          }),
         });
 
         const text = yield* cli.createElement("text", "Hello World", {
@@ -54,6 +42,7 @@ if (import.meta.main) {
             fg: Colors.Red,
             bg: Colors.Yellow,
             selectableBg: Colors.Green,
+            selectableFg: Colors.Blue,
           },
         });
 
@@ -67,13 +56,14 @@ if (import.meta.main) {
             fg: Colors.Red,
             bg: Colors.Transparent,
             selectableBg: Colors.Green,
+            selectableFg: Colors.Blue,
           },
           zIndex: 1,
           onUpdate: Effect.fn("text.onUpdate")(function* (self: TextElement) {
             const elementCount = yield* cli.getElementCount();
             const selection = yield* cli.getSelection();
             yield* self.setContent(
-              `Amount of elements: ${elementCount - 1} (root is not counted), selection: ${selection}`,
+              `Amount of elements: ${elementCount - 1} (root is not counted), selection: ${JSON.stringify(selection ?? {})}`,
             );
           }),
         });

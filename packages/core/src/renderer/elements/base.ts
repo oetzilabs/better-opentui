@@ -1,4 +1,5 @@
 import { Effect, Metric, Ref } from "effect";
+import type { NonNullChain } from "typescript";
 import Yoga, { Display, Edge, PositionType, type Config as YogaConfig } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, Input } from "../../colors";
@@ -97,11 +98,9 @@ export type BaseElement<T extends string, E> = {
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
   onSelectionChanged: (
     selection: SelectionState | null,
-    w: number,
-    h: number,
   ) => Effect.Effect<boolean, Collection | CantParseHexColor, Library>;
   getSelection: () => Effect.Effect<{ start: number; end: number } | null>;
-  getSelectedText: () => Effect.Effect<string>;
+  getSelectedText: () => Effect.Effect<string, Collection, Library>;
   processMouseEvent: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
   processKeyboardEvent: (event: KeyboardEvent) => Effect.Effect<void, Collection, Library>;
   destroy: () => Effect.Effect<
@@ -135,7 +134,7 @@ export type BaseElement<T extends string, E> = {
 };
 
 export const elementCounter = Metric.counter("element_counter", {
-  description: "a counter that only increases its value",
+  description: "this counter increases the num of the element",
   incremental: true,
 });
 
@@ -597,12 +596,8 @@ export const base = Effect.fn(function* <T extends string, E>(
 
   const onSelectionChanged: (
     selection: SelectionState | null,
-    w: number,
-    h: number,
   ) => Effect.Effect<boolean, Collection | CantParseHexColor, Library> = Effect.fn(function* (
     selection: SelectionState | null,
-    w: number,
-    h: number,
   ) {
     return false;
   });

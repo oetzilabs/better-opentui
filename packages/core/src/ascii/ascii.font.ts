@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
-import { OptimizedBuffer } from "../buffer";
-import { RGBA, RGBAClass } from "../types";
+import { OptimizedBuffer } from "../buffer/optimized";
+import { RGBA } from "../types";
 import block from "./fonts/block.json";
 import shade from "./fonts/shade.json";
 import slick from "./fonts/slick.json";
@@ -223,23 +223,24 @@ export const coordinateToCharacterIndex = Effect.fn(function* (
 });
 
 export const renderFontToFrameBuffer = Effect.fn(function* ({
+  buffer,
   text,
   x = 0,
   y = 0,
-  fg = [RGBAClass.fromInts(255, 255, 255, 255)],
-  bg = RGBAClass.fromInts(0, 0, 0, 255),
+  fg = [RGBA.fromInts(255, 255, 255, 255)],
+  bg = RGBA.fromInts(0, 0, 0, 255),
   font = "tiny",
 }: {
+  buffer: OptimizedBuffer;
   text: string;
   x?: number;
   y?: number;
-  fg?: RGBAClass | RGBAClass[];
-  bg?: RGBAClass;
+  fg?: RGBA | RGBA[];
+  bg?: RGBA;
   font?: keyof typeof fonts;
 }) {
-  const buffer = yield* OptimizedBuffer;
-  const width = yield* buffer.getWidth();
-  const height = yield* buffer.getHeight();
+  const width = buffer.getWidth();
+  const height = buffer.getHeight();
 
   const fontDef = yield* getParsedFont(font);
   if (!fontDef) {

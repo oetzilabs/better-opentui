@@ -3,6 +3,7 @@ import { BunSocket } from "@effect/platform-bun";
 import { Cause, Context, Duration, Effect, Exit, Fiber, Layer, Mailbox, Ref, Schedule, Schema } from "effect";
 import type { NoSuchElementException } from "effect/Cause";
 import {
+  isDumpBuffersCommand,
   isDumpHitGridCommand,
   isExitOnCtrlC,
   makeRoomForRenderer,
@@ -53,7 +54,7 @@ import type { BaseElement } from "./elements/base";
 import { Shutdown } from "./latch/shutdown";
 import type { PixelResolution } from "./utils";
 import { PositionAbsolute, PositionRelative } from "./utils/position";
-import { Selection, SelectionLive } from "./utils/selection";
+import { Selection } from "./utils/selection";
 
 const DevToolsLive = DevTools.layerWebSocket().pipe(Layer.provide(BunSocket.layerWebSocketConstructor));
 
@@ -102,7 +103,7 @@ export type CapturedOutput = {
 };
 
 export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
-  dependencies: [OpenTuiConfigLive, SelectionLive, MouseParserLive, ElementsLive, DevToolsLive, AnimationFrameLive],
+  dependencies: [OpenTuiConfigLive, MouseParserLive, ElementsLive, DevToolsLive, AnimationFrameLive],
   scoped: Effect.gen(function* () {
     const shutdown = yield* Shutdown;
     const cfg = yield* OpenTuiConfig;
@@ -188,7 +189,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const lastOverRenderableNum = yield* Ref.make(0);
 
-    const currentSelection = yield* Selection;
+    const selectionState = yield* Ref.make<SelectionState | null>(null);
+    const currentSelection = yield* Ref.make<Selection | null>(null);
     const selectionContainers = yield* Ref.make<Array<BaseElement<any, any> | null>>([]);
     const lastOverRenderable = yield* Ref.make<BaseElement<any, any> | undefined>(undefined);
 
@@ -197,7 +199,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const _useThread = yield* Ref.make(config.useThread);
     yield* lib.setUseThread(renderer, config.useThread);
 
-    const backgroundColor = yield* Ref.make<Input>(Colors.Black);
+    const backgroundColor = yield* Ref.make<Input>(Colors.Transparent);
     const terminalInputFork = yield* Ref.make<Fiber.RuntimeFiber<
       never,
       Error | RendererFailedToCheckHit | NoSuchElementException
@@ -227,6 +229,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const debugBox = yield* elements.text("N", {
       focused: false,
       selectable: false,
+      visible: false,
       position: PositionAbsolute.make(2),
       width: "auto",
       height: "auto",
@@ -395,6 +398,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         enabled: options?.debug ?? false,
       }));
 
+      if (options?.debug) {
+        yield* debugBox.setVisible(true);
+      }
+
       const um = yield* getUseMouse();
       if (um) {
         yield* enableMouse();
@@ -541,6 +548,17 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 );
                 return true;
               }
+              if (isDumpBuffersCommand(parsedKey.raw)) {
+                yield* lib.dumpBuffers(renderer).pipe(
+                  Effect.catchAll((cause) =>
+                    Effect.gen(function* () {
+                      yield* Ref.update(errors, (errors) => [...errors, cause]);
+                      return yield* Effect.void;
+                    }),
+                  ),
+                );
+                return true;
+              }
             }
 
             // TODO: currently the handlers do not work. they hang the program.
@@ -678,21 +696,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
         yield* debugBox.setLocation({ x: mouseEvent.x, y: mouseEvent.y });
 
+        const maybeRenderableId = yield* lib.checkHit(renderer, mouseEvent.x, mouseEvent.y);
+        const maybeRenderable = yield* elements.getRenderable(maybeRenderableId);
+
         if (isMouseScroll(mouseEvent.type)) {
           yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseScroll", mouseEvent);
-          const maybeRenderableId = yield* lib.checkHit(renderer, mouseEvent.x, mouseEvent.y).pipe(
-            Effect.catchAll((cause) =>
-              Effect.gen(function* () {
-                yield* Ref.update(errors, (errors) => [...errors, cause]);
-                return -1;
-              }),
-            ),
-          );
-          if (maybeRenderableId === -1) {
-            return false;
-          }
-          yield* debugBox.setContent(`MScroll (${maybeRenderableId}`);
-          const maybeRenderable = yield* elements.getRenderable(maybeRenderableId);
+          // yield* debugBox.setContent(`MScroll (${maybeRenderableId}`);
 
           if (maybeRenderable) {
             const event = new MouseEvent(maybeRenderable, mouseEvent);
@@ -701,26 +710,14 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           return true;
         }
 
-        const maybeRenderableId = yield* lib.checkHit(renderer, mouseEvent.x, mouseEvent.y).pipe(
-          Effect.catchAll((cause) =>
-            Effect.gen(function* () {
-              yield* Ref.update(errors, (errors) => [...errors, cause]);
-              return -1;
-            }),
-          ),
-        );
-        if (maybeRenderableId === -1) {
-          return false;
-        }
         const lrn = yield* Ref.get(lastOverRenderableNum);
         const sameElement = maybeRenderableId === lrn;
         yield* Ref.set(lastOverRenderableNum, maybeRenderableId);
-        const maybeRenderable = yield* elements.getRenderable(maybeRenderableId);
         if (isMouseDown(mouseEvent.type) && isLeftMouseButton(mouseEvent.button)) {
-          yield* debugBox.setForegroundColor(Colors.White);
+          // yield* debugBox.setForegroundColor(Colors.White);
           yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDown", mouseEvent);
           if (maybeRenderable) {
-            yield* debugBox.setContent(`MDo (${maybeRenderableId})`);
+            // yield* debugBox.setContent(`MDo (${maybeRenderableId})`);
             const sel = yield* Ref.get(maybeRenderable.selectable);
             if (sel) {
               const sss = yield* maybeRenderable.shouldStartSelection(mouseEvent.x, mouseEvent.y);
@@ -731,29 +728,25 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             }
           }
         }
-        let isSelecting = yield* currentSelection.isSelecting();
-        const selectionState = yield* currentSelection.get();
-        if (isMouseDrag(mouseEvent.type) && isSelecting) {
-          yield* debugBox.setContent(`MDrag (${maybeRenderableId})`);
+        const cs = yield* Ref.get(selectionState);
+        if (isMouseDrag(mouseEvent.type) && cs?.isSelecting) {
+          // yield* debugBox.setContent(`MDrag (${maybeRenderableId})`);
           yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDrag", mouseEvent);
           yield* updateSelection(maybeRenderable, mouseEvent.x, mouseEvent.y);
           return true;
         }
 
-        if (isMouseUp(mouseEvent.type)) {
-          yield* debugBox.setForegroundColor(Colors.Red);
-          yield* debugBox.setContent(`MUp (${maybeRenderableId})`);
-          if (isSelecting) {
-            yield* Effect.annotateCurrentSpan("mouseUp", mouseEvent);
-            yield* finishSelection();
-            return true;
-          }
+        if (isMouseUp(mouseEvent.type) && cs?.isSelecting) {
+          // yield* debugBox.setForegroundColor(Colors.Red);
+          // yield* debugBox.setContent(`MUp (${maybeRenderableId})`);
+          yield* Effect.annotateCurrentSpan("mouseUp", mouseEvent);
+          yield* finishSelection();
           return true;
         }
 
-        if (isMouseDown(mouseEvent.type) && isLeftMouseButton(mouseEvent.button) && selectionState) {
-          yield* debugBox.setForegroundColor(Colors.Green);
-          yield* debugBox.setContent(`MDoS (${maybeRenderableId})`);
+        if (isMouseDown(mouseEvent.type) && isLeftMouseButton(mouseEvent.button) && cs) {
+          // yield* debugBox.setForegroundColor(Colors.Green);
+          // yield* debugBox.setContent(`MDoS (${maybeRenderableId})`);
           yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDown", mouseEvent);
           yield* clearSelection();
         }
@@ -768,7 +761,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           }
           yield* Ref.set(lastOverRenderable, maybeRenderable);
           if (maybeRenderable) {
-            yield* debugBox.setContent(`NSE (${maybeRenderableId} [${maybeRenderable?.type ?? ""}]) (${lrn})`);
             const event = new MouseEvent(maybeRenderable, {
               ...mouseEvent,
               type: MouseOver.make("over"),
@@ -776,15 +768,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             });
             yield* maybeRenderable.processMouseEvent(event);
           }
-        }
-
-        // reset debug box?
-        if (isMouseMove(mouseEvent.type)) {
-          // does this make sense?
-          yield* debugBox.setForegroundColor(Colors.Red);
-          yield* debugBox.setContent("N");
-          yield* Ref.set(capturedRenderable, null);
-          yield* Ref.set(lastOverRenderable, undefined);
         }
 
         let cr = yield* Ref.get(capturedRenderable);
@@ -1291,7 +1274,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         return yield* Effect.fail(new NextBufferNotAvailable());
       }
       yield* root.render(nextBuffer, deltaTime);
-      yield* debugBox.render(nextBuffer, deltaTime);
+      if (config.debugOverlay?.enabled) {
+        yield* debugBox.render(nextBuffer, deltaTime);
+      }
       const visibleErrors = yield* Ref.get(errorBox.visible);
       if (visibleErrors) {
         yield* errorBox.render(nextBuffer, deltaTime);
@@ -1373,7 +1358,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const getSelection = Effect.fn("cli.getSelection")(function* () {
-      return yield* currentSelection.getSelectedText;
+      const cs = yield* Ref.get(selectionState);
+      return cs;
     });
 
     const getSelectionContainer = Effect.fn("cli.getSelectionContainer")(function* () {
@@ -1382,8 +1368,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const hasSelection = Effect.fn("cli.hasSelection")(function* () {
-      const ss = yield* currentSelection.get();
-      return ss !== null;
+      const cs = yield* Ref.get(selectionState);
+      return cs !== null;
     });
 
     const startSelection = Effect.fn("cli.startSelection")(function* (
@@ -1398,15 +1384,24 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         containers.push(p || root);
         return containers;
       });
-      yield* currentSelection.enable();
-      yield* currentSelection.setSelecting(true);
+      yield* Ref.set(selectionState, {
+        anchor: { x, y },
+        focus: { x, y },
+        isActive: true,
+        isSelecting: true,
+      });
+      yield* Ref.set(currentSelection, new Selection({ x, y }, { x, y }));
 
       yield* notifySelectablesOfSelectionChange();
     });
 
     const clearSelection = Effect.fn("cli.clearSelection")(function* () {
-      yield* currentSelection.disable();
-      yield* notifySelectablesOfSelectionChange();
+      const ss = yield* Ref.get(selectionState);
+      if (ss) {
+        yield* Ref.set(selectionState, null);
+        yield* notifySelectablesOfSelectionChange();
+      }
+      yield* Ref.set(currentSelection, null);
       yield* Ref.set(selectionContainers, []);
     });
 
@@ -1415,7 +1410,13 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       x: number,
       y: number,
     ) {
-      yield* currentSelection.setFocus({ x, y });
+      const ss = yield* Ref.get(selectionState);
+      if (ss) {
+        yield* Ref.update(selectionState, (ss2) => ({
+          ...ss,
+          focus: { x, y },
+        }));
+      }
       const scs = yield* Ref.get(selectionContainers);
       if (scs.length > 0) {
         const currentContainer = scs[scs.length - 1]!;
@@ -1432,7 +1433,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
         const iwc = yield* isWithinContainer(currentRenderable, currentContainer);
         if (!iwc) {
-          const p = yield* Ref.get(currentContainer!.parent);
+          const p = yield* Ref.get(currentContainer.parent);
           const parentContainer = p || root;
           yield* Ref.update(selectionContainers, (containers) => {
             containers.push(parentContainer as BaseElement<any, any>);
@@ -1473,12 +1474,18 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const finishSelection = Effect.fn("cli.finishSelection")(function* () {
-      yield* currentSelection.setSelecting(false);
+      const ss = yield* Ref.get(selectionState);
+      if (ss) {
+        yield* Ref.update(selectionState, (ss2) => ({
+          ...ss,
+          isSelecting: false,
+        }));
+      }
     });
 
     const notifySelectablesOfSelectionChange = Effect.fn("cli.notifySelectablesOfSelectionChange")(function* () {
       let normalizedSelection: SelectionState | null = null;
-      const ss = yield* currentSelection.get();
+      const ss = yield* Ref.get(selectionState);
       if (ss) {
         normalizedSelection = { ...ss };
 
@@ -1528,8 +1535,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           }
         }
       }
-
-      yield* currentSelection.updateSelectedRenderables(selectedRenderables);
+      const cs = yield* Ref.get(currentSelection);
+      if (cs) {
+        cs.updateSelectedRenderables(selectedRenderables);
+      }
     });
 
     const add = Effect.fn(function* (container: BaseElement<any, any>, index?: number) {

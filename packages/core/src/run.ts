@@ -41,7 +41,7 @@ export const run = (options: RunOptions) =>
     let onPanic: HookFunction<"panic"> = Effect.fn(function* (_cause: Cause.Cause<unknown>) {});
 
     yield* cli.setupTerminal(latch, {
-      debug: options.debug,
+      debug: options.debug && options.debug,
       hooks: {
         on: options.on,
         off: options.off,

@@ -3,7 +3,7 @@ import { Edge } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, type Input } from "../../colors";
 import type { Collection } from "../../errors";
-import { isMouseDown, isMouseDrag, isMouseUp } from "../../inputs/mouse";
+import { isMouseDown, isMouseDrag, isMouseMove, isMouseUp } from "../../inputs/mouse";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
 import {
@@ -43,15 +43,13 @@ export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = {}) 
   b.onMouseEvent = Effect.fn("box.onMouseEvent")(function* (event) {
     const fn = options.onMouseEvent ?? Effect.fn(function* (event) {});
     yield* fn(event);
-    if (event.source) {
-      if (event.source.id === b.id) {
-        if (isMouseDown(event.type) || isMouseDrag(event.type) || isMouseUp(event.type)) {
-          yield* event.source.setFocused(true);
-        } else {
-          yield* event.source.setFocused(false);
-        }
-      }
-    }
+    // if (event.target) {
+    //   if (event.target.id === b.id) {
+    //     yield* b.setFocused(true);
+    //   } else {
+    //     yield* b.setFocused(false);
+    //   }
+    // }
   });
 
   const border = yield* Ref.make<boolean | BorderSides[]>(options.border ?? true);
@@ -124,21 +122,6 @@ export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = {}) 
     yield* Effect.annotateCurrentSpan("box.update", { f, pt });
     if (pt) {
       yield* setTitle(f ? `${pt} (Focused)` : `${pt} (Not Focused)`);
-    }
-  });
-
-  b.onMouseEvent = Effect.fn("box.onMouseEvent")(function* (event) {
-    yield* Effect.annotateCurrentSpan("box.onMouseEvent", event);
-    const fn: BaseElement<"box", BoxElement>["onMouseEvent"] = options.onMouseEvent ?? Effect.fn(function* (event) {});
-    yield* fn(event);
-    if (event.source) {
-      if (event.source.id === b.id) {
-        if (isMouseDown(event.type) || isMouseDrag(event.type) || isMouseUp(event.type)) {
-          yield* event.source.setFocused(true);
-        } else {
-          yield* event.source.setFocused(false);
-        }
-      }
     }
   });
 

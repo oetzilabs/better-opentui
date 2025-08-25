@@ -41,6 +41,9 @@ export const isExitOnCtrlC = Schema.is(ExitOnCtrlC);
 export const DumpHitGridCommand = Schema.Literal("\u0007").pipe(Schema.brand("DumpHitGridCommand"));
 export const isDumpHitGridCommand = Schema.is(DumpHitGridCommand);
 
+export const DumpBuffersCommand = Schema.Literal("\u0002").pipe(Schema.brand("DumpBuffersCommand"));
+export const isDumpBuffersCommand = Schema.is(DumpBuffersCommand);
+
 export const scrollDown = Effect.fn(function* (lines: number) {
   return `\x1b[${lines}T`;
 });

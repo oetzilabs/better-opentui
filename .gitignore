@@ -45,3 +45,4 @@ screenshot-*.png
 .zig
 
 hitgrid_*.txt
+buffer_dump
