@@ -16,6 +16,7 @@ if (import.meta.main) {
         const parentContainer = yield* cli.createElement("group");
 
         const box = yield* cli.createElement("box", {
+          selectable: false,
           title: "Hello World Box",
           left: 10,
           top: 10,
@@ -32,6 +33,7 @@ if (import.meta.main) {
         });
 
         const text = yield* cli.createElement("text", "Hello World", {
+          selectable: true,
           position: PositionAbsolute.make(2),
           left: 1,
           top: 1,
@@ -40,13 +42,14 @@ if (import.meta.main) {
           zIndex: 1,
           colors: {
             fg: Colors.Red,
-            bg: Colors.Yellow,
+            bg: Colors.Transparent,
             selectableBg: Colors.Green,
             selectableFg: Colors.Blue,
           },
         });
 
-        const text2 = yield* cli.createElement("text", "Hello World 2", {
+        const text2 = yield* cli.createElement("text", "", {
+          selectable: false,
           position: PositionAbsolute.make(2),
           left: 5,
           top: 5,
@@ -61,10 +64,10 @@ if (import.meta.main) {
           zIndex: 1,
           onUpdate: Effect.fn("text.onUpdate")(function* (self: TextElement) {
             const elementCount = yield* cli.getElementCount();
-            const selection = yield* cli.getSelection();
-            yield* self.setContent(
-              `Amount of elements: ${elementCount - 1} (root is not counted), selection: ${JSON.stringify(selection ?? {})}`,
-            );
+            const seltext = yield* cli.getSelectionContainer();
+            if (seltext) {
+              yield* self.setContent(yield* seltext.getSelectedText());
+            }
           }),
         });
 

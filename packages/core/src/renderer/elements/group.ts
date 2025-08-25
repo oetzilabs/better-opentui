@@ -17,13 +17,15 @@ export const group = Effect.fn(function* (
   binds: Binds,
   options: GroupOptions = {
     visible: true,
-    selectable: false,
+    selectable: true,
   },
 ) {
   const b = yield* base("group", {
     ...options,
     width: "auto",
     height: "auto",
+    visible: true,
+    selectable: true,
   });
 
   b.onMouseEvent = Effect.fn("group.onMouseEvent")(function* (event) {

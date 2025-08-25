@@ -569,12 +569,12 @@ export const base = Effect.fn(function* <T extends string, E>(
   });
 
   const add = Effect.fn(function* (parentElement: BaseElement<any, E>, container: BaseElement<any, E>, index?: number) {
+    yield* Ref.set(container.parent, parentElement);
+
     if (index === undefined) {
       const cs = yield* Ref.get(renderables);
       index = cs.length;
     }
-
-    yield* Ref.set(parent, parentElement);
 
     yield* Ref.update(renderables, (cs) => {
       if (index === cs.length) {

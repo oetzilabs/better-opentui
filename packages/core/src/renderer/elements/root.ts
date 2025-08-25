@@ -46,13 +46,12 @@ export const root = Effect.fn(function* () {
     );
   });
 
-  const resize = Effect.fn(function* (width: number, height: number) {
+  b.onResize = Effect.fn(function* (width: number, height: number) {
     yield* b.layoutNode.setWidth(width);
     yield* b.layoutNode.setHeight(height);
   });
 
   return {
     ...b,
-    resize,
-  } as const;
+  } as RootElement;
 });

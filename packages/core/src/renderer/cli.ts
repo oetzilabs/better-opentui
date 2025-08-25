@@ -191,7 +191,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const selectionState = yield* Ref.make<SelectionState | null>(null);
     const currentSelection = yield* Ref.make<Selection | null>(null);
-    const selectionContainers = yield* Ref.make<Array<BaseElement<any, any> | null>>([]);
+    const selectionContainers = yield* Ref.make<Array<BaseElement<any, any>>>([]);
     const lastOverRenderable = yield* Ref.make<BaseElement<any, any> | undefined>(undefined);
 
     const _useConsole = yield* Ref.make(false);
@@ -729,24 +729,18 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           }
         }
         const cs = yield* Ref.get(selectionState);
-        if (isMouseDrag(mouseEvent.type) && cs?.isSelecting) {
-          // yield* debugBox.setContent(`MDrag (${maybeRenderableId})`);
-          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDrag", mouseEvent);
+        if (isMouseDrag(mouseEvent.type) && cs?.isSelecting && maybeRenderable) {
           yield* updateSelection(maybeRenderable, mouseEvent.x, mouseEvent.y);
           return true;
         }
 
         if (isMouseUp(mouseEvent.type) && cs?.isSelecting) {
-          // yield* debugBox.setForegroundColor(Colors.Red);
-          // yield* debugBox.setContent(`MUp (${maybeRenderableId})`);
           yield* Effect.annotateCurrentSpan("mouseUp", mouseEvent);
           yield* finishSelection();
           return true;
         }
 
         if (isMouseDown(mouseEvent.type) && isLeftMouseButton(mouseEvent.button) && cs) {
-          // yield* debugBox.setForegroundColor(Colors.Green);
-          // yield* debugBox.setContent(`MDoS (${maybeRenderableId})`);
           yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDown", mouseEvent);
           yield* clearSelection();
         }
@@ -938,7 +932,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         current: currentRenderBuffer,
       });
 
-      yield* root.resize(w, h);
+      yield* root.onResize(w, h);
     });
 
     // running the processResize once.
@@ -1131,6 +1125,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const isD = yield* Ref.get(_isDestroyed);
       if (isD) return;
       yield* root.destroy();
+      yield* elements.destroy();
       yield* lib.destroyRenderer(renderer);
       yield* Ref.set(_isDestroyed, true);
     });
@@ -1380,7 +1375,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       yield* clearSelection();
       const p = yield* Ref.get(startRenderable.parent);
       yield* Ref.update(selectionContainers, (containers) => {
-        // @ts-ignore
         containers.push(p || root);
         return containers;
       });
@@ -1416,44 +1410,36 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           ...ss,
           focus: { x, y },
         }));
-      }
-      const scs = yield* Ref.get(selectionContainers);
-      if (scs.length > 0) {
-        const currentContainer = scs[scs.length - 1]!;
+        let scs = yield* Ref.get(selectionContainers);
+        if (scs.length > 0) {
+          const currentContainer = scs[scs.length - 1];
 
-        if (!currentRenderable) {
-          const p = yield* Ref.get(currentContainer!.parent);
-          const parentContainer = p || root;
-          yield* Ref.update(selectionContainers, (containers) => {
-            containers.push(parentContainer as BaseElement<any, any>);
-            return containers;
-          });
-          return;
-        }
-
-        const iwc = yield* isWithinContainer(currentRenderable, currentContainer);
-        if (!iwc) {
-          const p = yield* Ref.get(currentContainer.parent);
-          const parentContainer = p || root;
-          yield* Ref.update(selectionContainers, (containers) => {
-            containers.push(parentContainer as BaseElement<any, any>);
-            return containers;
-          });
-        } else if (scs.length > 1) {
-          let containerIndex = scs.indexOf(currentRenderable);
-
-          if (containerIndex === -1) {
-            const p = yield* Ref.get(currentRenderable.parent);
-            // @ts-ignore
-            const immediateParent = p || root;
-            containerIndex = scs.indexOf(immediateParent as BaseElement<any, any>);
-          }
-
-          if (containerIndex !== -1 && containerIndex < scs.length - 1) {
-            yield* Ref.update(selectionContainers, (containers) => {
-              containers.splice(0, containerIndex + 1);
+          if (!currentRenderable || !(yield* isWithinContainer(currentRenderable, currentContainer))) {
+            const p = yield* Ref.get(currentContainer.parent);
+            const parentContainer = p || root;
+            scs = yield* Ref.updateAndGet(selectionContainers, (containers) => {
+              containers.push(parentContainer);
               return containers;
             });
+          } else if (currentRenderable && scs.length > 1) {
+            let containerIndex = scs.indexOf(currentRenderable);
+
+            if (containerIndex === -1) {
+              const p = yield* Ref.get(currentRenderable.parent);
+              const immediateParent = p || root;
+              containerIndex = scs.indexOf(immediateParent);
+            }
+
+            if (containerIndex !== -1 && containerIndex < scs.length - 1) {
+              scs = yield* Ref.updateAndGet(selectionContainers, (containers) => {
+                containers.splice(0, containerIndex + 1);
+                return containers;
+              });
+            }
+          }
+          const cs = yield* Ref.get(currentSelection);
+          if (cs) {
+            yield* Ref.set(currentSelection, new Selection(ss.anchor, ss.focus));
           }
         }
       }
@@ -1494,10 +1480,11 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           (normalizedSelection.anchor.y === normalizedSelection.focus.y &&
             normalizedSelection.anchor.x > normalizedSelection.focus.x)
         ) {
+          const temp = normalizedSelection.anchor;
           normalizedSelection.anchor = normalizedSelection.focus;
           normalizedSelection.focus = {
-            x: normalizedSelection.anchor.x + 1,
-            y: normalizedSelection.anchor.y,
+            x: temp.x + 1,
+            y: temp.y,
           };
         }
       }
@@ -1527,7 +1514,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           }
 
           if (hasSelection) {
-            yield* Effect.annotateCurrentSpan("cli.hasSelection.state", hasSelection);
             selectedRenderables.push(renderable);
           }
         }

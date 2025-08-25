@@ -20,6 +20,10 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
     const _root = Effect.fn(function* (ctx: RenderContextInterface) {
       yield* Ref.set(context, ctx);
       const r = yield* root();
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
       return r;
     });
 
@@ -90,6 +94,10 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       return elements.find((e) => e.num === id);
     });
 
+    const destroy = Effect.fn(function* () {
+      yield* Ref.set(renderables, []);
+    });
+
     return {
       box: _box,
       root: _root,
@@ -97,13 +105,17 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       text: _text,
       renderables,
       getRenderable,
+      destroy,
     };
   }),
 }) {}
 
 export const ElementsLive = Elements.Default;
 
-export type MethodsObj = Omit<Elements, "updateContext" | "_tag" | "root" | "renderables" | "getRenderable">;
+export type MethodsObj = Omit<
+  Elements,
+  "updateContext" | "_tag" | "root" | "renderables" | "getRenderable" | "destroy"
+>;
 
 export type Methods = keyof MethodsObj;
 
