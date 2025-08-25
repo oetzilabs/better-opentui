@@ -207,7 +207,8 @@ export class TextSelectionHelper {
         if (lineY < anchorY || lineY > focusY) continue;
 
         const lineStart = lineInfo.lineStarts[i];
-        const lineEnd = i < lineInfo.lineStarts.length - 1 ? lineInfo.lineStarts[i + 1] - 1 : yield* this.getTextLength();
+        const lineEnd =
+          i < lineInfo.lineStarts.length - 1 ? lineInfo.lineStarts[i + 1] - 1 : yield* this.getTextLength();
         const lineWidth = lineInfo.lineWidths[i];
 
         if (lineY > anchorY && lineY < focusY) {

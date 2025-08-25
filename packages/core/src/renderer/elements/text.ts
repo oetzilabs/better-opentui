@@ -119,13 +119,13 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
   });
 
   const syncSelectionToTextBuffer = Effect.fn(function* () {
-    const selection = yield* b.getSelection();
+    const selection = selectionHelper.getSelection();
     if (selection) {
       const { selectableBg, selectableFg } = yield* Ref.get(b.colors);
-      const sgb = yield* parseColor(selectableBg);
+      const sbg = yield* parseColor(selectableBg);
       const sfg = yield* parseColor(selectableFg);
 
-      yield* textBuffer.setSelection(selection.start, selection.end, sgb, sfg);
+      yield* textBuffer.setSelection(selection.start, selection.end, sbg, sfg);
     } else {
       yield* textBuffer.resetSelection();
     }
@@ -145,7 +145,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
         ...d,
         heightValue: numLines,
       }));
-      // b.layoutNode.yogaNode.markDirty();
+      b.layoutNode.yogaNode.markDirty();
     }
 
     const maxLineWidth = Math.max(...b.lineInfo.lineWidths);
@@ -163,7 +163,6 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
       yield* syncSelectionToTextBuffer();
     }
   });
-  yield* updateTextInfo();
 
   b.onResize = Effect.fn(function* (width: number, height: number) {
     const changed = yield* selectionHelper.reevaluateSelection(width, height);
@@ -215,6 +214,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
 
   b.onSelectionChanged = Effect.fn(function* (selection: SelectionState | null) {
     const { widthValue: width, heightValue: height } = yield* Ref.get(b.dimensions);
+
     const changed = selectionHelper.onSelectionChanged(selection, width, height);
     if (changed) {
       yield* syncSelectionToTextBuffer();
@@ -288,6 +288,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
       colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableFg: color }));
     }
   });
+  yield* updateTextInfo();
 
   return {
     ...b,
