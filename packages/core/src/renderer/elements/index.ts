@@ -6,6 +6,7 @@ import { box } from "./box";
 import { group } from "./group";
 import { root } from "./root";
 import { text } from "./text";
+import { framebuffer } from "./framebuffer";
 import { type RemoveBindsFromArgs, type RenderContextInterface } from "./utils";
 
 export class Elements extends Effect.Service<Elements>()("Elements", {
@@ -33,6 +34,20 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         return yield* Effect.fail(new MissingRenderContext());
       }
       const fn = group.bind(group, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
+      const r = yield* fn(...args);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
+      return r;
+    });
+
+    const _framebuffer = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof framebuffer>>) {
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = framebuffer.bind(framebuffer, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
       const r = yield* fn(...args);
       yield* Ref.update(renderables, (es) => {
         es.push(r);
@@ -103,6 +118,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       root: _root,
       group: _group,
       text: _text,
+      framebuffer: _framebuffer,
       renderables,
       getRenderable,
       destroy,
