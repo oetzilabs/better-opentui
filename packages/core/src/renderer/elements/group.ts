@@ -54,7 +54,7 @@ export const group = Effect.fn(function* (
     return false;
   });
 
-  const onSelectionChanged = Effect.fn(function* (selection: SelectionState | null, w: number, h: number) {
+  const onSelectionChanged = Effect.fn(function* (selection: SelectionState | null) {
     return false;
   });
 
