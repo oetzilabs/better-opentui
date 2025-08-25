@@ -127,6 +127,21 @@ export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = {}) 
     }
   });
 
+  b.onMouseEvent = Effect.fn("box.onMouseEvent")(function* (event) {
+    yield* Effect.annotateCurrentSpan("box.onMouseEvent", event);
+    const fn: BaseElement<"box", BoxElement>["onMouseEvent"] = options.onMouseEvent ?? Effect.fn(function* (event) {});
+    yield* fn(event);
+    if (event.source) {
+      if (event.source.id === b.id) {
+        if (isMouseDown(event.type) || isMouseDrag(event.type) || isMouseUp(event.type)) {
+          yield* event.source.setFocused(true);
+        } else {
+          yield* event.source.setFocused(false);
+        }
+      }
+    }
+  });
+
   b.render = Effect.fn("box.render")(function* (buffer: OptimizedBuffer, _dt: number) {
     const v = yield* Ref.get(b.visible);
     if (!v) return;
@@ -168,6 +183,11 @@ export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = {}) 
     });
   });
 
+  const empty = Effect.fn(function* () {
+    // remove all children
+    yield* Ref.set(b.renderables, []);
+  });
+
   return {
     ...b,
     setBorder,
@@ -176,5 +196,6 @@ export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = {}) 
     setFocusedBorderColor,
     setTitle,
     setTitleAlignment,
+    empty,
   };
 });

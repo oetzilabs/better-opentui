@@ -18,20 +18,6 @@ export interface RenderContextInterface {
   height: () => Effect.Effect<number>;
 }
 
-export class ElementCounter extends Effect.Service<ElementCounter>()("ElementCounter", {
-  dependencies: [],
-  effect: Effect.gen(function* () {
-    const counter = yield* Ref.make(0);
-    return {
-      getNext: Effect.fn(function* () {
-        return yield* Ref.updateAndGet(counter, (c) => c + 1);
-      }),
-    };
-  }),
-}) {}
-
-export const ElementCounterLive = ElementCounter.Default;
-
 export type ElementOptions<T extends string, E> = Partial<LayoutOptions> & {
   visible?: boolean;
   focused?: boolean;

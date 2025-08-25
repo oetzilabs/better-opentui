@@ -6,7 +6,9 @@ import { base, type BaseElement } from "./base";
 export interface RootElement extends BaseElement<"root", RootElement> {}
 
 export const root = Effect.fn(function* () {
-  const b = yield* base<"root", RootElement>("root");
+  const b = yield* base<"root", RootElement>("root", {
+    selectable: false,
+  });
 
   const calculateLayout = Effect.fn(function* () {
     const { widthValue: width, heightValue: height } = yield* Ref.get(b.dimensions);

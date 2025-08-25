@@ -1,4 +1,4 @@
-import { Effect, Ref } from "effect";
+import { Effect, Metric, Ref } from "effect";
 import Yoga, { Display, Edge, PositionType, type Config as YogaConfig } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, Input } from "../../colors";
@@ -31,7 +31,7 @@ import {
   PositionRelative,
 } from "../utils/position";
 import { createTrackedNode, TrackedNode } from "../utils/tracknode";
-import { ElementCounter, type ElementOptions } from "./utils";
+import { type ElementOptions } from "./utils";
 
 const validateOptions = Effect.fn(function* <T extends string, E>(id: string, options: ElementOptions<T, E>) {
   if (typeof options.width === "number") {
@@ -130,6 +130,11 @@ export type BaseElement<T extends string, E> = {
   toString: () => Effect.Effect<string, Collection, Library>;
 };
 
+export const elementCounter = Metric.counter("element_counter", {
+  description: "a counter that only increases its value",
+  incremental: true,
+});
+
 export const base = Effect.fn(function* <T extends string, E>(
   type: T,
   options: ElementOptions<T, E> = {
@@ -139,8 +144,9 @@ export const base = Effect.fn(function* <T extends string, E>(
 ) {
   // id random string
   const id = Math.random().toString(36).slice(2);
-  const counter = yield* ElementCounter;
-  const num = yield* counter.getNext();
+  yield* elementCounter(Effect.succeed(1));
+  const counter = yield* Metric.value(elementCounter);
+  const num = counter.count;
   const visible = yield* Ref.make(options.visible ?? true);
   yield* validateOptions(id, options);
   const location = yield* Ref.make<{
@@ -502,12 +508,12 @@ export const base = Effect.fn(function* <T extends string, E>(
     }
   });
 
-  const update = Effect.fn("base.update")(function* () {
-    const es = yield* Ref.get(renderables);
-    yield* Effect.all(
-      es.map((e) => Effect.suspend(() => e.update()), { concurrency: "unbounded", concurrentFinalizers: true }),
-    );
-  });
+  // const update = Effect.fn("base.update")(function* () {
+  //   const es = yield* Ref.get(renderables);
+  //   yield* Effect.all(
+  //     es.map((e) => Effect.suspend(() => e.onUpdate(e)), { concurrency: "unbounded", concurrentFinalizers: true }),
+  //   );
+  // });
 
   const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
     const es = yield* Ref.get(renderables);
@@ -546,13 +552,6 @@ export const base = Effect.fn(function* <T extends string, E>(
 
   const processMouseEvent = Effect.fn(function* (handler: BaseElement<any, E>["onMouseEvent"], event: MouseEvent) {
     yield* handler(event);
-    // if (!event.defaultPrevented) {
-    //   const es = yield* Ref.get(renderables);
-    //   yield* Effect.all(
-    //     es.map((e) => Effect.suspend(() => e.processMouseEvent(event))),
-    //     { concurrency: "unbounded", concurrentFinalizers: true },
-    //   );
-    // }
   });
 
   const processKeyboardEvent = Effect.fn(function* (

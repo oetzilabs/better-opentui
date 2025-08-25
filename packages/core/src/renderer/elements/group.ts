@@ -17,11 +17,13 @@ export const group = Effect.fn(function* (
   binds: Binds,
   options: GroupOptions = {
     visible: true,
-    selectable: true,
+    selectable: false,
   },
 ) {
   const b = yield* base("group", {
     ...options,
+    width: "auto",
+    height: "auto",
   });
 
   b.onMouseEvent = Effect.fn("group.onMouseEvent")(function* (event) {
@@ -39,7 +41,7 @@ export const group = Effect.fn(function* (
         // propagate to children
         const es = yield* Ref.get(b.renderables);
         yield* Effect.all(
-          es.map((e) => Effect.suspend(() => e.onMouseEvent(event)), {
+          es.map((e) => Effect.suspend(() => e.processMouseEvent(event)), {
             concurrency: "unbounded",
             concurrentFinalizers: true,
           }),
@@ -52,7 +54,7 @@ export const group = Effect.fn(function* (
     return false;
   });
 
-  const onSelectionChanged = Effect.fn(function* (selection: SelectionState | null) {
+  const onSelectionChanged = Effect.fn(function* (selection: SelectionState | null, w: number, h: number) {
     return false;
   });
 

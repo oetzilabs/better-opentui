@@ -6,10 +6,10 @@ import { box } from "./box";
 import { group } from "./group";
 import { root } from "./root";
 import { text } from "./text";
-import { ElementCounterLive, type RemoveBindsFromArgs, type RenderContextInterface } from "./utils";
+import { type RemoveBindsFromArgs, type RenderContextInterface } from "./utils";
 
 export class Elements extends Effect.Service<Elements>()("Elements", {
-  dependencies: [ElementCounterLive],
+  dependencies: [],
   effect: Effect.gen(function* () {
     const cachedGlobalSelection = yield* Ref.make<SelectionState | null>(null);
 
@@ -17,14 +17,11 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
     const context = yield* Ref.make<RenderContextInterface | null>(null);
 
-    const _root = Effect.fn(
-      function* (ctx: RenderContextInterface) {
-        yield* Ref.set(context, ctx);
-        const r = yield* root();
-        return r;
-      },
-      (effect) => effect.pipe(Effect.provide([ElementCounterLive])),
-    );
+    const _root = Effect.fn(function* (ctx: RenderContextInterface) {
+      yield* Ref.set(context, ctx);
+      const r = yield* root();
+      return r;
+    });
 
     const _group = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof group>>) {
       const ctx = yield* Ref.get(context);
@@ -32,24 +29,35 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         return yield* Effect.fail(new MissingRenderContext());
       }
       const fn = group.bind(group, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
-      const r = yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
+      const r = yield* fn(...args);
       yield* Ref.update(renderables, (es) => {
         es.push(r);
         return es;
       });
       return r;
     });
+
     const _text = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof text>>) {
       const ctx = yield* Ref.get(context);
       if (!ctx) {
         return yield* Effect.fail(new MissingRenderContext());
       }
       const fn = text.bind(text, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
-      const r = yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
+      const r = yield* fn(...args);
       yield* Ref.update(renderables, (es) => {
         es.push(r);
         return es;
       });
+      const initialLocation = yield* Ref.get(r.location);
+      const initialDimensions = yield* Ref.get(r.dimensions);
+
+      yield* ctx.addToHitGrid(
+        initialLocation.x,
+        initialLocation.y,
+        initialDimensions.widthValue,
+        initialDimensions.heightValue,
+        r.num,
+      );
       return r;
     });
 
@@ -59,7 +67,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         return yield* Effect.fail(new MissingRenderContext());
       }
       const fn = box.bind(box, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
-      const r = yield* fn(...args).pipe(Effect.provide([ElementCounterLive]));
+      const r = yield* fn(...args);
       yield* Ref.update(renderables, (es) => {
         es.push(r);
         return es;
