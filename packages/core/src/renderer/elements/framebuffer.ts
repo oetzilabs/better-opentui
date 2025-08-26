@@ -1,12 +1,13 @@
 import { Effect, Ref } from "effect";
+import { measureText } from "../../ascii/ascii.font";
 import { OptimizedBuffer } from "../../buffer/optimized";
+import { RendererFailedToResizeBuffer } from "../../errors";
 import { base, type BaseElement } from "./base";
 import type { Binds, ElementOptions } from "./utils";
-import { RendererFailedToResizeBuffer } from "../../errors";
 
-export interface FrameBufferElement extends BaseElement<"group", FrameBufferElement> {}
+export interface FrameBufferElement extends BaseElement<"framebuffer", FrameBufferElement> {}
 
-export interface FrameBufferOptions extends ElementOptions<"group", FrameBufferElement> {
+export interface FrameBufferOptions extends ElementOptions<"framebuffer", FrameBufferElement> {
   width: number;
   height: number;
   onMouseEvent?: BaseElement<"framebuffer", FrameBufferElement>["onMouseEvent"];
@@ -25,13 +26,14 @@ export const framebuffer = Effect.fn(function* (binds: Binds, options: FrameBuff
     respectAlpha: options.respectAlpha,
   });
 
-  b.onResize = (width: number, height: number) => Effect.gen(function*(){
-    if (width <= 0 || height <= 0) {
-      return yield* Effect.fail(new RendererFailedToResizeBuffer());
-    }
+  b.onResize = (width: number, height: number) =>
+    Effect.gen(function* () {
+      if (width <= 0 || height <= 0) {
+        return yield* Effect.fail(new RendererFailedToResizeBuffer());
+      }
 
-    yield* framebuffer_buffer.resize(width, height)
-  })
+      yield* framebuffer_buffer.resize(width, height);
+    });
 
   b.render = Effect.fn("framebuffer.render")(function* (buffer: OptimizedBuffer) {
     const v = yield* Ref.get(b.visible);

@@ -1,12 +1,13 @@
 import { Effect, Ref } from "effect";
 import { MissingRenderContext } from "../../errors";
 import type { SelectionState } from "../../types";
+import { asciifont } from "./asciifont";
 import type { BaseElement } from "./base";
 import { box } from "./box";
+import { framebuffer } from "./framebuffer";
 import { group } from "./group";
 import { root } from "./root";
 import { text } from "./text";
-import { framebuffer } from "./framebuffer";
 import { type RemoveBindsFromArgs, type RenderContextInterface } from "./utils";
 
 export class Elements extends Effect.Service<Elements>()("Elements", {
@@ -47,7 +48,27 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       if (!ctx) {
         return yield* Effect.fail(new MissingRenderContext());
       }
-      const fn = framebuffer.bind(framebuffer, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
+      const fn = framebuffer.bind(framebuffer, {
+        context: context as Ref.Ref<RenderContextInterface>,
+        cachedGlobalSelection,
+      });
+      const r = yield* fn(...args);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
+      return r;
+    });
+
+    const _asciifont = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof asciifont>>) {
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = asciifont.bind(asciifont, {
+        context: context as Ref.Ref<RenderContextInterface>,
+        cachedGlobalSelection,
+      });
       const r = yield* fn(...args);
       yield* Ref.update(renderables, (es) => {
         es.push(r);
@@ -118,6 +139,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       root: _root,
       group: _group,
       text: _text,
+      asciifont: _asciifont,
       framebuffer: _framebuffer,
       renderables,
       getRenderable,

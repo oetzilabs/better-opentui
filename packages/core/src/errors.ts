@@ -471,6 +471,8 @@ export type Collection =
   | RendererFailedToDrawBox
   | RendererFailedToCheckHit
   | CantParseHexColor
+  | RendererFailedToFillRect
+  | RendererFailedToSetCellWithAlphaBlending
   | RendererFailedToUpdateStats
   | RendererFailedToSetBackgroundColor
   | RendererFailedToSetCursorPosition

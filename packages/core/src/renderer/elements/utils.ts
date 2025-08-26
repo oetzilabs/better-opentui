@@ -27,6 +27,9 @@ export type ElementOptions<T extends string, E> = Partial<LayoutOptions> & {
     bg?: Input;
     selectableFg?: Input;
     selectableBg?: Input;
+    focusedBorderColor?: Input;
+    focusedBg?: Input;
+    focusedFg?: Input;
   };
   attributes?: number;
   onMouseEvent?: BaseElement<T, E>["onMouseEvent"];

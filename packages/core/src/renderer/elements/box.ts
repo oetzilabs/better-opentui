@@ -1,4 +1,5 @@
 import { Effect, Ref } from "effect";
+import { C } from "vitest/dist/chunks/reporters.d.BFLkQcL6.js";
 import { Edge } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, type Input } from "../../colors";
@@ -36,9 +37,27 @@ export interface BoxElement extends BaseElement<"box", BoxElement> {
   setTitleAlignment: (value: "left" | "center" | "right") => Effect.Effect<void, Collection, Library>;
 }
 
-export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = {}) {
+export const DEFAULTS = {
+  borderStyle: "single",
+  border: false,
+  borderColor: Colors.White,
+  shouldFill: true,
+  titleAlignment: "left",
+  colors: {
+    bg: Colors.Transparent,
+    focusedBorderColor: Colors.Custom("#00AAFF"),
+  },
+} as const;
+
+export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = DEFAULTS) {
   // const lib = yield* Library;
-  const b = yield* base<"box", BoxElement>("box", options);
+  const b = yield* base<"box", BoxElement>("box", {
+    ...options,
+    colors: {
+      ...DEFAULTS.colors,
+      ...options.colors,
+    },
+  });
 
   b.onMouseEvent = Effect.fn("box.onMouseEvent")(function* (event) {
     const fn = options.onMouseEvent ?? Effect.fn(function* (event) {});
@@ -52,18 +71,20 @@ export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = {}) 
     // }
   });
 
-  const border = yield* Ref.make<boolean | BorderSides[]>(options.border ?? true);
+  const border = yield* Ref.make<boolean | BorderSides[]>(options.border ?? DEFAULTS.border);
   const borderStyle = yield* Ref.make<BorderStyle>(options.borderStyle || "single");
   const borderColor = yield* Ref.make(options.borderColor ?? Colors.White);
   const focusedBorderColor = yield* Ref.make(options.focusedBorderColor ?? Colors.Custom("#00AAFF"));
+  const borderSides = yield* Ref.make(getBorderSides(options.border ?? DEFAULTS.border));
   const customBorderChars = yield* Ref.make<Uint32Array | undefined>(
     options.customBorderChars ? yield* borderCharsToArray(options.customBorderChars) : undefined,
   );
-  const borderSides = yield* Ref.make(getBorderSides(options.border ?? true));
   const shouldFill = yield* Ref.make(options.shouldFill ?? true);
   const title = yield* Ref.make(options.title);
   const plainTitle = yield* Ref.make(options.title);
-  const titleAlignment = yield* Ref.make<"left" | "center" | "right">(options.titleAlignment || "left");
+  const titleAlignment = yield* Ref.make<"left" | "center" | "right">(
+    options.titleAlignment ?? DEFAULTS.titleAlignment,
+  );
 
   // helper to apply yoga borders when border changes
   const applyYogaBorders = Effect.fn(function* () {

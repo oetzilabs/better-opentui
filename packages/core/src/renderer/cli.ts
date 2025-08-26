@@ -1367,6 +1367,19 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       return cs !== null;
     });
 
+    const getSelectionText = Effect.fn("cli.getSelectionText")(function* () {
+      const hs = yield* hasSelection();
+      if (hs) {
+        const scs = yield* Ref.get(selectionContainers);
+        const allSelectedText = yield* Effect.all(
+          scs.map((sc) => sc.getSelectedText()),
+          { concurrency: "unbounded", concurrentFinalizers: true },
+        );
+        return allSelectedText.join("\n");
+      }
+      return "";
+    });
+
     const startSelection = Effect.fn("cli.startSelection")(function* (
       startRenderable: BaseElement<any, any>,
       x: number,
@@ -1532,6 +1545,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     return {
+      getSelectionText,
       getElementCount,
       createElement,
       add,

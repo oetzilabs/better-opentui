@@ -48,32 +48,51 @@ if (import.meta.main) {
           },
         });
 
-        const text2 = yield* cli.createElement("text", "", {
-          selectable: false,
-          position: PositionAbsolute.make(2),
+        // const text2 = yield* cli.createElement("text", "", {
+        //   selectable: false,
+        //   position: PositionAbsolute.make(2),
+        //   left: 5,
+        //   top: 5,
+        //   width: "auto",
+        //   height: "auto",
+        //   colors: {
+        //     fg: Colors.Red,
+        //     bg: Colors.Transparent,
+        //     selectableBg: Colors.Green,
+        //     selectableFg: Colors.Blue,
+        //   },
+        //   zIndex: 1,
+        //   onUpdate: Effect.fn("text.onUpdate")(function* (self: TextElement) {
+        //     const elementCount = yield* cli.getElementCount();
+        //     const hasSelection = yield* cli.hasSelection();
+        //     if (hasSelection) {
+        //       const text = yield* cli.getSelectionText();
+        //       yield* self.setContent(`${elementCount} Elements -> ${text}`);
+        //     } else {
+        //       yield* self.setContent(`${elementCount} Elements`);
+        //     }
+        //   }),
+        // });
+
+        // yield* parentContainer.add(box);
+        yield* parentContainer.add(text);
+        // yield* parentContainer.add(text2);
+
+        const tinyHello = yield* cli.createElement("asciifont", {
           left: 5,
           top: 5,
-          width: "auto",
-          height: "auto",
-          colors: {
-            fg: Colors.Red,
-            bg: Colors.Transparent,
-            selectableBg: Colors.Green,
-            selectableFg: Colors.Blue,
-          },
-          zIndex: 1,
-          onUpdate: Effect.fn("text.onUpdate")(function* (self: TextElement) {
-            const elementCount = yield* cli.getElementCount();
-            const seltext = yield* cli.getSelectionContainer();
-            if (seltext) {
-              yield* self.setContent(yield* seltext.getSelectedText());
-            }
-          }),
+          text: "Hello World",
         });
 
-        yield* parentContainer.add(box);
-        yield* parentContainer.add(text);
-        yield* parentContainer.add(text2);
+        const bigHello = yield* cli.createElement("asciifont", {
+          left: 20,
+          top: 20,
+          text: "Hello World",
+          font: "block",
+        });
+
+        yield* parentContainer.add(tinyHello);
+        yield* parentContainer.add(bigHello);
 
         yield* cli.add(parentContainer);
       }),

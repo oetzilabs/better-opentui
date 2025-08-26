@@ -254,7 +254,7 @@ export class ASCIIFontSelectionHelper {
     private getX: () => Effect.Effect<number>,
     private getY: () => Effect.Effect<number>,
     private getText: () => Effect.Effect<string>,
-    private getFont: () => keyof typeof fonts,
+    private getFont: () => Effect.Effect<keyof typeof fonts>,
   ) {}
 
   hasSelection(): boolean {
@@ -277,7 +277,7 @@ export class ASCIIFontSelectionHelper {
       }
 
       const text = yield* this.getText();
-      const font = this.getFont();
+      const font = yield* this.getFont();
       const charIndex = yield* coordinateToCharacterIndex(localX, text, font);
 
       return charIndex >= 0 && charIndex <= text.length;
@@ -298,7 +298,7 @@ export class ASCIIFontSelectionHelper {
       const myY = yield* this.getY();
       const myEndY = myY + height - 1;
       const text = yield* this.getText();
-      const font = this.getFont();
+      const font = yield* this.getFont();
 
       let selStart: { x: number; y: number };
       let selEnd: { x: number; y: number };
