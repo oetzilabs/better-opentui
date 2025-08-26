@@ -9,7 +9,7 @@ export interface FrameBufferElement extends BaseElement<"framebuffer", FrameBuff
   framebuffer_buffer: OptimizedBuffer;
 }
 
-export interface FrameBufferOptions extends ElementOptions<"framebuffer", FrameBufferElement> {
+export interface FrameBufferOptions<E> extends ElementOptions<"framebuffer", E> {
   width: number;
   height: number;
   onMouseEvent?: BaseElement<"framebuffer", FrameBufferElement>["onMouseEvent"];
@@ -17,8 +17,8 @@ export interface FrameBufferOptions extends ElementOptions<"framebuffer", FrameB
   respectAlpha?: boolean;
 }
 
-export const framebuffer = Effect.fn(function* (binds: Binds, options: FrameBufferOptions) {
-  const b = yield* base("framebuffer", {
+export const framebuffer = Effect.fn(function* <E>(binds: Binds, options: FrameBufferOptions<E>) {
+  const b = yield* base<"framebuffer", E>("framebuffer", {
     ...options,
     width: options.width,
     height: options.height,

@@ -8,10 +8,11 @@ import type { SelectionState } from "../../types";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
 import { ASCIIFontSelectionHelper } from "../utils/selection";
+import type { BaseElement } from "./base";
 import { framebuffer, type FrameBufferElement, type FrameBufferOptions } from "./framebuffer";
 import type { Binds } from "./utils";
 
-export interface ASCIIFontElement extends FrameBufferElement {
+export interface ASCIIFontElement extends BaseElement<"framebuffer", ASCIIFontElement> {
   setText: (text: string) => Effect.Effect<void, Collection, Library>;
   getText: () => Effect.Effect<string, Collection, Library>;
   setFont: (font: keyof typeof fonts) => Effect.Effect<void, Collection, Library>;
@@ -19,7 +20,7 @@ export interface ASCIIFontElement extends FrameBufferElement {
   getSelectedText: () => Effect.Effect<string, Collection, Library>;
 }
 
-export type ASCIIFontOptions = Partial<FrameBufferOptions> & {
+export type ASCIIFontOptions = Partial<FrameBufferOptions<ASCIIFontElement>> & {
   text?: string;
   font?: "tiny" | "block" | "shade" | "slick";
   fg?: Input | Input[];
@@ -35,9 +36,8 @@ export const DEFAULTS = {
 };
 
 export const asciifont = Effect.fn(function* (binds: Binds, options: ASCIIFontOptions) {
-  // const b = yield* base<"asciifont", ASCIIFontElement>("asciifont", options);
   const measurements = yield* measureText({ text: options.text ?? "", font: options.font ?? "tiny" });
-  const b = yield* framebuffer(binds, {
+  const b = yield* framebuffer<ASCIIFontElement>(binds, {
     ...options,
     width: measurements.width,
     height: measurements.height,

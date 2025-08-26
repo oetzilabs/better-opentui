@@ -2,10 +2,11 @@ import { BunRuntime } from "@effect/platform-bun";
 import { Colors } from "@opentuee/core/src/colors";
 import { isMouseDown, isMouseDrag, isMouseOver, isMouseUp } from "@opentuee/core/src/inputs/mouse";
 import type { BaseElement } from "@opentuee/core/src/renderer/elements/base";
+import type { InputElement } from "@opentuee/core/src/renderer/elements/input";
 import type { TextElement } from "@opentuee/core/src/renderer/elements/text";
 import { PositionAbsolute } from "@opentuee/core/src/renderer/utils/position";
 import { run } from "@opentuee/core/src/run";
-import { Effect } from "effect";
+import { Effect, Ref } from "effect";
 
 if (import.meta.main) {
   BunRuntime.runMain(
@@ -88,7 +89,7 @@ if (import.meta.main) {
           left: 20,
           top: 20,
           text: "Hello World",
-          font: "block",
+          font: "tiny",
         });
 
         const input = yield* cli.createElement("input", {
@@ -102,11 +103,16 @@ if (import.meta.main) {
           position: PositionAbsolute.make(2),
           left: 5,
           top: 5,
-          width: 40,
+          width: 70,
           height: 1,
           value: "",
+          padding: 1,
           placeholder: "Enter text",
           maxLength: 50,
+          onUpdate: Effect.fn("input.onUpdate")(function* (self: InputElement) {
+            const value = yield* self.getValue();
+            yield* bigHello.setText(value);
+          }),
         });
 
         // yield* parentContainer.add(tinyHello);

@@ -1,17 +1,17 @@
 import { Effect, Match, Ref } from "effect";
-import { patch } from "effect/RuntimeFlags";
 import type { OptimizedBuffer } from "../../buffer/optimized";
 // import { CliRenderer } from "../../cli";
 import { Colors, Input } from "../../colors";
 import { Block } from "../../cursor-style";
-import type { Collection, RendererFailedToDestroyOptimizedBuffer } from "../../errors";
+import type { Collection } from "../../errors";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import { framebuffer, type FrameBufferElement, type FrameBufferOptions } from "./framebuffer";
-import type { Binds } from "./utils";
+import type { BaseElement } from "./base";
+import { framebuffer, type FrameBufferOptions } from "./framebuffer";
+import type { Binds, ElementOptions } from "./utils";
 
-export interface InputElement extends FrameBufferElement {
+export interface InputElement extends BaseElement<"framebuffer", InputElement> {
   setValue: (value: string) => Effect.Effect<void, Collection, Library>;
   getValue: () => Effect.Effect<string, Collection, Library>;
   setPlaceholder: (value: string) => Effect.Effect<void, Collection, Library>;
@@ -21,16 +21,21 @@ export interface InputElement extends FrameBufferElement {
   setPlaceholderColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
   setCursorColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
   handleKeyPress: (key: ParsedKey) => Effect.Effect<boolean, Collection, Library>;
+  onUpdate: (self: InputElement) => Effect.Effect<void, Collection, Library>;
 }
 
-export type InputOptions = Partial<FrameBufferOptions> & {
-  colors: FrameBufferOptions["colors"] & {
+export type InputOptions = ElementOptions<"framebuffer", InputElement> & {
+  colors: FrameBufferOptions<InputElement>["colors"] & {
     placeholderColor?: Input;
     cursorColor?: Input;
   };
+  width: number;
+  height: number;
+  respectAlpha?: boolean;
   placeholder?: string;
   maxLength?: number;
   value?: string;
+  onUpdate?: (self: InputElement) => Effect.Effect<void, Collection, Library>;
   validate?: (value: string) => boolean;
 };
 
@@ -251,12 +256,12 @@ export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
 
   const handleKeyPress = Effect.fn(function* (key: ParsedKey) {
     const keySequence = typeof key === "string" ? key : key.sequence;
-    const cp = yield* Ref.get(cursorPosition);
 
     return yield* Match.value(key.name).pipe(
       Match.when(
         "left",
         Effect.fn(function* () {
+          const cp = yield* Ref.get(cursorPosition);
           yield* setCursorPosition(cp - 1);
           return true;
         }),
@@ -264,6 +269,7 @@ export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
       Match.when(
         "right",
         Effect.fn(function* () {
+          const cp = yield* Ref.get(cursorPosition);
           yield* setCursorPosition(cp + 1);
           return true;
         }),
@@ -332,7 +338,7 @@ export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
     yield* updateCursorPosition();
   });
 
-  b.onUpdate = Effect.fn(function* (self) {
+  const onUpdate: InputElement["onUpdate"] = Effect.fn(function* (self) {
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
     const ctx = yield* Ref.get(binds.context);
@@ -364,6 +370,7 @@ export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
 
   return {
     ...b,
+    onUpdate,
     render,
     setValue,
     getValue,

@@ -192,28 +192,25 @@ export const ParseInput = Schema.Union(Schema.String, BufferSchema);
 export type ParseInput = typeof ParseInput.Type;
 
 export const parse = Effect.fn(function* (key: ParseInput = "") {
-  const parsed1 = Match.value(key).pipe(
-    Match.when(Schema.is(BufferSchema), (s) => {
-      let b = "";
-      if (s[0]! > 127 && s[1] === undefined) {
-        s[0] -= 128;
-        b = "\x1b" + String(s);
-      } else {
-        b = String(s);
-      }
-      return b;
-    }),
-    Match.when(Schema.is(Schema.Unknown), (s) => String(s)),
-    Match.when(Schema.is(Schema.String), (s) => s),
-    Match.exhaustive,
-  );
+  if (Buffer.isBuffer(key)) {
+    if (key[0]! > 127 && key[1] === undefined) {
+      key[0] -= 128;
+      key = "\x1b" + String(key);
+    } else {
+      key = String(key);
+    }
+  } else if (typeof key !== "string") {
+    key = String(key);
+  } else if (!key) {
+    key = "";
+  }
 
   // Drop mouse sequences immediately. Somehow they cause issues with the keyboardhandlers
-  if (/^(?:\x1b\[M|\x1b\[<|\x1b\[\d+;\d+[mM]|\x1b\[<\d+;\d+;\d+[mM])/.test(parsed1)) {
+  if (/^(?:\x1b\[M|\x1b\[<|\x1b\[\d+;\d+[mM]|\x1b\[<\d+;\d+;\d+[mM])/.test(key)) {
     return null;
   }
 
-  let result = Match.value(parsed1).pipe(
+  let result = Match.value(key).pipe(
     Match.when(Schema.is(KeyNames), (s) => {
       return ParsedKey.make({
         name: Schema.is(Ctrl)(s) ? "ctrl" : Schema.is(Shift)(s) ? "shift" : metaKeyCodeRe.test(s) ? "meta" : "",
@@ -222,8 +219,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
         shift: Schema.is(Shift)(s),
         option: false,
         number: false,
-        sequence: parsed1 || "",
-        raw: parsed1,
+        sequence: key || "",
+        raw: key,
       });
     }),
     Match.when(Schema.is(Specials), (s) => {
@@ -236,8 +233,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: false,
             option: false,
             number: false,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.when(Schema.is(Enter), (s) => {
@@ -248,8 +245,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: false,
             option: false,
             number: false,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.when(Schema.is(TabSpecial), (s) => {
@@ -260,8 +257,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: false,
             option: false,
             number: false,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.when(Schema.is(Backspace), (s) => {
@@ -272,8 +269,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: false,
             option: false,
             number: false,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.when(Schema.is(Escape), (s) => {
@@ -284,8 +281,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: false,
             option: false,
             number: false,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.when(Schema.is(Space), (s) => {
@@ -296,8 +293,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: false,
             option: false,
             number: false,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.when(Schema.is(CtrlLetter), (s) => {
@@ -308,8 +305,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: false,
             option: false,
             number: false,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.when(Schema.is(Number), (s) => {
@@ -320,8 +317,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: false,
             option: false,
             number: true,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.when(Schema.is(LowerCaseLetter), (s) => {
@@ -332,8 +329,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: false,
             option: false,
             number: true,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.when(Schema.is(UpperCaseLetter), (s) => {
@@ -344,8 +341,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: true,
             option: false,
             number: true,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.when(Schema.is(SpecialChar), (s) => {
@@ -356,8 +353,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: false,
             option: false,
             number: true,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.when(metaKeyCodeRe.test, (s) => {
@@ -369,8 +366,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: /^[A-Z]$/.test(parts[1]!),
             option: false,
             number: true,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.when(fnKeyRe.test, (fnS) => {
@@ -389,8 +386,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: !!(modifier & 1) || Schema.is(Shift)(s),
             option: (segs[0] === "\u001b" && segs[1] === "\u001b") || !!(modifier & 2), // Add option/alt modifier detection,
             number: true,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
             code,
           });
         }),
@@ -402,8 +399,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: false,
             option: false,
             number: true,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
             code: "[3~",
           });
         }),
@@ -415,8 +412,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
             shift: false,
             option: false,
             number: false,
-            sequence: parsed1 || "",
-            raw: parsed1,
+            sequence: key || "",
+            raw: key,
           });
         }),
         Match.exhaustive,
@@ -430,8 +427,8 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
         shift: false,
         option: false,
         number: false,
-        sequence: parsed1 || "",
-        raw: parsed1,
+        sequence: key || "",
+        raw: key,
       });
     }),
     Match.exhaustive,
