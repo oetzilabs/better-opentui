@@ -1,6 +1,7 @@
 // asciifont.ts
 import { Effect, Ref } from "effect";
 import { getCharacterPositions, measureText, renderFontToFrameBuffer, type fonts } from "../../ascii/ascii.font";
+import type { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, Input } from "../../colors";
 import type { Collection } from "../../errors";
 import type { SelectionState } from "../../types";
@@ -85,7 +86,7 @@ export const asciifont = Effect.fn(function* (binds: Binds, options: ASCIIFontOp
   });
 
   // Render logic
-  b.render = Effect.fn(function* (buffer, _dt) {
+  const render = Effect.fn(function* (buffer: OptimizedBuffer, dt: number) {
     const v = yield* Ref.get(b.visible);
     if (!v) return;
     const loc = yield* Ref.get(b.location);
@@ -179,6 +180,7 @@ export const asciifont = Effect.fn(function* (binds: Binds, options: ASCIIFontOp
 
   return {
     ...b,
+    render,
     setText,
     getText,
     setFont,

@@ -561,7 +561,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
               }
             }
 
-            // TODO: currently the handlers do not work. they hang the program.
             const keyboardHandler = Effect.gen(function* () {
               if (parsedKey) {
                 const hkb = yield* handleKeyboardData(parsedKey).pipe(

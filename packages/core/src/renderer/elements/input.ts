@@ -133,7 +133,7 @@ export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
     if (!v) return;
 
     const loc = yield* Ref.get(b.location);
-    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
+    const { widthValue: w } = yield* Ref.get(b.dimensions);
     const focused = yield* Ref.get(b.focused);
     const colors = yield* Ref.get(b.colors);
     const bgColor = yield* parseColor(focused ? colors.focusedBg : colors.bg);
@@ -154,15 +154,12 @@ export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
     }
     const visibleText = displayText.substring(displayStartIndex, displayStartIndex + maxVisibleChars);
 
+    // yield* b.render(buffer, _dt);
+
     if (visibleText) {
-      yield* b.framebuffer_buffer.drawText(visibleText, loc.x, loc.y, textColorParsed);
+      yield* b.framebuffer_buffer.drawText(visibleText, 0, 0, textColorParsed);
     }
-
-    if (focused) {
-      yield* updateCursorPosition();
-    }
-
-    yield* b.render(buffer, _dt);
+    yield* buffer.drawFrameBuffer(loc.x, loc.y, b.framebuffer_buffer);
   });
 
   // Setters/getters
@@ -342,6 +339,11 @@ export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
     yield* ctx.addToHitGrid(x, y, w, h, b.num);
+
+    const focused = yield* Ref.get(b.focused);
+    if (focused) {
+      yield* updateCursorPosition();
+    }
 
     yield* b.updateFromLayout();
   });

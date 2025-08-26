@@ -103,7 +103,7 @@ if (import.meta.main) {
           left: 5,
           top: 5,
           width: 40,
-          height: 3,
+          height: 1,
           value: "",
           placeholder: "Enter text",
           maxLength: 50,

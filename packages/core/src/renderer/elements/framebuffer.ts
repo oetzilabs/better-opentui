@@ -5,7 +5,9 @@ import { RendererFailedToResizeBuffer } from "../../errors";
 import { base, type BaseElement } from "./base";
 import type { Binds, ElementOptions } from "./utils";
 
-export interface FrameBufferElement extends BaseElement<"framebuffer", FrameBufferElement> {}
+export interface FrameBufferElement extends BaseElement<"framebuffer", FrameBufferElement> {
+  framebuffer_buffer: OptimizedBuffer;
+}
 
 export interface FrameBufferOptions extends ElementOptions<"framebuffer", FrameBufferElement> {
   width: number;
@@ -35,7 +37,7 @@ export const framebuffer = Effect.fn(function* (binds: Binds, options: FrameBuff
       yield* framebuffer_buffer.resize(width, height);
     });
 
-  b.render = Effect.fn("framebuffer.render")(function* (buffer: OptimizedBuffer) {
+  const render = Effect.fn("framebuffer.render")(function* (buffer: OptimizedBuffer, dt: number) {
     const v = yield* Ref.get(b.visible);
     if (!v) return;
     const { x, y } = yield* Ref.get(b.location);
@@ -49,6 +51,7 @@ export const framebuffer = Effect.fn(function* (binds: Binds, options: FrameBuff
 
   return {
     ...b,
+    render,
     framebuffer_buffer,
     destroy,
   };
