@@ -816,7 +816,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         type: "keydown",
       });
 
-      // yield* root.processKeyboardEvent(keyboardEvent);
+      yield* root.processKeyboardEvent(keyboardEvent);
 
       return true;
     });

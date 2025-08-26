@@ -49,7 +49,7 @@ export const isEnter = (name: string) => Schema.is(Enter)(name);
 export const TabSpecial = Schema.Literal("\t").pipe(Schema.brand("tab"));
 export type TabSpecial = typeof TabSpecial.Type;
 export const isTabSpecial = (name: string) => Schema.is(TabSpecial)(name);
-export const Backspace = Schema.Literal("\b", "\x1b\b", "\x7f", "\x1b\x7f").pipe(Schema.brand("backspace"));
+export const Backspace = Schema.Literal("\b", "\x1b\b", "\x7f", "\x1b\x7f", "\x08").pipe(Schema.brand("backspace"));
 export type Backspace = typeof Backspace.Type;
 export const isBackspace = (name: string) => Schema.is(Backspace)(name);
 export const Escape = Schema.Literal("\x1b", "\x1b\x1b").pipe(Schema.brand("escape"));

@@ -49,6 +49,7 @@ export const framebuffer = Effect.fn(function* (binds: Binds, options: FrameBuff
 
   return {
     ...b,
+    framebuffer_buffer,
     destroy,
   };
 });

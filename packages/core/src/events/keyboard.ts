@@ -1,18 +1,19 @@
 import type { ParsedKey } from "../inputs/keyboard";
-import type { BaseElement } from "../renderer/elements";
+import type { BaseElement } from "../renderer/elements/base";
 
 export class KeyboardEvent {
   public readonly type: "keydown" | "keyup" | "keypress";
   public readonly key: string;
   public readonly code?: string;
-  public readonly source?: BaseElement;
+  public readonly source?: BaseElement<any, any>;
   public readonly modifiers: {
     shift: boolean;
     alt: boolean;
     ctrl: boolean;
     meta: boolean;
   };
-  public readonly target: BaseElement | null;
+  public readonly parsedKey: ParsedKey;
+  public readonly target: BaseElement<any, any> | null;
   public readonly originalEvent: ParsedKey;
   private _defaultPrevented: boolean = false;
 
@@ -21,10 +22,12 @@ export class KeyboardEvent {
   }
 
   constructor(
-    target: BaseElement | null,
-    attributes: ParsedKey & { source?: BaseElement; type?: "keydown" | "keyup" | "keypress" },
+    target: BaseElement<any, any> | null,
+    attributes: ParsedKey & { source?: BaseElement<any, any>; type?: "keydown" | "keyup" | "keypress" },
   ) {
     this.target = target;
+    const { source, type, ..._parsedKey } = attributes;
+    this.parsedKey = _parsedKey;
     this.type = attributes.type || "keydown";
     this.key = attributes.name;
     this.code = attributes.code;

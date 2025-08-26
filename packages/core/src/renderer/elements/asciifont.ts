@@ -41,6 +41,7 @@ export const asciifont = Effect.fn(function* (binds: Binds, options: ASCIIFontOp
     width: measurements.width,
     height: measurements.height,
     respectAlpha: options.respectAlpha ?? DEFAULTS.respectAlpha,
+    selectable: options.selectable ?? true,
   });
 
   const text = yield* Ref.make(options.text ?? "");

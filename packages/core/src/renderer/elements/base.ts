@@ -6,6 +6,9 @@ import { Colors, Input } from "../../colors";
 import {
   FailedToFreeYogaConfig,
   FailedToFreeYogaNode,
+  RendererFailedToSetCursorColor,
+  RendererFailedToSetCursorPosition,
+  RendererFailedToSetCursorStyle,
   type CantParseHexColor,
   type Collection,
   type RendererFailedToDestroyOptimizedBuffer,
@@ -60,6 +63,8 @@ export type BaseElement<T extends string, E> = {
     bg: Input;
     selectableFg: Input;
     selectableBg: Input;
+    focusedFg: Input;
+    focusedBg: Input;
   }>;
   attributes: Ref.Ref<number>;
   location: Ref.Ref<{
@@ -106,6 +111,7 @@ export type BaseElement<T extends string, E> = {
   destroy: () => Effect.Effect<
     void,
     | RendererFailedToDestroyTextBuffer
+    | RendererFailedToSetCursorPosition
     | RendererFailedToDestroyOptimizedBuffer
     | TrackedNodeDestroyed
     | FailedToFreeYogaConfig
@@ -129,7 +135,17 @@ export type BaseElement<T extends string, E> = {
   setSelectionForegroundColor: (
     color: ((oldColor: Input) => Input) | Input,
   ) => Effect.Effect<void, Collection, Library>;
-  setFocused: (value: boolean) => Effect.Effect<void, Collection, Library>;
+  setFocused: (
+    value: boolean,
+  ) => Effect.Effect<
+    void,
+    | Collection
+    | CantParseHexColor
+    | RendererFailedToSetCursorPosition
+    | RendererFailedToSetCursorStyle
+    | RendererFailedToSetCursorColor,
+    Library
+  >;
   toString: () => Effect.Effect<string, Collection, Library>;
 };
 
@@ -183,6 +199,8 @@ export const base = Effect.fn(function* <T extends string, E>(
     bg: options.colors?.bg ?? Colors.Transparent,
     selectableFg: options.colors?.selectableFg ?? Colors.Transparent,
     selectableBg: options.colors?.selectableBg ?? Colors.Transparent,
+    focusedFg: options.colors?.focusedFg ?? Colors.Black,
+    focusedBg: options.colors?.focusedBg ?? Colors.Transparent,
   });
   const attributes = yield* Ref.make(options.attributes ?? 0);
   const _yogaPerformancePositionUpdated = yield* Ref.make(false);
@@ -562,10 +580,10 @@ export const base = Effect.fn(function* <T extends string, E>(
     event: KeyboardEvent,
   ) {
     yield* handler(event);
-    const p = yield* Ref.get(parent);
-    if (p && !event.defaultPrevented) {
-      yield* Effect.suspend(() => p.processKeyboardEvent(event));
-    }
+    // const p = yield* Ref.get(parent);
+    // if (p && !event.defaultPrevented) {
+    //   yield* Effect.suspend(() => p.processKeyboardEvent(event));
+    // }
   });
 
   const add = Effect.fn(function* (parentElement: BaseElement<any, E>, container: BaseElement<any, E>, index?: number) {
@@ -647,7 +665,7 @@ export const base = Effect.fn(function* <T extends string, E>(
     return elements.find((e) => e.id === id);
   });
 
-  const setFocused = Effect.fn(function* (value: boolean) {
+  const setFocused: BaseElement<any, E>["setFocused"] = Effect.fn(function* (value: boolean) {
     yield* Ref.set(focused, value);
   });
 
@@ -657,6 +675,7 @@ export const base = Effect.fn(function* <T extends string, E>(
       es.map((e) => Effect.suspend(() => e.update())),
       { concurrency: "unbounded", concurrentFinalizers: true },
     );
+    yield* ensureZIndexSorted();
   });
 
   const setLocation = Effect.fn(function* (loc: { x: number; y: number }) {

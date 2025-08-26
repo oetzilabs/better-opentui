@@ -6,6 +6,7 @@ import type { BaseElement } from "./base";
 import { box } from "./box";
 import { framebuffer } from "./framebuffer";
 import { group } from "./group";
+import { input } from "./input";
 import { root } from "./root";
 import { text } from "./text";
 import { type RemoveBindsFromArgs, type RenderContextInterface } from "./utils";
@@ -125,6 +126,33 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       return r;
     });
 
+    const _input = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof input>>) {
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = input.bind(input, {
+        context: context as Ref.Ref<RenderContextInterface>,
+        cachedGlobalSelection,
+      });
+      const r = yield* fn(...args);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
+      const initialLocation = yield* Ref.get(r.location);
+      const initialDimensions = yield* Ref.get(r.dimensions);
+
+      yield* ctx.addToHitGrid(
+        initialLocation.x,
+        initialLocation.y,
+        initialDimensions.widthValue,
+        initialDimensions.heightValue,
+        r.num,
+      );
+      return r;
+    });
+
     const getRenderable = Effect.fn(function* (id: number) {
       const elements = yield* Ref.get(renderables);
       return elements.find((e) => e.num === id);
@@ -141,6 +169,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       text: _text,
       asciifont: _asciifont,
       framebuffer: _framebuffer,
+      input: _input,
       renderables,
       getRenderable,
       destroy,

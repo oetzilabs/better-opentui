@@ -78,11 +78,11 @@ if (import.meta.main) {
         yield* parentContainer.add(text);
         // yield* parentContainer.add(text2);
 
-        const tinyHello = yield* cli.createElement("asciifont", {
-          left: 5,
-          top: 5,
-          text: "Hello World",
-        });
+        // const tinyHello = yield* cli.createElement("asciifont", {
+        //   left: 5,
+        //   top: 5,
+        //   text: "Hello World",
+        // });
 
         const bigHello = yield* cli.createElement("asciifont", {
           left: 20,
@@ -91,8 +91,27 @@ if (import.meta.main) {
           font: "block",
         });
 
-        yield* parentContainer.add(tinyHello);
+        const input = yield* cli.createElement("input", {
+          focused: true,
+          colors: {
+            bg: Colors.Custom("#001122"),
+            fg: Colors.White,
+            cursorColor: Colors.Teal,
+            placeholderColor: Colors.Custom("#666666"),
+          },
+          position: PositionAbsolute.make(2),
+          left: 5,
+          top: 5,
+          width: 40,
+          height: 3,
+          value: "",
+          placeholder: "Enter text",
+          maxLength: 50,
+        });
+
+        // yield* parentContainer.add(tinyHello);
         yield* parentContainer.add(bigHello);
+        yield* parentContainer.add(input);
 
         yield* cli.add(parentContainer);
       }),
