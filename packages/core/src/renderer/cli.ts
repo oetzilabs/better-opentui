@@ -1109,13 +1109,13 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       if (um) {
         yield* disableMouse();
       }
-      yield* writeOut(ResetCursorColor.make("\u001B]12;default\u0007"));
-      yield* writeOut(ShowCursor.make("\u001B[?25h"));
-      yield* writeOut(yield* moveCursorAndClear(0, 0));
       const uas = yield* Ref.get(_useAlternateScreen);
       if (uas) {
         yield* writeOut(SwitchToMainScreen.make("\u001B[?1049l"));
       }
+      yield* writeOut(ResetCursorColor.make("\u001B]12;default\u0007"));
+      yield* writeOut(ShowCursor.make("\u001B[?25h"));
+      yield* writeOut(yield* moveCursorAndClear(0, 0));
       stdin.setRawMode(false);
       stdin.removeAllListeners("data");
     });
