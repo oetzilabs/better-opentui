@@ -531,7 +531,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
               }
             }
 
-            const parsedKey = yield* parseKey(data);
+            const parsedKey = yield* parseKey(str);
             yield* Effect.annotateCurrentSpan("parsedKey", parsedKey);
             if (parsedKey) {
               if (isExitOnCtrlC(parsedKey.raw)) {
