@@ -17,15 +17,15 @@ export const F10 = Schema.Literal("[21~").pipe(Schema.brand("f10"));
 export const F11 = Schema.Literal("[23~").pipe(Schema.brand("f11"));
 export const F12 = Schema.Literal("[24~").pipe(Schema.brand("f12"));
 
-export const Up = Schema.Literal("[A", "OA", "[a", "p", "Oa", "\u001b[A").pipe(Schema.brand("up"));
-export const Down = Schema.Literal("[B", "OB", "[b", "n", "Ob", "\u001b[B").pipe(Schema.brand("down"));
-export const Right = Schema.Literal("[C", "OC", "[c", "f", "Oc", "\u001b[C").pipe(Schema.brand("right"));
-export const Left = Schema.Literal("[D", "OD", "[d", "b", "Od", "\u001b[D").pipe(Schema.brand("left"));
+export const Up = Schema.Literal("[A", "OA", "[a", "\u001b[A").pipe(Schema.brand("up"));
+export const Down = Schema.Literal("[B", "OB", "[b", "\u001b[B").pipe(Schema.brand("down"));
+export const Right = Schema.Literal("[C", "OC", "[c", "\u001b[C").pipe(Schema.brand("right"));
+export const Left = Schema.Literal("[D", "OD", "[d", "\u001b[D").pipe(Schema.brand("left"));
 export const Clear = Schema.Literal("[E", "OE", "[e", "Oe").pipe(Schema.brand("clear"));
 export const End = Schema.Literal("[F", "OF", "[4~", "[8~", "[8$", "[8^").pipe(Schema.brand("end"));
 export const Home = Schema.Literal("[H", "OH", "[1~", "[7~", "[7$", "[7^").pipe(Schema.brand("home"));
 export const Insert = Schema.Literal("[2~", "[2$", "[2^").pipe(Schema.brand("insert"));
-export const Delete = Schema.Literal("[3~", "[3$", "[3^").pipe(Schema.brand("delete"));
+export const Delete = Schema.Literal("[3~", "[3$", "[3^", "\x1b[3~").pipe(Schema.brand("delete"));
 export const PageUp = Schema.Literal("[5~", "[[5~", "[5$", "[5^").pipe(Schema.brand("pageup"));
 export const PageDown = Schema.Literal("[6~", "[[6~", "[6$", "[6^").pipe(Schema.brand("pagedown")); // putty
 export const Tab = Schema.Literal("[Z").pipe(Schema.brand("tab"));
@@ -125,6 +125,10 @@ export const SpecialChar = Schema.String.pipe(Schema.brand("special"));
 export type SpecialChar = typeof SpecialChar.Type;
 export const isSpecialChar = (name: string) => Schema.is(SpecialChar)(name);
 
+export const ArrowKeys = Schema.Union(Up, Down, Left, Right);
+export type ArrowKeys = typeof ArrowKeys.Type;
+export const isArrowKeys = (name: string) => Schema.is(ArrowKeys)(name);
+
 export const Specials = Schema.Union(
   Return,
   Enter,
@@ -139,49 +143,36 @@ export const Specials = Schema.Union(
 );
 export type Specials = typeof Specials.Type;
 
+export const FKeys = Schema.Union(F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12);
+export type FKeys = typeof FKeys.Type;
+export const isFKeys = (name: string) => Schema.is(FKeys)(name);
+
+export const UtilityKeys = Schema.Union(Clear, End, Home, Insert, Delete, PageUp, PageDown, Tab);
+
 export const KeyNames = Schema.Union(
   Shift,
   Ctrl,
   ...Specials.members,
-  F1,
-  F2,
-  F3,
-  F4,
-  F5,
-  F6,
-  F7,
-  F8,
-  F9,
-  F10,
-  F11,
-  F12,
-  Up,
-  Down,
-  Right,
-  Left,
-  Clear,
-  End,
-  Home,
-  Insert,
-  Delete,
-  PageUp,
-  PageDown,
-  Tab,
+  ...FKeys.members,
+  ...ArrowKeys.members,
+  ...UtilityKeys.members,
 );
 
 export type KeyNames = typeof KeyNames.Type;
 
-export const ParsedKey = Schema.Struct({
-  name: Schema.String,
-  ctrl: Schema.Boolean,
-  meta: Schema.Boolean,
-  shift: Schema.Boolean,
-  option: Schema.Boolean,
-  sequence: Schema.String,
-  number: Schema.Boolean,
-  raw: Schema.String,
-  code: Schema.optional(Schema.String),
-});
+export const ParsedKey = Schema.mutable(
+  Schema.Struct({
+    name: Schema.String,
+    ctrl: Schema.Boolean,
+    meta: Schema.Boolean,
+    shift: Schema.Boolean,
+    option: Schema.Boolean,
+    sequence: Schema.String,
+    number: Schema.Boolean,
+    raw: Schema.String,
+    code: Schema.optional(Schema.String),
+  }),
+);
 
 export type ParsedKey = typeof ParsedKey.Type;
 export const BufferSchema = Schema.instanceOf(Buffer);
@@ -207,304 +198,267 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
     return null;
   }
 
-  let result = Match.value(key).pipe(
+  let xresult: ParsedKey = {
+    name: "unknown",
+    ctrl: Schema.is(Ctrl)(key),
+    meta: false,
+    shift: Schema.is(Shift)(key),
+    option: false,
+    number: false,
+    sequence: key,
+    raw: key,
+  };
+
+  // ArrowKeys matcher
+  xresult = Match.value(key).pipe(
+    // ArrowKeys
     Match.when(Schema.is(Up), (s) => {
-      return ParsedKey.make({
-        name: "up",
-        ctrl: false,
-        meta: false,
-        shift: false,
-        option: false,
-        number: false,
-        sequence: key || "",
-        raw: key,
-      });
+      xresult.name = "up";
+      xresult.sequence = key;
+      return xresult;
     }),
     Match.when(Schema.is(Down), (s) => {
-      return ParsedKey.make({
-        name: "down",
-        ctrl: false,
-        meta: false,
-        shift: false,
-        option: false,
-        number: false,
-        sequence: key || "",
-        raw: key,
-      });
+      xresult.name = "down";
+      xresult.sequence = key;
+      return xresult;
     }),
     Match.when(Schema.is(Left), (s) => {
-      return ParsedKey.make({
-        name: "left",
-        ctrl: false,
-        meta: false,
-        shift: false,
-        option: false,
-        number: false,
-        sequence: key || "",
-        raw: key,
-      });
+      xresult.name = "left";
+      xresult.sequence = key;
+      return xresult;
     }),
     Match.when(Schema.is(Right), (s) => {
-      return ParsedKey.make({
-        name: "right",
-        ctrl: false,
-        meta: false,
-        shift: false,
-        option: false,
-        number: false,
-        sequence: key || "",
-        raw: key,
-      });
+      xresult.name = "right";
+      xresult.sequence = key;
+      return xresult;
     }),
-    Match.when(Schema.is(KeyNames), (s) => {
-      return Match.value(s).pipe(
-        Match.when(Schema.is(Backspace), (s) => {
-          return ParsedKey.make({
-            name: "backspace",
-            ctrl: false,
-            meta: s.charAt(0) === "\x1b",
-            shift: false,
-            option: false,
-            number: false,
-            sequence: key || "",
-            raw: key,
-          });
-        }),
-        Match.when(Schema.is(Delete), (s) => {
-          return ParsedKey.make({
-            name: "delete",
-            ctrl: false,
-            meta: s.charAt(0) === "\x1b",
-            shift: false,
-            option: false,
-            number: false,
-            sequence: key || "",
-            raw: key,
-          });
-        }),
-        Match.when(Schema.is(Specials), (s) => {
-          return Match.value(s).pipe(
-            Match.when(Schema.is(Return), (s) => {
-              return ParsedKey.make({
-                name: "return",
-                ctrl: false,
-                meta: false,
-                shift: false,
-                option: false,
-                number: false,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.when(Schema.is(Enter), (s) => {
-              return ParsedKey.make({
-                name: "enter",
-                ctrl: false,
-                meta: false,
-                shift: false,
-                option: false,
-                number: false,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.when(Schema.is(TabSpecial), (s) => {
-              return ParsedKey.make({
-                name: "tab",
-                ctrl: false,
-                meta: false,
-                shift: false,
-                option: false,
-                number: false,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.when(Schema.is(Backspace), (s) => {
-              return ParsedKey.make({
-                name: "backspace",
-                ctrl: false,
-                meta: s.charAt(0) === "\x1b",
-                shift: false,
-                option: false,
-                number: false,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.when(Schema.is(Escape), (s) => {
-              return ParsedKey.make({
-                name: "escape",
-                ctrl: false,
-                meta: s.length === 2,
-                shift: false,
-                option: false,
-                number: false,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.when(Schema.is(Space), (s) => {
-              return ParsedKey.make({
-                name: "space",
-                ctrl: false,
-                meta: s.length === 2,
-                shift: false,
-                option: false,
-                number: false,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.when(Schema.is(CtrlLetter), (s) => {
-              return ParsedKey.make({
-                name: String.fromCharCode(s.charCodeAt(0) + "a".charCodeAt(0) - 1),
-                ctrl: true,
-                meta: false,
-                shift: false,
-                option: false,
-                number: false,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.when(Schema.is(Number), (s) => {
-              return ParsedKey.make({
-                name: s,
-                ctrl: false,
-                meta: false,
-                shift: false,
-                option: false,
-                number: true,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.when(Schema.is(LowerCaseLetter), (s) => {
-              return ParsedKey.make({
-                name: s,
-                ctrl: false,
-                meta: false,
-                shift: false,
-                option: false,
-                number: true,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.when(Schema.is(UpperCaseLetter), (s) => {
-              return ParsedKey.make({
-                name: s.toLocaleLowerCase(),
-                ctrl: false,
-                meta: false,
-                shift: true,
-                option: false,
-                number: true,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.when(Schema.is(SpecialChar), (s) => {
-              return ParsedKey.make({
-                name: "special",
-                ctrl: false,
-                meta: false,
-                shift: false,
-                option: false,
-                number: true,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.when(metaKeyCodeRe.test, (s) => {
-              const parts = s.match(metaKeyCodeRe)!;
-              return ParsedKey.make({
-                name: parts[1]!,
-                ctrl: false,
-                meta: true,
-                shift: /^[A-Z]$/.test(parts[1]!),
-                option: false,
-                number: true,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.when(fnKeyRe.test, (fnS) => {
-              const parts = fnS.match(fnKeyRe)!;
-              const segs = [...fnS];
-              // ansi escape sequence
-              // reassemble the key code leaving out leading \x1b's,
-              // the modifier key bitflag and any meaningless "1;" sequence
-              const code = [parts[1], parts[2], parts[4], parts[6]].filter(Boolean).join("");
-              const modifier = ((parts[3] || parts[5] || 1) as number) - 1;
-              const brandName = "";
-              return ParsedKey.make({
-                name: brandName,
-                ctrl: !!(modifier & 4) || Schema.is(Ctrl)(s),
-                meta: !!(modifier & 10),
-                shift: !!(modifier & 1) || Schema.is(Shift)(s),
-                option: (segs[0] === "\u001b" && segs[1] === "\u001b") || !!(modifier & 2), // Add option/alt modifier detection,
-                number: true,
-                sequence: key || "",
-                raw: key,
-                code,
-              });
-            }),
-            Match.when(Schema.is(Delete), (s) => {
-              return ParsedKey.make({
-                name: "delete",
-                ctrl: false,
-                meta: false,
-                shift: false,
-                option: false,
-                number: true,
-                sequence: key || "",
-                raw: key,
-                code: "[3~",
-              });
-            }),
-            Match.when(Schema.is(Schema.Unknown), (s) => {
-              return ParsedKey.make({
-                name: "unknown",
-                ctrl: false,
-                meta: false,
-                shift: false,
-                option: false,
-                number: false,
-                sequence: key || "",
-                raw: key,
-              });
-            }),
-            Match.exhaustive,
-          );
-        }),
-        Match.orElse(() =>
-          ParsedKey.make({
-            name: Schema.is(Ctrl)(s) ? "ctrl" : Schema.is(Shift)(s) ? "shift" : metaKeyCodeRe.test(s) ? "meta" : "",
-            ctrl: Schema.is(Ctrl)(s),
-            meta: metaKeyCodeRe.test(s),
-            shift: Schema.is(Shift)(s),
-            option: false,
-            number: false,
-            sequence: key || "",
-            raw: key,
-          }),
-        ),
-      );
-    }),
-    Match.when(Schema.is(Schema.Unknown), (s) => {
-      return ParsedKey.make({
-        name: "unknown",
-        ctrl: false,
-        meta: false,
-        shift: false,
-        option: false,
-        number: false,
-        sequence: key || "",
-        raw: key,
-      });
-    }),
-    Match.exhaustive,
+    Match.orElse(() => xresult),
   );
-  return result;
+  if (xresult.name !== "unknown") return xresult;
+
+  // Specials matcher
+  xresult = Match.value(key).pipe(
+    // Specials
+    Match.when(Schema.is(Return), (s) => {
+      xresult.name = "return";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(Enter), (s) => {
+      xresult.name = "enter";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(TabSpecial), (s) => {
+      xresult.name = "tab";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(Backspace), (s) => {
+      xresult.name = "backspace";
+      xresult.sequence = s;
+      xresult.meta = s.charAt(0) === "\x1b";
+      return xresult;
+    }),
+    Match.when(Schema.is(Escape), (s) => {
+      xresult.name = "escape";
+      xresult.sequence = s;
+
+      xresult.meta = s.length === 2;
+      return xresult;
+    }),
+    Match.when(Schema.is(Space), (s) => {
+      xresult.name = "space";
+      xresult.sequence = s;
+
+      xresult.meta = s.length === 2;
+      return xresult;
+    }),
+    Match.when(Schema.is(CtrlLetter), (s) => {
+      xresult.name = String.fromCharCode(s.charCodeAt(0) + "a".charCodeAt(0) - 1);
+      xresult.sequence = s;
+      xresult.ctrl = true;
+      return xresult;
+    }),
+    Match.when(Schema.is(Number), (s) => {
+      xresult.name = s;
+      xresult.sequence = s;
+      xresult.number = true;
+      return xresult;
+    }),
+    Match.when(Schema.is(LowerCaseLetter), (s) => {
+      xresult.name = s;
+      xresult.sequence = s;
+      xresult.number = true;
+      return xresult;
+    }),
+    Match.when(Schema.is(UpperCaseLetter), (s) => {
+      xresult.name = s.toLocaleLowerCase();
+      xresult.sequence = s;
+      xresult.shift = true;
+      xresult.number = true;
+      return xresult;
+    }),
+    Match.when(Schema.is(SpecialChar), (s) => {
+      xresult.name = s;
+      xresult.sequence = s;
+      xresult.number = true;
+      return xresult;
+    }),
+    Match.orElse(() => xresult),
+  );
+  if (xresult.name !== "unknown") return xresult;
+
+  // FKeys matcher
+  xresult = Match.value(key).pipe(
+    Match.when(Schema.is(F1), (s) => {
+      xresult.name = "f1";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(F2), (s) => {
+      xresult.name = "f2";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(F3), (s) => {
+      xresult.name = "f3";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(F4), (s) => {
+      xresult.name = "f4";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(F5), (s) => {
+      xresult.name = "f5";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(F6), (s) => {
+      xresult.name = "f6";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(F7), (s) => {
+      xresult.name = "f7";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(F8), (s) => {
+      xresult.name = "f8";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(F9), (s) => {
+      xresult.name = "f9";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(F10), (s) => {
+      xresult.name = "f10";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(F11), (s) => {
+      xresult.name = "f11";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(F12), (s) => {
+      xresult.name = "f12";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.orElse(() => xresult),
+  );
+  if (xresult.name !== "unknown") return xresult;
+
+  // UtilityKeys matcher
+  xresult = Match.value(key).pipe(
+    Match.when(Schema.is(Clear), (s) => {
+      xresult.name = "clear";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(End), (s) => {
+      xresult.name = "end";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(Home), (s) => {
+      xresult.name = "home";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(Insert), (s) => {
+      xresult.name = "insert";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(Delete), (s) => {
+      xresult.name = "delete";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(PageUp), (s) => {
+      xresult.name = "pageup";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(PageDown), (s) => {
+      xresult.name = "pagedown";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.when(Schema.is(Tab), (s) => {
+      xresult.name = "tab";
+      xresult.sequence = s;
+      return xresult;
+    }),
+    Match.orElse(() => xresult),
+  );
+  if (xresult.name !== "unknown") return xresult;
+
+  // Modifiers, Meta, FnKey, Unknown, Fallback matcher
+  xresult = Match.value(key).pipe(
+    Match.when(Schema.is(Ctrl), (s) => {
+      xresult.name = "ctrl";
+      xresult.sequence = s;
+      xresult.ctrl = true;
+      return xresult;
+    }),
+    Match.when(Schema.is(Shift), (s) => {
+      xresult.name = "shift";
+      xresult.sequence = s;
+      xresult.shift = true;
+      return xresult;
+    }),
+    Match.orElse((s) => {
+      let parts;
+      if ((parts = metaKeyCodeRe.exec(s))) {
+        xresult.meta = true;
+        xresult.shift ||= /^[A-Z]$/.test(parts[1]!);
+        xresult.name = parts[1];
+      } else if ((parts = fnKeyRe.exec(s))) {
+        const segs = [...s];
+        if (segs[0] === "\u001b" && segs[1] === "\u001b") {
+          xresult.option = true;
+        }
+
+        const code = [parts[1], parts[2], parts[4], parts[6]].filter(Boolean).join("");
+        const modifier = ((parts[3] || parts[5] || 1) as number) - 1;
+
+        xresult.ctrl ||= !!(modifier & 4);
+        xresult.meta ||= !!(modifier & 10);
+        xresult.shift ||= !!(modifier & 1);
+        xresult.option ||= !!(modifier & 2);
+        xresult.code = code;
+      }
+      return xresult;
+    }),
+  );
+
+  return xresult;
 });
