@@ -179,6 +179,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
   const render = Effect.fn(function* (buffer: OptimizedBuffer, _dt: number) {
     const v = yield* Ref.get(b.visible);
     if (!v) return;
+    const sa = yield* Ref.get(searchable);
 
     const loc = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
@@ -206,7 +207,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
     const fnt = yield* Ref.get(font);
 
     const contentX = 0;
-    const contentY = 1;
+    const contentY = sa ? 1 : 0;
     const { widthValue: contentWidth, heightValue: contentHeight } = yield* Ref.get(b.dimensions);
     const maxVisibleItems = Math.max(1, Math.floor(contentHeight / (yield* Ref.get(linesPerItem))));
 
@@ -273,7 +274,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
 
     yield* buffer.drawFrameBuffer(loc.x, loc.y, framebuffer_buffer);
 
-    if (searchable) {
+    if (sa) {
       // show the input
       yield* searchinput.render(buffer, _dt);
     }
@@ -400,7 +401,8 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
   const handleKeyPress = Effect.fn(function* (key: ParsedKey) {
     const focused = yield* Ref.get(b.focused);
     if (!focused) return false;
-    if (searchable) {
+    const sa = yield* Ref.get(searchable);
+    if (sa) {
       yield* searchinput.handleKeyPress(key);
     }
     const keyName = key.name;
@@ -440,7 +442,8 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
   const onUpdate: SelectElement<OptionsType, FBT>["onUpdate"] = Effect.fn(function* (self) {
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
-    if (searchable) {
+    const sa = yield* Ref.get(searchable);
+    if (sa) {
       yield* searchinput.update();
     }
     const ctx = yield* Ref.get(binds.context);
