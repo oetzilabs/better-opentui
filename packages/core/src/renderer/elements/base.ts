@@ -6,6 +6,7 @@ import { Colors, Input } from "../../colors";
 import {
   FailedToFreeYogaConfig,
   FailedToFreeYogaNode,
+  RendererFailedToCreateFrameBuffer,
   RendererFailedToSetCursorColor,
   RendererFailedToSetCursorPosition,
   RendererFailedToSetCursorStyle,
@@ -147,6 +148,8 @@ export type BaseElement<T extends string, E> = {
     Library
   >;
   toString: () => Effect.Effect<string, Collection, Library>;
+  setupYogaProperties: (options: ElementOptions<T, E>) => Effect.Effect<void, Collection, Library>;
+  createFrameBuffer: () => Effect.Effect<OptimizedBuffer | null, Collection, Library>;
 };
 
 export const elementCounter = Metric.counter("element_counter", {
@@ -211,8 +214,8 @@ export const base = Effect.fn(function* <T extends string, E>(
   const renderables = yield* Ref.make<BaseElement<any, E>[]>([]);
   const position = yield* Ref.make<Position>({});
   const focused = yield* Ref.make(options.focused ?? false);
-  const layoutNode = createTrackedNode();
   const yogaConfig = Yoga.Config.create();
+  const layoutNode = createTrackedNode({}, yogaConfig);
   yogaConfig.setUseWebDefaults(false);
   yogaConfig.setPointScaleFactor(1);
 
@@ -463,14 +466,13 @@ export const base = Effect.fn(function* <T extends string, E>(
     const { widthValue: w, heightValue: h } = yield* Ref.get(dimensions);
 
     if (w <= 0 || h <= 0) {
-      return;
+      return yield* Effect.fail(new RendererFailedToCreateFrameBuffer());
     }
 
     const fb = yield* OptimizedBuffer.create(w, h, {
       respectAlpha: true,
-    }).pipe(Effect.catchAll(() => Effect.succeed(null)));
-
-    yield* Ref.set(frameBuffer, fb);
+    });
+    return fb;
   });
 
   const handleFrameBufferResize = Effect.fn(function* (width: number, height: number) {
@@ -522,7 +524,11 @@ export const base = Effect.fn(function* <T extends string, E>(
     const { width: oldWidth, height: oldHeight } = yield* Ref.get(dimensions);
     const sizeChanged = oldWidth !== newWidth || oldHeight !== newHeight;
 
-    yield* Ref.update(dimensions, (d) => ({ ...d, width: newWidth, height: newHeight }));
+    yield* Ref.update(dimensions, (d) => ({
+      ...d,
+      width: newWidth,
+      height: newHeight,
+    }));
 
     if (sizeChanged) {
       yield* onLayoutResize(newWidth, newHeight);
@@ -750,5 +756,7 @@ export const base = Effect.fn(function* <T extends string, E>(
     setSelectionBackgroundColor,
     setSelectionForegroundColor,
     toString,
+    setupYogaProperties,
+    createFrameBuffer,
   } satisfies BaseElement<T, E>;
 });

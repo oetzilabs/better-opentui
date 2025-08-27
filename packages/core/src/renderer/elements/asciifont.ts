@@ -12,7 +12,7 @@ import type { BaseElement } from "./base";
 import { framebuffer, type FrameBufferElement, type FrameBufferOptions } from "./framebuffer";
 import type { Binds } from "./utils";
 
-export interface ASCIIFontElement extends BaseElement<"framebuffer", ASCIIFontElement> {
+export interface ASCIIFontElement extends BaseElement<"asciifont", ASCIIFontElement> {
   setText: (text: string) => Effect.Effect<void, Collection, Library>;
   getText: () => Effect.Effect<string, Collection, Library>;
   setFont: (font: keyof typeof fonts) => Effect.Effect<void, Collection, Library>;
@@ -37,7 +37,7 @@ export const DEFAULTS = {
 
 export const asciifont = Effect.fn(function* (binds: Binds, options: ASCIIFontOptions) {
   const measurements = yield* measureText({ text: options.text ?? "", font: options.font ?? "tiny" });
-  const b = yield* framebuffer<ASCIIFontElement>(binds, {
+  const b = yield* framebuffer<ASCIIFontElement, "asciifont">(binds, "asciifont", {
     ...options,
     width: measurements.width,
     height: measurements.height,

@@ -11,7 +11,7 @@ import type { BaseElement } from "./base";
 import { framebuffer, type FrameBufferOptions } from "./framebuffer";
 import type { Binds, ElementOptions } from "./utils";
 
-export interface InputElement extends BaseElement<"framebuffer", InputElement> {
+export interface InputElement extends BaseElement<"input", InputElement> {
   setValue: (value: string) => Effect.Effect<void, Collection, Library>;
   getValue: () => Effect.Effect<string, Collection, Library>;
   setPlaceholder: (value: string) => Effect.Effect<void, Collection, Library>;
@@ -24,7 +24,7 @@ export interface InputElement extends BaseElement<"framebuffer", InputElement> {
   onUpdate: (self: InputElement) => Effect.Effect<void, Collection, Library>;
 }
 
-export type InputOptions = ElementOptions<"framebuffer", InputElement> & {
+export type InputOptions = ElementOptions<"input", InputElement> & {
   colors: FrameBufferOptions<InputElement>["colors"] & {
     placeholderColor?: Input;
     cursorColor?: Input;
@@ -59,7 +59,7 @@ export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
   const lib = yield* Library;
   const width = options.width ?? 20;
   const height = options.height ?? 1;
-  const b = yield* framebuffer(binds, {
+  const b = yield* framebuffer<InputElement, "input">(binds, "input", {
     ...options,
     selectable: true,
     width,

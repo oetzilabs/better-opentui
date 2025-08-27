@@ -5,20 +5,24 @@ import { RendererFailedToResizeBuffer } from "../../errors";
 import { base, type BaseElement } from "./base";
 import type { Binds, ElementOptions } from "./utils";
 
-export interface FrameBufferElement extends BaseElement<"framebuffer", FrameBufferElement> {
+export interface FrameBufferElement<T extends string = "framebuffer"> extends BaseElement<T, FrameBufferElement<T>> {
   framebuffer_buffer: OptimizedBuffer;
 }
 
-export interface FrameBufferOptions<E> extends ElementOptions<"framebuffer", E> {
+export interface FrameBufferOptions<E, T extends string = "framebuffer"> extends ElementOptions<T, E> {
   width: number;
   height: number;
-  onMouseEvent?: BaseElement<"framebuffer", FrameBufferElement>["onMouseEvent"];
-  onKeyboardEvent?: BaseElement<"framebuffer", FrameBufferElement>["onKeyboardEvent"];
+  onMouseEvent?: BaseElement<T, FrameBufferElement<T>>["onMouseEvent"];
+  onKeyboardEvent?: BaseElement<T, FrameBufferElement<T>>["onKeyboardEvent"];
   respectAlpha?: boolean;
 }
 
-export const framebuffer = Effect.fn(function* <E>(binds: Binds, options: FrameBufferOptions<E>) {
-  const b = yield* base<"framebuffer", E>("framebuffer", {
+export const framebuffer = Effect.fn(function* <E, FrameBufferType extends string = "framebuffer">(
+  binds: Binds,
+  type: FrameBufferType,
+  options: FrameBufferOptions<E>,
+) {
+  const b = yield* base<FrameBufferType, E>(type, {
     ...options,
     width: options.width,
     height: options.height,

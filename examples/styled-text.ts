@@ -3,6 +3,7 @@ import { Colors } from "@opentuee/core/src/colors";
 import { isMouseDown, isMouseDrag, isMouseOver, isMouseUp } from "@opentuee/core/src/inputs/mouse";
 import type { BaseElement } from "@opentuee/core/src/renderer/elements/base";
 import type { InputElement } from "@opentuee/core/src/renderer/elements/input";
+import type { SelectElement, SelectOption } from "@opentuee/core/src/renderer/elements/select";
 import type { TextElement } from "@opentuee/core/src/renderer/elements/text";
 import { PositionAbsolute } from "@opentuee/core/src/renderer/utils/position";
 import { run } from "@opentuee/core/src/run";
@@ -92,32 +93,61 @@ if (import.meta.main) {
           font: "tiny",
         });
 
-        const input = yield* cli.createElement("input", {
-          focused: true,
-          colors: {
-            bg: Colors.Custom("#001122"),
-            fg: Colors.White,
-            cursorColor: Colors.Teal,
-            placeholderColor: Colors.Custom("#666666"),
-          },
+        // const input = yield* cli.createElement("input", {
+        //   visible: false,
+        //   // focused: true,
+        //   colors: {
+        //     bg: Colors.Custom("#001122"),
+        //     fg: Colors.White,
+        //     cursorColor: Colors.Teal,
+        //     placeholderColor: Colors.Custom("#666666"),
+        //   },
+        //   position: PositionAbsolute.make(2),
+        //   left: 5,
+        //   top: 5,
+        //   width: 70,
+        //   height: 1,
+        //   value: "",
+        //   padding: 1,
+        //   placeholder: "Enter text",
+        //   maxLength: 50,
+        //   onUpdate: Effect.fn("input.onUpdate")(function* (self: InputElement) {
+        //     const value = yield* self.getValue();
+        //     yield* bigHello.setText(value);
+        //   }),
+        // });
+
+        const select = yield* cli.createElement("select", {
           position: PositionAbsolute.make(2),
-          left: 5,
+          left: 1,
           top: 5,
-          width: 70,
-          height: 1,
-          value: "",
-          padding: 1,
-          placeholder: "Enter text",
-          maxLength: 50,
-          onUpdate: Effect.fn("input.onUpdate")(function* (self: InputElement) {
-            const value = yield* self.getValue();
-            yield* bigHello.setText(value);
+          width: 40,
+          height: 10,
+          options: [
+            { name: "Option 1", value: "1" },
+            { name: "Option 2", value: "2" },
+            { name: "Option 3", value: "3" },
+            { name: "Option 4", value: "4", description: "ASDF" },
+            { name: "Option 5", value: "5" },
+            { name: "Option 6", value: "6" },
+            { name: "Option 7", value: "7" },
+            { name: "Option 8", value: "8" },
+            { name: "Option 9", value: "9" },
+            { name: "Option 10", value: "10" },
+          ],
+          description: "Select option",
+          showDescription: true,
+          selectedIndex: 0,
+          onSelect: Effect.fn(function* (option) {
+            if (!option) return;
+            yield* bigHello.setText(option.value ?? "");
           }),
         });
 
         // yield* parentContainer.add(tinyHello);
         yield* parentContainer.add(bigHello);
-        yield* parentContainer.add(input);
+        // yield* parentContainer.add(input);
+        yield* parentContainer.add(select);
 
         yield* cli.add(parentContainer);
       }),

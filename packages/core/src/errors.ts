@@ -446,8 +446,15 @@ export class MissingRenderContext extends Schema.TaggedError<MissingRenderContex
   },
 ) {}
 
+export class RendererFailedToCreateFrameBuffer extends Schema.TaggedError<RendererFailedToCreateFrameBuffer>(
+  "RendererFailedToCreateFrameBuffer",
+)("RendererFailedToCreateFrameBuffer", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
 // all errors
 export type Collection =
+  | RendererFailedToCreateFrameBuffer
   | MissingRenderContext
   | FailedToFreeYogaConfig
   | FailedToInsertChildTrackNode

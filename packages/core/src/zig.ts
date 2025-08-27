@@ -11,6 +11,7 @@ import {
   RendererFailedToCheckHit,
   RendererFailedToClearBuffer,
   RendererFailedToCreate,
+  RendererFailedToCreateFrameBuffer,
   RendererFailedToCreateTextBuffer,
   RendererFailedToDestroy,
   RendererFailedToDestroyOptimizedBuffer,
@@ -527,7 +528,8 @@ export class Library extends Effect.Service<Library>()("Library", {
     ) {
       const bufferPtr = opentui.symbols.createOptimizedBuffer(width, height, respectAlpha);
       if (!bufferPtr) {
-        return yield* Effect.fail(new Error(`Failed to create optimized buffer: ${width}x${height}`));
+        // return yield* Effect.fail(new Error(`Failed to create optimized buffer: ${width}x${height}`));
+        return yield* Effect.fail(new RendererFailedToCreateFrameBuffer());
       }
       const size = width * height;
       const buffers = yield* getBuffer(bufferPtr, size);
