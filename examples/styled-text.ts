@@ -93,63 +93,40 @@ if (import.meta.main) {
           font: "tiny",
         });
 
-        // const input = yield* cli.createElement("input", {
-        //   visible: false,
-        //   // focused: true,
-        //   colors: {
-        //     bg: Colors.Custom("#001122"),
-        //     fg: Colors.White,
-        //     cursorColor: Colors.Teal,
-        //     placeholderColor: Colors.Custom("#666666"),
-        //   },
-        //   position: PositionAbsolute.make(2),
-        //   left: 5,
-        //   top: 5,
-        //   width: 70,
-        //   height: 1,
-        //   value: "",
-        //   padding: 1,
-        //   placeholder: "Enter text",
-        //   maxLength: 50,
-        //   onUpdate: Effect.fn("input.onUpdate")(function* (self: InputElement) {
-        //     const value = yield* self.getValue();
-        //     yield* bigHello.setText(value);
-        //   }),
-        // });
+        const options = [
+          { name: "Option 1", value: "1" },
+          { name: "Option 2", value: "2" },
+          { name: "Option 3", value: "3" },
+          { name: "Option 4", value: "4", description: "ASDF" },
+          { name: "Option 5", value: "5" },
+          { name: "Option 6", value: "6" },
+          { name: "Option 7", value: "7" },
+          { name: "Option 8", value: "8" },
+          { name: "Option 9", value: "9" },
+          { name: "Option 10", value: "10" },
+        ] as SelectOption<string>[];
 
         const select = yield* cli.createElement("select", {
+          focused: true,
+          searchable: true,
           zIndex: 3,
           position: PositionAbsolute.make(2),
           left: 1,
-          top: 5,
+          top: 6,
           width: 40,
-          height: 10,
-          options: [
-            { name: "Option 1", value: "1" },
-            { name: "Option 2", value: "2" },
-            { name: "Option 3", value: "3" },
-            { name: "Option 4", value: "4", description: "ASDF" },
-            { name: "Option 5", value: "5" },
-            { name: "Option 6", value: "6" },
-            { name: "Option 7", value: "7" },
-            { name: "Option 8", value: "8" },
-            { name: "Option 9", value: "9" },
-            { name: "Option 10", value: "10" },
-          ],
-          // description: "Select option",
+          height: 6,
+          options,
           showDescription: true,
           selectedIndex: 0,
           onSelect: Effect.fn(function* (option) {
             if (!option) return;
             const value = option.value as string;
-            // return yield* Effect.fail(new Error(value));
             yield* bigHello.setText(value);
           }),
         });
 
         // yield* parentContainer.add(tinyHello);
         yield* parentContainer.add(bigHello);
-        // yield* parentContainer.add(input);
         yield* parentContainer.add(select);
 
         yield* cli.add(parentContainer);

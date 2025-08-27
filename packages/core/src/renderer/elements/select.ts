@@ -1,4 +1,5 @@
 import { Effect, Match, Ref } from "effect";
+import Fuse, { type IFuseOptions } from "fuse.js";
 import { fonts, measureText, renderFontToFrameBuffer } from "../../ascii/ascii.font";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, Input } from "../../colors";
@@ -6,8 +7,10 @@ import type { Collection } from "../../errors";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
+import { PositionAbsolute, PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { framebuffer, type FrameBufferOptions } from "./framebuffer";
+import { input } from "./input";
 import type { Binds, ElementOptions } from "./utils";
 
 export interface SelectOption<T> {
@@ -63,6 +66,9 @@ export type SelectOptions<OptionsType = any, FBT extends string = "select"> = El
   onSelect?: (option?: SelectOption<OptionsType>) => Effect.Effect<void, Collection, Library>;
   description?: string;
   font?: keyof typeof fonts;
+  searchable?: boolean | IFuseOptions<SelectOption<OptionsType>>;
+  width: number;
+  height: number;
 };
 
 const DEFAULTS = {
@@ -83,6 +89,7 @@ const DEFAULTS = {
   selectedIndex: 0,
   itemSpacing: 0,
   description: "",
+  searchable: false,
 };
 
 export const select = Effect.fn(function* <OptionsType, FBT extends string = "select">(
@@ -124,6 +131,38 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
   const scrollOffset = yield* Ref.make(0);
   const font = yield* Ref.make(options.font);
   const fontHeight = options.font ? (yield* measureText({ text: "A", font: options.font })).height : 1;
+
+  const searchable = yield* Ref.make(options.searchable ?? DEFAULTS.searchable);
+  const fuse =
+    options.searchable !== undefined
+      ? typeof options.searchable === "boolean" && options.searchable
+        ? new Fuse(options.options ?? [], { keys: ["name", "value", "description"] })
+        : new Fuse(options.options ?? [], { keys: ["name", "value", "description"] })
+      : new Fuse(options.options ?? [], options.searchable);
+
+  const searchinput = yield* input(binds, {
+    ...options,
+    focused: options.focused ?? false,
+    visible: true,
+    colors: options.colors ?? DEFAULTS.colors,
+    width: options.width,
+    height: 1,
+    position: PositionAbsolute.make(2),
+    left: options.left ?? 0,
+    top: options.top ?? 0,
+    value: "",
+    placeholder: "Search options",
+    onUpdate: Effect.fn(function* (self) {
+      const value = yield* self.getValue();
+      if (value.length === 0) {
+        yield* Ref.update(opts, (opts) => options.options ?? []);
+        return;
+      }
+      const filteredOptions = fuse.search(value).map((o) => o.item);
+      yield* Ref.update(opts, (opts) => filteredOptions);
+      yield* updateScrollOffset();
+    }),
+  });
 
   // Helper to update scroll offset
   const updateScrollOffset = Effect.fn(function* () {
@@ -167,7 +206,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
     const fnt = yield* Ref.get(font);
 
     const contentX = 0;
-    const contentY = 0;
+    const contentY = 1;
     const { widthValue: contentWidth, heightValue: contentHeight } = yield* Ref.get(b.dimensions);
     const maxVisibleItems = Math.max(1, Math.floor(contentHeight / (yield* Ref.get(linesPerItem))));
 
@@ -233,6 +272,11 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
     }
 
     yield* buffer.drawFrameBuffer(loc.x, loc.y, framebuffer_buffer);
+
+    if (searchable) {
+      // show the input
+      yield* searchinput.render(buffer, _dt);
+    }
   });
 
   // Setters/getters
@@ -356,6 +400,9 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
   const handleKeyPress = Effect.fn(function* (key: ParsedKey) {
     const focused = yield* Ref.get(b.focused);
     if (!focused) return false;
+    if (searchable) {
+      yield* searchinput.handleKeyPress(key);
+    }
     const keyName = key.name;
     const isShift = key.shift;
     return yield* Match.value(keyName).pipe(
@@ -393,6 +440,9 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
   const onUpdate: SelectElement<OptionsType, FBT>["onUpdate"] = Effect.fn(function* (self) {
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
+    if (searchable) {
+      yield* searchinput.update();
+    }
     const ctx = yield* Ref.get(binds.context);
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
