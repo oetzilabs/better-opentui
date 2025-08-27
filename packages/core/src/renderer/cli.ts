@@ -1156,13 +1156,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const tfps = yield* Ref.get(targetFps);
       yield* Ref.set(targetFrameTime, 1000 / tfps);
       const l = loop();
-      const fiber = yield* Effect.fork(
-        l.pipe(
-          // We need to repeat the loop to keep the fiber alive
-          Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps))), // also this is the main "rendering" loop
-          // Effect.retry(Schedule.recurs(10)),
-        ),
-      );
+      const fiber = yield* Effect.fork(l.pipe(Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps)))));
 
       yield* Ref.set(renderFiber, fiber);
     });
