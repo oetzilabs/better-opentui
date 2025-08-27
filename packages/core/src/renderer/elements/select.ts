@@ -215,7 +215,8 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
       if (showDesc && itemY + fontHeight < contentY + contentHeight) {
         const descColor = isSelected ? parsedSelDescColor : parsedDescColor;
         const descBg = b.focused ? baseBg : bgColor;
-        yield* framebuffer_buffer.drawText(desc, descX, itemY + fontHeight, descColor);
+        const descText = option.description ?? desc;
+        yield* framebuffer_buffer.drawText(descText, descX, itemY + fontHeight, descColor);
       }
     }
 
@@ -353,6 +354,8 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
   });
 
   const handleKeyPress = Effect.fn(function* (key: ParsedKey) {
+    const focused = yield* Ref.get(b.focused);
+    if (!focused) return false;
     const keyName = key.name;
     const isShift = key.shift;
     return yield* Match.value(keyName).pipe(

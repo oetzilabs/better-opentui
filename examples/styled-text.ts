@@ -135,12 +135,13 @@ if (import.meta.main) {
             { name: "Option 9", value: "9" },
             { name: "Option 10", value: "10" },
           ],
-          description: "Select option",
+          // description: "Select option",
           showDescription: true,
           selectedIndex: 0,
           onSelect: Effect.fn(function* (option) {
             if (!option) return;
-            yield* bigHello.setText(option.value ?? "");
+            const value = option.value as string;
+            yield* bigHello.setText(value);
           }),
         });
 
