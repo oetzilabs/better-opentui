@@ -262,7 +262,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
   const getSelectedOption = Effect.fn(function* () {
     const optionsArr = yield* Ref.get(opts);
     const idx = yield* Ref.get(selectedIndex);
-    return optionsArr[idx] ?? null;
+    return optionsArr[idx];
   });
 
   const setTextColor = b.setForegroundColor;
@@ -408,6 +408,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
 
   const destroy = Effect.fn(function* () {
     yield* framebuffer_buffer.destroy;
+    yield* b.destroy();
   });
 
   const onSelect = Effect.fn(function* (option?: SelectOption<OptionsType>) {

@@ -454,6 +454,7 @@ export class RendererFailedToCreateFrameBuffer extends Schema.TaggedError<Render
 
 // all errors
 export type Collection =
+  | Error
   | RendererFailedToCreateFrameBuffer
   | MissingRenderContext
   | FailedToFreeYogaConfig

@@ -118,6 +118,7 @@ if (import.meta.main) {
         // });
 
         const select = yield* cli.createElement("select", {
+          zIndex: 3,
           position: PositionAbsolute.make(2),
           left: 1,
           top: 5,
@@ -141,6 +142,7 @@ if (import.meta.main) {
           onSelect: Effect.fn(function* (option) {
             if (!option) return;
             const value = option.value as string;
+            // return yield* Effect.fail(new Error(value));
             yield* bigHello.setText(value);
           }),
         });

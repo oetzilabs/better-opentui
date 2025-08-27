@@ -1,5 +1,6 @@
 import { DevTools } from "@effect/experimental";
 import { BunSocket } from "@effect/platform-bun";
+import { toRequest } from "@effect/platform-bun/BunHttpServerRequest";
 import { Cause, Context, Duration, Effect, Exit, Fiber, Layer, Mailbox, Ref, Schedule, Schema } from "effect";
 import type { NoSuchElementException } from "effect/Cause";
 import {
@@ -185,7 +186,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const resizeFiber = yield* Ref.make<Fiber.RuntimeFiber<number, Error> | null>(null);
 
-    const errors = yield* Ref.make<(Cause.Cause<unknown> | Collection | NoSuchElementException)[]>([]);
+    const errors = yield* Ref.make<Set<Cause.Cause<unknown> | Collection | NoSuchElementException>>(new Set());
 
     const lastOverRenderableNum = yield* Ref.make(0);
 
@@ -201,8 +202,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const backgroundColor = yield* Ref.make<Input>(Colors.Transparent);
     const terminalInputFork = yield* Ref.make<Fiber.RuntimeFiber<
-      never,
-      Error | RendererFailedToCheckHit | NoSuchElementException
+      void,
+      Collection | Cause.NoSuchElementException
     > | null>(null);
     const resizeFork = yield* Ref.make<Fiber.RuntimeFiber<never, Error | NoSuchElementException> | null>(null);
     const signalWatcherFork = yield* Ref.make<Fiber.RuntimeFiber<never, Error | NoSuchElementException> | null>(null);
@@ -240,14 +241,15 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const errorBox = yield* elements.box({
-      visible: false,
+      // zIndex: Number.MAX_SAFE_INTEGER - 100,
+      visible: true,
       title: "Error",
       left: 0,
-      bottom: 0,
-      width: "100%",
+      top: 0,
+      width: "auto",
       height: "auto",
       colors: {
-        bg: Colors.Red,
+        bg: Colors.Transparent,
       },
     });
 
@@ -541,7 +543,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 yield* lib.dumpHitGrid(renderer).pipe(
                   Effect.catchAll((cause) =>
                     Effect.gen(function* () {
-                      yield* Ref.update(errors, (errors) => [...errors, cause]);
+                      yield* Ref.update(errors, (errors) => errors.add(cause));
                       return yield* Effect.void;
                     }),
                   ),
@@ -552,7 +554,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 yield* lib.dumpBuffers(renderer).pipe(
                   Effect.catchAll((cause) =>
                     Effect.gen(function* () {
-                      yield* Ref.update(errors, (errors) => [...errors, cause]);
+                      yield* Ref.update(errors, (errors) => errors.add(cause));
                       return yield* Effect.void;
                     }),
                   ),
@@ -566,7 +568,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 const hkb = yield* handleKeyboardData(parsedKey).pipe(
                   Effect.catchAll((cause) =>
                     Effect.gen(function* () {
-                      yield* Ref.update(errors, (errors) => [...errors, cause]);
+                      yield* Ref.update(errors, (errors) => errors.add(cause));
                       return yield* Effect.succeed(false);
                     }),
                   ),
@@ -584,7 +586,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 const hm = yield* handleMouseData(data).pipe(
                   Effect.catchAll((cause) =>
                     Effect.gen(function* () {
-                      yield* Ref.update(errors, (errors) => [...errors, cause]);
+                      yield* Ref.update(errors, (errors) => errors.add(cause));
                       return yield* Effect.succeed(false);
                     }),
                   ),
@@ -605,8 +607,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           }),
         ),
         Effect.forever,
-        // Effect.catchAllCause((cause) => Effect.sync(() => errors.push(cause))),
-        Effect.tapError((cause) => Ref.update(errors, (errors) => [...errors, cause])),
+        Effect.tapError((cause) => Ref.update(errors, (errs) => errs.add(cause))),
         Effect.retry(Schedule.recurs(10)),
         Effect.fork,
       );
@@ -1138,6 +1139,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         l.pipe(
           // We need to repeat the loop to keep the fiber alive
           // Effect.forever,
+          Effect.catchAll((err) =>
+            Effect.gen(function* () {
+              console.debug("Error in root.update", err.toString());
+              yield* Ref.update(errors, (errors) => errors.add(err));
+            }),
+          ),
           Effect.repeat(Schedule.fixed(Duration.millis(1000 / tfps))),
           // Effect.retry(Schedule.recurs(10)),
         ),
@@ -1163,11 +1170,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const errorRenderer = Effect.fn("cli.errorRenderer")(function* (nextBuffer: OptimizedBuffer, deltaTime: number) {
       const es = yield* Ref.get(errors);
+      const errs = Array.from(es);
       yield* Effect.annotateCurrentSpan(
         "renderer.errorRenderer",
-        es.map((e) => e.toJSON()),
+        errs.map((e) => e.toString()),
       );
-      if (es.length === 0) {
+      if (errs.length === 0) {
         return;
       }
       // return yield* Effect.dieMessage(es.map((e) => e.toString()).join("\n"));
@@ -1175,10 +1183,11 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
     const updateLoop = Effect.fn("cli.updateLoop")(function* () {
       const errs = yield* Ref.get(errors);
+      const errsArr = Array.from(errs);
       const alreadyAdded = yield* Ref.get(errorBox.renderables);
-      if (errs.length > 0 && alreadyAdded.length !== errs.length) {
-        for (let i = 0; i < errs.length; i++) {
-          const err = errs[i];
+      if (errsArr.length > 0 && alreadyAdded.length !== errsArr.length) {
+        for (let i = 0; i < errsArr.length; i++) {
+          const err = errsArr[i];
           const errBoxHolder = yield* elements.text(err.toString(), {
             position: PositionRelative.make(1),
             left: 1,
@@ -1537,7 +1546,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       return yield* Effect.succeed(element as ElementElement<T>);
     });
 
+    const getErrors = Effect.fn(function* () {
+      return yield* Ref.get(errors);
+    });
+
     return {
+      getErrors,
       getSelectionText,
       getElementCount,
       createElement,
