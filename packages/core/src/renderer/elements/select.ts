@@ -7,9 +7,9 @@ import type { Collection } from "../../errors";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import { PositionAbsolute, PositionRelative } from "../utils/position";
+import { PositionAbsolute } from "../utils/position";
 import { base, type BaseElement } from "./base";
-import { framebuffer, type FrameBufferOptions } from "./framebuffer";
+import { type FrameBufferOptions } from "./framebuffer";
 import { input } from "./input";
 import type { Binds, ElementOptions } from "./utils";
 
@@ -67,8 +67,8 @@ export type SelectOptions<OptionsType = any, FBT extends string = "select"> = El
   description?: string;
   font?: keyof typeof fonts;
   searchable?: boolean | IFuseOptions<SelectOption<OptionsType>>;
-  width: number;
-  height: number;
+  // width: number;
+  // height: number;
 };
 
 const DEFAULTS = {
@@ -90,23 +90,29 @@ const DEFAULTS = {
   itemSpacing: 0,
   description: "",
   searchable: false,
+  parentNode: null,
 };
 
 export const select = Effect.fn(function* <OptionsType, FBT extends string = "select">(
   binds: Binds,
   options: SelectOptions<OptionsType>,
+  parentElement: BaseElement<any, any> | null = null,
 ) {
   const lib = yield* Library;
-  const b = yield* base<"select", SelectElement<OptionsType>>("select", {
-    ...options,
-    selectable: true,
-    colors: {
-      bg: options.colors?.bg ?? DEFAULTS.colors.bg,
-      fg: options.colors?.fg ?? DEFAULTS.colors.fg,
-      focusedBg: options.colors?.focusedBg ?? DEFAULTS.colors.focusedBg,
-      focusedFg: options.colors?.focusedFg ?? DEFAULTS.colors.focusedFg,
+  const b = yield* base<"select", SelectElement<OptionsType>>(
+    "select",
+    {
+      ...options,
+      selectable: true,
+      colors: {
+        bg: options.colors?.bg ?? DEFAULTS.colors.bg,
+        fg: options.colors?.fg ?? DEFAULTS.colors.fg,
+        focusedBg: options.colors?.focusedBg ?? DEFAULTS.colors.focusedBg,
+        focusedFg: options.colors?.focusedFg ?? DEFAULTS.colors.focusedFg,
+      },
     },
-  });
+    parentElement,
+  );
 
   const framebuffer_buffer = yield* b.createFrameBuffer();
 
@@ -451,12 +457,15 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
     yield* ctx.addToHitGrid(x, y, w, h, b.num);
     yield* b.updateFromLayout();
+    // yield* framebuffer_buffer.resize(w, h);
   });
 
   b.onKeyboardEvent = Effect.fn(function* (event) {
     const fn = options.onKeyboardEvent ?? Effect.fn(function* (event) {});
     yield* fn(event);
-    yield* handleKeyPress(event.parsedKey);
+    if (!event.defaultPrevented) {
+      yield* handleKeyPress(event.parsedKey);
+    }
   });
 
   const destroy = Effect.fn(function* () {

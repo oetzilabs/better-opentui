@@ -7,8 +7,8 @@ import type { Collection } from "../../errors";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import type { BaseElement } from "./base";
-import { framebuffer, type FrameBufferOptions } from "./framebuffer";
+import { base, type BaseElement } from "./base";
+import { type FrameBufferOptions } from "./framebuffer";
 import type { Binds, ElementOptions } from "./utils";
 
 export interface InputElement extends BaseElement<"input", InputElement> {
@@ -29,8 +29,8 @@ export type InputOptions = ElementOptions<"input", InputElement> & {
     placeholderColor?: Input;
     cursorColor?: Input;
   };
-  width: number;
-  height: number;
+  // width: number;
+  // height: number;
   respectAlpha?: boolean;
   placeholder?: string;
   maxLength?: number;
@@ -55,26 +55,33 @@ const DEFAULTS = {
   value: "",
 };
 
-export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
+export const input = Effect.fn(function* (
+  binds: Binds,
+  options: InputOptions,
+  parentElement: BaseElement<any, any> | null = null,
+) {
   const lib = yield* Library;
-  const width = options.width ?? 20;
-  const height = options.height ?? 1;
-  const b = yield* framebuffer<InputElement, "input">(binds, "input", {
-    ...options,
-    selectable: true,
-    width,
-    height,
-    respectAlpha: true,
-    colors: {
-      ...options.colors,
-      bg: options.colors.bg ?? DEFAULTS.colors.bg,
-      fg: options.colors.fg ?? DEFAULTS.colors.fg,
-      selectableBg: options.colors.selectableBg ?? DEFAULTS.colors.selectableBg,
-      selectableFg: options.colors.selectableFg ?? DEFAULTS.colors.selectableFg,
-      focusedBg: options.colors.focusedBg ?? DEFAULTS.colors.focusedBg,
-      focusedFg: options.colors.focusedFg ?? DEFAULTS.colors.focusedFg,
+  const b = yield* base<"input", InputElement>(
+    "input",
+    {
+      ...options,
+      selectable: true,
+      width: options.width ?? "auto",
+      height: options.height ?? "auto",
+      colors: {
+        ...options.colors,
+        bg: options.colors.bg ?? DEFAULTS.colors.bg,
+        fg: options.colors.fg ?? DEFAULTS.colors.fg,
+        selectableBg: options.colors.selectableBg ?? DEFAULTS.colors.selectableBg,
+        selectableFg: options.colors.selectableFg ?? DEFAULTS.colors.selectableFg,
+        focusedBg: options.colors.focusedBg ?? DEFAULTS.colors.focusedBg,
+        focusedFg: options.colors.focusedFg ?? DEFAULTS.colors.focusedFg,
+      },
     },
-  });
+    parentElement,
+  );
+
+  const framebuffer_buffer = yield* b.createFrameBuffer();
 
   const value = yield* Ref.make(options.value ?? DEFAULTS.value);
   const cursorPosition = yield* Ref.make((options.value ?? DEFAULTS.value).length);
@@ -142,7 +149,7 @@ export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
     const focused = yield* Ref.get(b.focused);
     const colors = yield* Ref.get(b.colors);
     const bgColor = yield* parseColor(focused ? colors.focusedBg : colors.bg);
-    yield* b.framebuffer_buffer.clear(bgColor);
+    yield* framebuffer_buffer.clear(bgColor);
     const val = yield* Ref.get(value);
     const ph = yield* Ref.get(placeholder);
     const displayText = val || ph;
@@ -162,9 +169,9 @@ export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
     // yield* b.render(buffer, _dt);
 
     if (visibleText) {
-      yield* b.framebuffer_buffer.drawText(visibleText, 0, 0, textColorParsed);
+      yield* framebuffer_buffer.drawText(visibleText, 0, 0, textColorParsed);
     }
-    yield* buffer.drawFrameBuffer(loc.x, loc.y, b.framebuffer_buffer);
+    yield* buffer.drawFrameBuffer(loc.x, loc.y, framebuffer_buffer);
   });
 
   // Setters/getters
@@ -352,6 +359,7 @@ export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
     }
 
     yield* b.updateFromLayout();
+    yield* framebuffer_buffer.resize(w, h);
   });
 
   b.onKeyboardEvent = Effect.fn(function* (event) {
@@ -365,7 +373,8 @@ export const input = Effect.fn(function* (binds: Binds, options: InputOptions) {
     if (focused) {
       yield* lib.setCursorPosition(0, 0, false);
     }
-    yield* b.framebuffer_buffer.destroy;
+    yield* framebuffer_buffer.destroy;
+    yield* b.destroy();
   });
 
   return {

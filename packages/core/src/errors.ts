@@ -452,9 +452,29 @@ export class RendererFailedToCreateFrameBuffer extends Schema.TaggedError<Render
   cause: Schema.optional(Schema.Unknown),
 }) {}
 
+export class MissingRoot extends Schema.TaggedError<MissingRoot>("MissingRoot")("MissingRoot", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class CannotAddElementToItself extends Schema.TaggedError<CannotAddElementToItself>("CannotAddElementToItself")(
+  "CannotAddElementToItself",
+  {
+    cause: Schema.optional(Schema.Unknown),
+  },
+) {}
+
+export class CannotCreateCycleInElementTree extends Schema.TaggedError<CannotCreateCycleInElementTree>(
+  "CannotCreateCycleInElementTree",
+)("CannotCreateCycleInElementTree", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
 // all errors
 export type Collection =
   | Error
+  | CannotAddElementToItself
+  | CannotCreateCycleInElementTree
+  | MissingRoot
   | RendererFailedToCreateFrameBuffer
   | MissingRenderContext
   | FailedToFreeYogaConfig

@@ -1,6 +1,7 @@
 import { Effect, Ref } from "effect";
 import { MissingRenderContext } from "../../errors";
 import type { SelectionState } from "../../types";
+import type { Library } from "../../zig";
 import { asciifont } from "./asciifont";
 import type { BaseElement } from "./base";
 import { box } from "./box";
@@ -190,15 +191,115 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       yield* Ref.set(renderables, []);
     });
 
-    return {
-      box: _box,
+    const element_functions = {
       root: _root,
+      box: _box,
       group: _group,
       text: _text,
       asciifont: _asciifont,
       framebuffer: _framebuffer,
       input: _input,
       select: _select,
+    } as const;
+
+    const _create_non_parent = Effect.fn(function* <T extends Methods>(
+      type: T,
+      ...args: [...MethodParameters[T], BaseElement<any, any> | null] | MethodParameters[T]
+    ) {
+      const fn = element_functions[type];
+      // @ts-ignore: we know that the type is correct
+      const element = yield* fn(...args);
+      return yield* Effect.succeed(element as ElementElement<T>);
+    });
+
+    type CreateElement = {
+      // First call (no parent)
+      <T extends Methods>(
+        type: T,
+        ...args: [...MethodParameters[T], BaseElement<any, any> | null] | MethodParameters[T]
+      ): Effect.Effect<
+        ElementElement<T> & {
+          create: CreateElementBound;
+        },
+        TypeError,
+        Library
+      >;
+
+      // With explicit parent (still supported, but not needed)
+      <T extends Methods>(
+        parent: BaseElement<any, any>,
+        type: T,
+        ...args: [...MethodParameters[T], BaseElement<any, any> | null] | MethodParameters[T]
+      ): Effect.Effect<
+        ElementElement<T> & {
+          create: CreateElementBound;
+        },
+        TypeError,
+        Library
+      >;
+    };
+
+    // Once bound to a parent, we no longer accept "parent" explicitly
+    type CreateElementBound = <T extends Methods>(
+      type: T,
+      ...args: MethodParameters[T]
+    ) => Effect.Effect<
+      ElementElement<T> & {
+        create: CreateElementBound;
+      },
+      TypeError,
+      Library
+    >;
+
+    const _create: CreateElement = <T extends Methods>(
+      a: BaseElement<any, any> | T,
+      b?: T,
+      ...args: [...MethodParameters[T], BaseElement<any, any> | null] | MethodParameters[T]
+    ) =>
+      Effect.gen(function* () {
+        let element;
+        if (typeof a !== "string") {
+          // case: create(parent, type, ...args)
+          const parent = a as BaseElement<any, any>;
+
+          const type = b as T;
+          const args2 = [...args, parent] as [...MethodParameters[T], BaseElement<any, any> | null];
+          const child_element = yield* _create_non_parent(type, ...args2);
+
+          const createFn: CreateElementBound = (t, ...as) => Effect.suspend(() => _create(child_element, t, ...as));
+
+          element = {
+            ...child_element,
+            create: createFn,
+          } satisfies ElementElement<T> & {
+            create: CreateElementBound;
+          };
+        } else {
+          // case: create(type, ...args) -- first call
+          const type = a as T;
+          // @ts-ignore: we know that the type is correct
+          const args2 = [b, ...args] as MethodParameters[T];
+          const parent_element = yield* _create_non_parent(type, ...args2);
+
+          const createFn: CreateElementBound = (t, ...as) => Effect.suspend(() => _create(parent_element, t, ...as));
+          element = {
+            ...parent_element,
+            create: createFn,
+          } satisfies ElementElement<T> & {
+            create: CreateElementBound;
+          };
+        }
+        yield* Ref.update(renderables, (es) => {
+          es.push(element);
+          return es;
+        });
+
+        return element;
+      });
+
+    return {
+      ...element_functions,
+      create: _create,
       renderables,
       getRenderable,
       destroy,
@@ -210,7 +311,7 @@ export const ElementsLive = Elements.Default;
 
 export type MethodsObj = Omit<
   Elements,
-  "updateContext" | "_tag" | "root" | "renderables" | "getRenderable" | "destroy"
+  "updateContext" | "_tag" | "renderables" | "getRenderable" | "destroy" | "create"
 >;
 
 export type Methods = keyof MethodsObj;

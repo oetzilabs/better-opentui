@@ -189,6 +189,11 @@ export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = DEFA
 
   const empty = Effect.fn(function* () {
     // remove all children
+    const es = yield* Ref.get(b.renderables);
+    yield* Effect.all(
+      es.map((e) => Effect.suspend(() => e.destroy())),
+      { concurrency: 10, concurrentFinalizers: true },
+    );
     yield* Ref.set(b.renderables, []);
   });
 

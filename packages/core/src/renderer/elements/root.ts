@@ -8,6 +8,7 @@ export interface RootElement extends BaseElement<"root", RootElement> {}
 export const root = Effect.fn(function* () {
   const b = yield* base<"root", RootElement>("root", {
     selectable: false,
+    zIndex: 0,
   });
 
   const calculateLayout = Effect.fn(function* () {
@@ -17,13 +18,14 @@ export const root = Effect.fn(function* () {
 
   b.onMouseEvent = Effect.fn("root.onMouseEvent")(function* (event) {
     yield* Effect.annotateCurrentSpan("root.onMouseEvent", event);
-    const es = yield* Ref.get(b.renderables);
-    yield* Effect.all(
-      es.map((e) => Effect.suspend(() => e.onMouseEvent(event)), {
-        concurrency: "unbounded",
-        concurrentFinalizers: true,
-      }),
-    );
+    // Note: processMouseEvent already handles recursive processing of children
+    // No need to do it here to avoid double-processing
+  });
+
+  b.onKeyboardEvent = Effect.fn("root.onKeyboardEvent")(function* (event) {
+    yield* Effect.annotateCurrentSpan("root.onKeyboardEvent", event);
+    // Note: processKeyboardEvent already handles recursive processing of children
+    // No need to do it here to avoid double-processing
   });
 
   b.onUpdate = Effect.fn(function* () {
@@ -31,27 +33,26 @@ export const root = Effect.fn(function* () {
       yield* calculateLayout();
     }
     yield* b.updateFromLayout();
+    console.debug("root.onUpdate");
 
     const es = yield* Ref.get(b.renderables);
-    yield* Effect.all(
-      es.map((e) => Effect.suspend(() => e.update()), { concurrency: "unbounded", concurrentFinalizers: true }),
-    );
-  });
-
-  b.render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
-    const elements = yield* Ref.get(b.renderables);
-    yield* Effect.all(
-      elements.map((e) => Effect.suspend(() => e.render(buffer, deltaTime))),
-      { concurrency: "unbounded", concurrentFinalizers: true },
-    );
+    yield* Effect.all(es.map((e) => Effect.suspend(() => e.update()), { concurrency: 10, concurrentFinalizers: true }));
   });
 
   b.onResize = Effect.fn(function* (width: number, height: number) {
     yield* b.layoutNode.setWidth(width);
     yield* b.layoutNode.setHeight(height);
+
+    const es = yield* Ref.get(b.renderables);
+    yield* Effect.all(
+      es.map((e) => Effect.suspend(() => e.onResize(width, height)), {
+        concurrency: 10,
+        concurrentFinalizers: true,
+      }),
+    );
   });
 
   return {
     ...b,
-  } as RootElement;
+  } satisfies RootElement;
 });

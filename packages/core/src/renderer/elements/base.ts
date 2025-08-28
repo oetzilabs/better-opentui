@@ -4,6 +4,8 @@ import Yoga, { Display, Edge, PositionType, type Config as YogaConfig } from "yo
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, Input } from "../../colors";
 import {
+  CannotAddElementToItself,
+  CannotCreateCycleInElementTree,
   FailedToFreeYogaConfig,
   FailedToFreeYogaNode,
   RendererFailedToCreateFrameBuffer,
@@ -95,11 +97,7 @@ export type BaseElement<T extends string, E> = {
   update: () => Effect.Effect<void, Collection, Library>;
   onUpdate: (self: E) => Effect.Effect<void, Collection, Library>;
   render: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, Collection, Library>;
-  add: (
-    this: BaseElement<T, E>,
-    container: BaseElement<any, E>,
-    index?: number | undefined,
-  ) => Effect.Effect<void, never, never>;
+  add: (container: BaseElement<any, any>, index?: number | undefined) => Effect.Effect<void, Collection, never>;
   setLocation: (loc: { x: number; y: number }) => Effect.Effect<void, never, never>;
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
   onSelectionChanged: (
@@ -163,6 +161,7 @@ export const base = Effect.fn(function* <T extends string, E>(
     visible: true,
     selectable: true,
   },
+  parentElement: BaseElement<any, any> | null = null,
 ) {
   // id random string
   const id = Math.random().toString(36).slice(2);
@@ -196,7 +195,7 @@ export const base = Effect.fn(function* <T extends string, E>(
     heightValue: typeof options.height === "number" ? options.height : 0,
   });
   const selectable = yield* Ref.make(options.selectable ?? true);
-  const parent = yield* Ref.make<BaseElement<any, E> | null>(null);
+  const parent = yield* Ref.make<BaseElement<any, E> | null>(parentElement);
   const colors = yield* Ref.make({
     fg: options.colors?.fg ?? Colors.Black,
     bg: options.colors?.bg ?? Colors.Transparent,
@@ -207,17 +206,16 @@ export const base = Effect.fn(function* <T extends string, E>(
   });
   const attributes = yield* Ref.make(options.attributes ?? 0);
   const _yogaPerformancePositionUpdated = yield* Ref.make(false);
-  const frameBuffer = yield* Ref.make<OptimizedBuffer | null>(null);
-  const buffered = yield* Ref.make<boolean>(false);
   const needsZIndexSort = yield* Ref.make(false);
   const zIndex = yield* Ref.make(options.zIndex ?? 0);
   const renderables = yield* Ref.make<BaseElement<any, E>[]>([]);
   const position = yield* Ref.make<Position>({});
   const focused = yield* Ref.make(options.focused ?? false);
   const yogaConfig = Yoga.Config.create();
-  const layoutNode = createTrackedNode({}, yogaConfig);
   yogaConfig.setUseWebDefaults(false);
   yogaConfig.setPointScaleFactor(1);
+  const layoutNode = createTrackedNode({}, yogaConfig, parentElement?.layoutNode);
+  const _setupYogaNode = yield* Ref.make(false);
 
   const setBackgroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
     if (typeof color === "function") {
@@ -460,6 +458,7 @@ export const base = Effect.fn(function* <T extends string, E>(
     }
 
     yield* setupMarginAndPadding(options);
+    yield* Ref.set(_setupYogaNode, true);
   });
 
   const createFrameBuffer = Effect.fn(function* () {
@@ -475,21 +474,6 @@ export const base = Effect.fn(function* <T extends string, E>(
     return fb;
   });
 
-  const handleFrameBufferResize = Effect.fn(function* (width: number, height: number) {
-    const buf = yield* Ref.get(buffered);
-    if (!buf) return;
-
-    if (width <= 0 || height <= 0) {
-      return;
-    }
-    const fb = yield* Ref.get(frameBuffer);
-    if (fb) {
-      yield* fb.resize(width, height);
-    } else {
-      yield* createFrameBuffer();
-    }
-  });
-
   const onResize: BaseElement<any, E>["onResize"] = Effect.fn(function* (width: number, height: number) {
     // Override in subclasses for additional resize logic
   });
@@ -497,7 +481,6 @@ export const base = Effect.fn(function* <T extends string, E>(
   const onLayoutResize = Effect.fn(function* (width: number, height: number) {
     const v = yield* Ref.get(visible);
     if (v) {
-      yield* handleFrameBufferResize(width, height);
       yield* onResize(width, height);
     }
   });
@@ -535,17 +518,13 @@ export const base = Effect.fn(function* <T extends string, E>(
     }
   });
 
-  // const update = Effect.fn("base.update")(function* () {
-  //   const es = yield* Ref.get(renderables);
-  //   yield* Effect.all(
-  //     es.map((e) => Effect.suspend(() => e.onUpdate(e)), { concurrency: "unbounded", concurrentFinalizers: true }),
-  //   );
-  // });
-
   const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
     const es = yield* Ref.get(renderables);
-    for (const element of es) {
-      yield* Effect.suspend(() => element.render(buffer, deltaTime));
+    if (es.length > 0) {
+      yield* Effect.all(
+        es.map((e) => Effect.suspend(() => e.render(buffer, deltaTime))),
+        { concurrency: 10, concurrentFinalizers: true },
+      );
     }
   });
 
@@ -560,25 +539,22 @@ export const base = Effect.fn(function* <T extends string, E>(
   };
 
   const onMouseEvent: BaseElement<any, E>["onMouseEvent"] =
-    options.onMouseEvent ??
-    Effect.fn("base.onMouseEvent")(function* (event: MouseEvent) {
-      if (!event.defaultPrevented) {
-        const es = yield* Ref.get(renderables);
-        yield* Effect.all(es.map((e) => Effect.suspend(() => e.processMouseEvent(event))));
-      }
-    });
+    options.onMouseEvent ?? Effect.fn("base.onMouseEvent")(function* (event: MouseEvent) {});
 
   const onKeyboardEvent: BaseElement<any, E>["onKeyboardEvent"] =
-    options.onKeyboardEvent ??
-    Effect.fn("base.onKeyboardEvent")(function* (event: KeyboardEvent) {
-      if (!event.defaultPrevented) {
-        const es = yield* Ref.get(renderables);
-        yield* Effect.all(es.map((e) => Effect.suspend(() => e.processKeyboardEvent(event))));
-      }
-    });
+    options.onKeyboardEvent ?? Effect.fn("base.onKeyboardEvent")(function* (event: KeyboardEvent) {});
 
   const processMouseEvent = Effect.fn(function* (handler: BaseElement<any, E>["onMouseEvent"], event: MouseEvent) {
     yield* handler(event);
+    if (!event.defaultPrevented) {
+      const es = yield* Ref.get(renderables);
+      if (es.length > 0) {
+        yield* Effect.all(
+          es.map((e) => Effect.suspend(() => e.processMouseEvent(event))),
+          { concurrency: 10 },
+        );
+      }
+    }
   });
 
   const processKeyboardEvent = Effect.fn(function* (
@@ -586,25 +562,51 @@ export const base = Effect.fn(function* <T extends string, E>(
     event: KeyboardEvent,
   ) {
     yield* handler(event);
-    // const p = yield* Ref.get(parent);
-    // if (p && !event.defaultPrevented) {
-    //   yield* Effect.suspend(() => p.processKeyboardEvent(event));
-    // }
+    if (!event.defaultPrevented) {
+      const es = yield* Ref.get(renderables);
+      if (es.length > 0) {
+        yield* Effect.all(
+          es.map((e) => Effect.suspend(() => e.processKeyboardEvent(event))),
+          { concurrency: 10 },
+        );
+      }
+    }
   });
 
-  const add = Effect.fn(function* (parentElement: BaseElement<any, E>, container: BaseElement<any, E>, index?: number) {
-    yield* Ref.set(container.parent, parentElement);
-
-    if (index === undefined) {
-      const cs = yield* Ref.get(renderables);
-      index = cs.length;
+  const add = Effect.fn(function* (container: BaseElement<any, any>, index?: number) {
+    // Prevent self-addition
+    if (container.id === id) {
+      return yield* Effect.fail(new CannotAddElementToItself());
     }
 
+    // Get current renderables for validation
+    const currentRenderables = yield* Ref.get(renderables);
+
+    // Prevent duplicate addition
+    if (currentRenderables.some((r) => r.id === container.id)) {
+      return;
+    }
+
+    // Prevent cycles: check if container is an ancestor
+    let current: BaseElement<any, any> | null = yield* Ref.get(parent);
+    while (current) {
+      if (current.id === container.id) {
+        return yield* Effect.fail(new CannotCreateCycleInElementTree());
+      }
+      current = yield* Ref.get(current.parent);
+    }
+
+    // Set index if undefined
+    if (index === undefined) {
+      index = currentRenderables.length;
+    }
+
+    // Add to renderables
     yield* Ref.update(renderables, (cs) => {
-      if (index === cs.length) {
+      if (index! >= cs.length) {
         cs.push(container);
       } else {
-        cs.splice(index, 0, container);
+        cs.splice(index!, 0, container);
       }
       return cs;
     });
@@ -639,7 +641,7 @@ export const base = Effect.fn(function* <T extends string, E>(
     const elements = yield* Ref.get(renderables);
     yield* Effect.all(
       elements.map((r) => Effect.suspend(() => r.destroy())),
-      { concurrency: "unbounded", concurrentFinalizers: true },
+      { concurrency: 10, concurrentFinalizers: true },
     );
     yield* layoutNode.destroy();
     yield* Effect.try({
@@ -677,11 +679,13 @@ export const base = Effect.fn(function* <T extends string, E>(
 
   const onUpdate: BaseElement<any, E>["onUpdate"] = Effect.fn(function* <T>(self: T) {
     const es = yield* Ref.get(renderables);
-    yield* Effect.all(
-      es.map((e) => Effect.suspend(() => e.update())),
-      { concurrency: "unbounded", concurrentFinalizers: true },
-    );
-    yield* ensureZIndexSorted();
+    if (es.length > 0) {
+      yield* Effect.all(
+        es.map((e) => Effect.suspend(() => e.update())),
+        { concurrency: 10, concurrentFinalizers: true },
+      );
+      yield* ensureZIndexSorted();
+    }
   });
 
   const setLocation = Effect.fn(function* (loc: { x: number; y: number }) {
@@ -696,7 +700,10 @@ export const base = Effect.fn(function* <T extends string, E>(
 
   const toString = Effect.fn(function* () {
     const es = yield* Ref.get(renderables);
-    const texts = yield* Effect.all(es.map((e) => Effect.suspend(() => e.toString())));
+    const texts = yield* Effect.all(
+      es.map((e) => Effect.suspend(() => e.toString())),
+      { concurrency: 10 },
+    );
     return texts.join("\n");
   });
 
@@ -720,9 +727,7 @@ export const base = Effect.fn(function* <T extends string, E>(
     ensureZIndexSorted,
     setVisible,
     render,
-    add: function (this, container: BaseElement<any, any>, index?: number) {
-      return add(this, container, index);
-    },
+    add,
     setLocation,
     getSelection,
     getSelectedText,

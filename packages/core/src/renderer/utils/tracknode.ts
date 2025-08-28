@@ -20,11 +20,11 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
   protected _width: number | "auto" | `${number}%` = "auto";
   protected _height: number | "auto" | `${number}%` = "auto";
 
-  constructor(yogaNode: YogaNode, metadata: T = {} as T) {
+  constructor(yogaNode: YogaNode, metadata: T = {} as T, parent: TrackedNode<any> | null = null) {
     this.id = TrackedNode.idCounter++;
     this.yogaNode = yogaNode;
     this.metadata = metadata;
-    this.parent = null;
+    this.parent = parent;
     this.children = [];
   }
 
@@ -44,7 +44,12 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
         // Fatal: Something is very wrong (debug why we are trying to parse width after destruction)
         return yield* Effect.fail(new ParentTrackedNodeDestroyed());
       }
-      return Math.floor((this.parent.yogaNode.getComputedWidth() * parseInt(width)) / 100);
+      let pcw = this.parent.yogaNode.getComputedWidth();
+      const parsedInt = parseInt(width);
+      if (Number.isNaN(pcw)) {
+        pcw = 1;
+      }
+      return Math.floor((pcw * parsedInt) / 100);
     });
 
   parseHeight = (height: number | "auto" | `${number}%`) =>
@@ -63,7 +68,12 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
         // Fatal: Something is very wrong (debug why we are trying to parse height after destruction)
         return yield* Effect.fail(new ParentTrackedNodeDestroyed());
       }
-      return Math.floor((this.parent.yogaNode.getComputedHeight() * parseInt(height)) / 100);
+      let pch = this.parent.yogaNode.getComputedHeight();
+      const parsedInt = parseInt(height);
+      if (Number.isNaN(pch)) {
+        pch = 1;
+      }
+      return Math.floor((pch * parsedInt) / 100);
     });
 
   setWidth = (width: number | "auto" | `${number}%`) =>
@@ -244,9 +254,13 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
     });
 }
 
-function createTrackedNode<T extends NodeMetadata>(metadata: T = {} as T, yogaConfig?: Config): TrackedNode<T> {
+function createTrackedNode<T extends NodeMetadata>(
+  metadata: T = {} as T,
+  yogaConfig?: Config,
+  parent: TrackedNode<T> | null = null,
+): TrackedNode<T> {
   const yogaNode = Yoga.Node.create(yogaConfig);
-  return new TrackedNode<T>(yogaNode, metadata);
+  return new TrackedNode<T>(yogaNode, metadata, parent);
 }
 
 export { TrackedNode, createTrackedNode };

@@ -19,14 +19,19 @@ export const group = Effect.fn(function* (
     visible: true,
     selectable: false,
   },
+  parentElement: BaseElement<any, any> | null = null,
 ) {
-  const b = yield* base("group", {
-    ...options,
-    width: "auto",
-    height: "auto",
-    visible: true,
-    selectable: false,
-  });
+  const b = yield* base(
+    "group",
+    {
+      ...options,
+      width: "auto",
+      height: "auto",
+      visible: true,
+      selectable: false,
+    },
+    parentElement,
+  );
 
   b.onMouseEvent = Effect.fn("group.onMouseEvent")(function* (event) {
     yield* Effect.annotateCurrentSpan("group.onMouseEvent", event);
@@ -40,14 +45,8 @@ export const group = Effect.fn(function* (
         } else {
           yield* event.source.setFocused(false);
         }
-        // propagate to children
-        const es = yield* Ref.get(b.renderables);
-        yield* Effect.all(
-          es.map((e) => Effect.suspend(() => e.processMouseEvent(event)), {
-            concurrency: "unbounded",
-            concurrentFinalizers: true,
-          }),
-        );
+        // Note: processMouseEvent already handles recursive processing of children
+        // No need to do it here to avoid double-processing
       }
     }
   });
@@ -64,7 +63,7 @@ export const group = Effect.fn(function* (
     const elements = yield* Ref.get(b.renderables);
     yield* Effect.all(
       elements.map((element) => Effect.suspend(() => element.destroy())),
-      { concurrency: "unbounded" },
+      { concurrency: 10 },
     );
     yield* b.destroy();
   });
@@ -74,5 +73,5 @@ export const group = Effect.fn(function* (
     shouldStartSelection,
     onSelectionChanged,
     destroy,
-  };
+  } satisfies GroupElement;
 });

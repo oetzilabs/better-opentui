@@ -16,77 +16,9 @@ if (import.meta.main) {
       setup: Effect.fn("run.setup")(function* (cli) {
         yield* cli.setBackgroundColor(Colors.Transparent);
         const parentContainer = yield* cli.createElement("group");
+        console.debug("parentContainer", parentContainer.num);
 
-        const box = yield* cli.createElement("box", {
-          selectable: false,
-          title: "Hello World Box",
-          left: 10,
-          top: 10,
-          width: 40,
-          height: 10,
-          colors: {
-            bg: Colors.Gray,
-          },
-          border: true,
-          borderStyle: "rounded",
-          borderColor: Colors.Maroon,
-          focusedBorderColor: Colors.Red,
-          zIndex: 2,
-        });
-
-        const text = yield* cli.createElement("text", "Hello World", {
-          selectable: true,
-          position: PositionAbsolute.make(2),
-          left: 1,
-          top: 1,
-          width: "auto",
-          height: "auto",
-          zIndex: 1,
-          colors: {
-            fg: Colors.Red,
-            bg: Colors.Transparent,
-            selectableBg: Colors.Green,
-            selectableFg: Colors.Blue,
-          },
-        });
-
-        // const text2 = yield* cli.createElement("text", "", {
-        //   selectable: false,
-        //   position: PositionAbsolute.make(2),
-        //   left: 5,
-        //   top: 5,
-        //   width: "auto",
-        //   height: "auto",
-        //   colors: {
-        //     fg: Colors.Red,
-        //     bg: Colors.Transparent,
-        //     selectableBg: Colors.Green,
-        //     selectableFg: Colors.Blue,
-        //   },
-        //   zIndex: 1,
-        //   onUpdate: Effect.fn("text.onUpdate")(function* (self: TextElement) {
-        //     const elementCount = yield* cli.getElementCount();
-        //     const hasSelection = yield* cli.hasSelection();
-        //     if (hasSelection) {
-        //       const text = yield* cli.getSelectionText();
-        //       yield* self.setContent(`${elementCount} Elements -> ${text}`);
-        //     } else {
-        //       yield* self.setContent(`${elementCount} Elements`);
-        //     }
-        //   }),
-        // });
-
-        // yield* parentContainer.add(box);
-        yield* parentContainer.add(text);
-        // yield* parentContainer.add(text2);
-
-        // const tinyHello = yield* cli.createElement("asciifont", {
-        //   left: 5,
-        //   top: 5,
-        //   text: "Hello World",
-        // });
-
-        const bigHello = yield* cli.createElement("asciifont", {
+        const bigHello = yield* parentContainer.create("asciifont", {
           left: 20,
           top: 20,
           text: "Hello World",
@@ -106,18 +38,18 @@ if (import.meta.main) {
           { name: "Option 10", value: "10" },
         ] as SelectOption<string>[];
 
-        const select = yield* cli.createElement("select", {
+        const select = yield* parentContainer.create("select", {
           focused: true,
           searchable: true,
           zIndex: 3,
           position: PositionAbsolute.make(2),
           left: 1,
           top: 6,
-          width: 40,
-          height: 6,
           options,
           showDescription: true,
           selectedIndex: 0,
+          width: 70,
+          height: 7,
           onSelect: Effect.fn(function* (option) {
             if (!option) return;
             const value = option.value as string;
@@ -125,7 +57,6 @@ if (import.meta.main) {
           }),
         });
 
-        // yield* parentContainer.add(tinyHello);
         yield* parentContainer.add(bigHello);
         yield* parentContainer.add(select);
 

@@ -212,7 +212,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const stdout = process.stdout;
     const realStdoutWrite = stdout.write;
 
-    const root = yield* elements.root({
+    const root = yield* elements.create("root", {
       width: Effect.fn(function* () {
         return yield* Ref.get(_width);
       }),
@@ -227,7 +227,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       }),
     });
 
-    const debugBox = yield* elements.text("N", {
+    const debugBox = yield* root.create("text", "N", {
       focused: false,
       selectable: false,
       visible: false,
@@ -240,7 +240,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       },
     });
 
-    const errorBox = yield* elements.box({
+    const errorBox = yield* root.create("box", {
       // zIndex: Number.MAX_SAFE_INTEGER - 100,
       visible: true,
       title: "Error",
@@ -599,7 +599,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             });
 
             const handlerResults = yield* Effect.all([keyboardHandler, mouseHandler], {
-              concurrency: "unbounded",
+              concurrency: 2,
               concurrentFinalizers: true,
             });
 
@@ -1188,7 +1188,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       if (errsArr.length > 0 && alreadyAdded.length !== errsArr.length) {
         for (let i = 0; i < errsArr.length; i++) {
           const err = errsArr[i];
-          const errBoxHolder = yield* elements.text(err.toString(), {
+          const errBoxHolder = yield* errorBox.create("text", err.toString(), {
             position: PositionRelative.make(1),
             left: 1,
             top: i + 1,
@@ -1246,7 +1246,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const animationRequestStart = performance.now();
       yield* Effect.all(
         Array.from(frameRequests).map((callback) => Effect.sync(() => callback(deltaTime))),
-        { concurrency: "unbounded", concurrentFinalizers: true },
+        { concurrency: 10, concurrentFinalizers: true },
       );
       const animationRequestEnd = performance.now();
       const animationRequestTime = animationRequestEnd - animationRequestStart;
@@ -1255,7 +1255,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const fcbs = yield* Ref.get(frameCallbacks);
       yield* Effect.all(
         fcbs.map((frameCallback) => frameCallback(deltaTime)),
-        { concurrency: "unbounded", concurrentFinalizers: true },
+        { concurrency: 10, concurrentFinalizers: true },
       );
 
       const end = performance.now();
@@ -1285,7 +1285,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       yield* Effect.all(
         ppfns.map((postProcessFn) => postProcessFn(buf.next!, deltaTime)),
-        { concurrency: "unbounded", concurrentFinalizers: true },
+        { concurrency: 10, concurrentFinalizers: true },
       );
 
       // yield* this._console.renderToBuffer(this.nextRenderBuffer!);
@@ -1375,7 +1375,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         const scs = yield* Ref.get(selectionContainers);
         const allSelectedText = yield* Effect.all(
           scs.map((sc) => sc.getSelectedText()),
-          { concurrency: "unbounded", concurrentFinalizers: true },
+          { concurrency: 10, concurrentFinalizers: true },
         );
         return allSelectedText.join("\n");
       }
@@ -1540,10 +1540,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const createElement = Effect.fn(function* <T extends Methods>(type: T, ...args: MethodParameters[T]) {
-      const fn = elements[type];
-      // @ts-ignore: we know that the type is correct
-      const element = yield* fn(...args);
-      return yield* Effect.succeed(element as ElementElement<T>);
+      const element = yield* root.create(type, ...args);
+      return yield* Effect.succeed(element);
     });
 
     const getErrors = Effect.fn(function* () {
