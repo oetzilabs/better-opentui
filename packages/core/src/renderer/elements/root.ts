@@ -33,7 +33,6 @@ export const root = Effect.fn(function* () {
       yield* calculateLayout();
     }
     yield* b.updateFromLayout();
-    console.debug("root.onUpdate");
 
     const es = yield* Ref.get(b.renderables);
     yield* Effect.all(es.map((e) => Effect.suspend(() => e.update()), { concurrency: 10, concurrentFinalizers: true }));
