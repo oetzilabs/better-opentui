@@ -97,19 +97,11 @@ const DEFAULTS = {
 export const select = Effect.fn(function* <OptionsType, FBT extends string = "select">(
   binds: Binds,
   options: SelectOptions<OptionsType>,
-  parentElement: BaseElement<any, any> | null = null,
+  parentElement: BaseElement<any, any>,
 ) {
   const lib = yield* Library;
-  const g = yield* group(
-    binds,
-    {
-      selectable: true,
-      visible: true,
-    },
-    parentElement,
-  );
 
-  const parentDimensions = yield* Ref.get(g.dimensions);
+  const parentDimensions = yield* Ref.get(parentElement.dimensions);
 
   const b = yield* base<"select", SelectElement<OptionsType>>(
     "select",
@@ -129,7 +121,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
         focusedFg: options.colors?.focusedFg ?? DEFAULTS.colors.focusedFg,
       },
     },
-    g,
+    parentElement,
   );
 
   const framebuffer_buffer = yield* b.createFrameBuffer();
@@ -189,11 +181,8 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
         yield* updateScrollOffset();
       }),
     },
-    g,
+    parentElement,
   );
-
-  yield* g.add(searchinput);
-  yield* g.add(b);
 
   // Helper to update scroll offset
   const updateScrollOffset = Effect.fn(function* () {
@@ -208,7 +197,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
 
   // Rendering
   const render = Effect.fn(function* (buffer: OptimizedBuffer, _dt: number) {
-    const v = yield* Ref.get(g.visible);
+    const v = yield* Ref.get(b.visible);
     if (!v) return;
     const sa = yield* Ref.get(searchable);
 
@@ -309,8 +298,6 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
       // show the input
       yield* searchinput.render(buffer, _dt);
     }
-
-    yield* g.render(buffer, _dt);
   });
 
   // Setters/getters
