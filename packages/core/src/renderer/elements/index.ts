@@ -22,9 +22,9 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
     const context = yield* Ref.make<RenderContextInterface | null>(null);
 
-    const _root = Effect.fn(function* (ctx: RenderContextInterface) {
+    const _root = Effect.fn(function* (initial: { width: number; height: number }, ctx: RenderContextInterface) {
       yield* Ref.set(context, ctx);
-      const r = yield* root();
+      const r = yield* root(initial);
       yield* Ref.update(renderables, (es) => {
         es.push(r);
         return es;
@@ -216,7 +216,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       // First call (no parent)
       <T extends Methods>(
         type: T,
-        ...args: [...MethodParameters[T], BaseElement<any, any> | null] | MethodParameters[T]
+        ...args: MethodParameters[T]
       ): Effect.Effect<
         ElementElement<T> & {
           create: CreateElementBound;
@@ -253,7 +253,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
     const _create: CreateElement = <T extends Methods>(
       a: BaseElement<any, any> | T,
-      b?: T,
+      b?: T | MethodParameters[T],
       ...args: [...MethodParameters[T], BaseElement<any, any> | null] | MethodParameters[T]
     ) =>
       Effect.gen(function* () {
@@ -266,7 +266,10 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
           const args2 = [...args, parent] as [...MethodParameters[T], BaseElement<any, any> | null];
           const child_element = yield* _create_non_parent(type, ...args2);
 
-          const createFn: CreateElementBound = (t, ...as) => Effect.suspend(() => _create(child_element, t, ...as));
+          const createFn: CreateElementBound = <T extends Methods>(t: T, ...as: MethodParameters[T]) => {
+            const args3 = [...as, child_element] as unknown as [...MethodParameters[T], BaseElement<any, any> | null];
+            return Effect.suspend(() => _create(child_element, t, ...args3));
+          };
 
           element = {
             ...child_element,
@@ -281,7 +284,12 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
           const args2 = [b, ...args] as MethodParameters[T];
           const parent_element = yield* _create_non_parent(type, ...args2);
 
-          const createFn: CreateElementBound = (t, ...as) => Effect.suspend(() => _create(parent_element, t, ...as));
+          // const createFn: CreateElementBound = (t, ...as) => Effect.suspend(() => _create(parent_element, t, ...as));
+          const createFn: CreateElementBound = <T extends Methods>(t: T, ...as: MethodParameters[T]) => {
+            const args3 = [...as, parent_element] as unknown as [...MethodParameters[T], BaseElement<any, any> | null];
+            return Effect.suspend(() => _create(parent_element, t, ...args3));
+          };
+
           element = {
             ...parent_element,
             create: createFn,

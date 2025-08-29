@@ -85,7 +85,7 @@ export type BaseElement<T extends string, E> = {
   }>;
   localSelection: Ref.Ref<{ start: number; end: number } | null>;
   lineInfo: { lineStarts: number[]; lineWidths: number[] };
-  layoutNode: TrackedNode;
+  layoutNode: TrackedNode<T>;
   zIndex: Ref.Ref<number>;
   renderables: Ref.Ref<BaseElement<any, E>[]>;
   yogaConfig: YogaConfig;
@@ -214,7 +214,7 @@ export const base = Effect.fn(function* <T extends string, E>(
   const yogaConfig = Yoga.Config.create();
   yogaConfig.setUseWebDefaults(false);
   yogaConfig.setPointScaleFactor(1);
-  const layoutNode = createTrackedNode({}, yogaConfig, parentElement?.layoutNode);
+  const layoutNode = createTrackedNode(type, {}, yogaConfig, parentElement?.layoutNode);
   const _setupYogaNode = yield* Ref.make(false);
 
   const setBackgroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
@@ -380,57 +380,110 @@ export const base = Effect.fn(function* <T extends string, E>(
   });
 
   const setupYogaProperties = Effect.fn(function* (options: ElementOptions<T, E>) {
-    const node = layoutNode.yogaNode;
     const v = yield* Ref.get(visible);
-    node.setDisplay(v ? Display.Flex : Display.None);
+    layoutNode.yogaNode.setDisplay(v ? Display.Flex : Display.None);
 
     if (isFlexBasis(options.flexBasis)) {
-      node.setFlexBasis(options.flexBasis);
+      layoutNode.yogaNode.setFlexBasis(options.flexBasis);
     }
 
     if (isSize(options.minWidth)) {
-      node.setMinWidth(options.minWidth);
+      layoutNode.yogaNode.setMinWidth(options.minWidth);
     }
     if (isSize(options.minHeight)) {
-      node.setMinHeight(options.minHeight);
+      layoutNode.yogaNode.setMinHeight(options.minHeight);
     }
 
     if (options.flexGrow !== undefined) {
-      node.setFlexGrow(options.flexGrow);
+      layoutNode.yogaNode.setFlexGrow(options.flexGrow);
     } else {
-      node.setFlexGrow(0);
+      layoutNode.yogaNode.setFlexGrow(0);
     }
 
     if (options.flexShrink !== undefined) {
-      node.setFlexShrink(options.flexShrink);
+      layoutNode.yogaNode.setFlexShrink(options.flexShrink);
     } else {
       const shrinkValue = options.flexGrow && options.flexGrow > 0 ? 1 : 0;
-      node.setFlexShrink(shrinkValue);
+      layoutNode.yogaNode.setFlexShrink(shrinkValue);
     }
 
     if (options.flexDirection !== undefined) {
-      const flexDirection = node.setFlexDirection(options.flexDirection);
+      layoutNode.yogaNode.setFlexDirection(options.flexDirection);
     }
     if (options.alignItems !== undefined) {
-      node.setAlignItems(options.alignItems);
+      layoutNode.yogaNode.setAlignItems(options.alignItems);
     }
     if (options.justifyContent !== undefined) {
-      node.setJustifyContent(options.justifyContent);
+      layoutNode.yogaNode.setJustifyContent(options.justifyContent);
     }
 
     if (options.width && isDimension(options.width)) {
       yield* Ref.update(dimensions, (d) => ({ ...d, width: options.width! }));
-      yield* layoutNode.setWidth(options.width);
+      const w = options.width;
+      if (typeof w === "number") {
+        yield* Ref.update(dimensions, (d) => ({ ...d, widthValue: w }));
+      }
+      yield* layoutNode.setWidth(w);
+      if (typeof w === "string" && w.endsWith("%")) {
+        const parsed = yield* layoutNode.parseWidth(w);
+        if (typeof parsed === "number") {
+          yield* Ref.update(dimensions, (d) => ({ ...d, widthValue: parsed }));
+        }
+      }
+      if (w === "auto") {
+        let current = parentElement;
+        let effectiveWidth = 0;
+        while (current) {
+          const dims = yield* Ref.get(current.dimensions);
+          if (dims.widthValue > 0) {
+            effectiveWidth = dims.widthValue;
+            break;
+          }
+          current = yield* Ref.get(current.parent);
+        }
+        if (effectiveWidth > 0) {
+          yield* Ref.update(dimensions, (d) => ({ ...d, widthValue: effectiveWidth }));
+        } else {
+          yield* Ref.update(dimensions, (d) => ({ ...d, widthValue: 1 }));
+        }
+      }
     }
     if (options.height && isDimension(options.height)) {
       yield* Ref.update(dimensions, (d) => ({ ...d, height: options.height! }));
-      yield* layoutNode.setHeight(options.height);
+      const h = options.height;
+      if (typeof h === "number") {
+        yield* Ref.update(dimensions, (d) => ({ ...d, heightValue: h }));
+      }
+      yield* layoutNode.setHeight(h);
+      if (typeof h === "string" && h.endsWith("%")) {
+        const parsed = yield* layoutNode.parseHeight(h);
+        if (typeof parsed === "number") {
+          yield* Ref.update(dimensions, (d) => ({ ...d, heightValue: parsed }));
+        }
+      }
+      if (h === "auto") {
+        let current = parentElement;
+        let effectiveHeight = 0;
+        while (current) {
+          const dims = yield* Ref.get(current.dimensions);
+          if (dims.heightValue > 0) {
+            effectiveHeight = dims.heightValue;
+            break;
+          }
+          current = yield* Ref.get(current.parent);
+        }
+        if (effectiveHeight > 0) {
+          yield* Ref.update(dimensions, (d) => ({ ...d, heightValue: effectiveHeight }));
+        } else {
+          yield* Ref.update(dimensions, (d) => ({ ...d, heightValue: 1 }));
+        }
+      }
     }
 
     yield* setPosition(options.position ?? PositionRelative.make(1));
-    const { type } = yield* Ref.get(location);
-    if (isPositionAbsolute(type)) {
-      node.setPositionType(type);
+    const { type: posType } = yield* Ref.get(location);
+    if (isPositionAbsolute(posType)) {
+      layoutNode.yogaNode.setPositionType(posType);
     }
 
     // TODO: flatten position properties internally as well
@@ -451,10 +504,10 @@ export const base = Effect.fn(function* <T extends string, E>(
     }
 
     if (isSize(options.maxWidth)) {
-      node.setMaxWidth(options.maxWidth);
+      layoutNode.yogaNode.setMaxWidth(options.maxWidth);
     }
     if (isSize(options.maxHeight)) {
-      node.setMaxHeight(options.maxHeight);
+      layoutNode.yogaNode.setMaxHeight(options.maxHeight);
     }
 
     yield* setupMarginAndPadding(options);
@@ -462,6 +515,10 @@ export const base = Effect.fn(function* <T extends string, E>(
   });
 
   const createFrameBuffer = Effect.fn(function* () {
+    const x = yield* Ref.get(_setupYogaNode);
+    if (!x) {
+      yield* setupYogaProperties(options);
+    }
     const { widthValue: w, heightValue: h } = yield* Ref.get(dimensions);
 
     if (w <= 0 || h <= 0) {
@@ -504,17 +561,21 @@ export const base = Effect.fn(function* <T extends string, E>(
 
     const newWidth = Math.max(layout.width, 1);
     const newHeight = Math.max(layout.height, 1);
-    const { width: oldWidth, height: oldHeight } = yield* Ref.get(dimensions);
-    const sizeChanged = oldWidth !== newWidth || oldHeight !== newHeight;
+    if (!isNaN(newWidth) && !isNaN(newHeight)) {
+      const { width: oldWidth, height: oldHeight } = yield* Ref.get(dimensions);
+      const sizeChanged = oldWidth !== newWidth || oldHeight !== newHeight;
 
-    yield* Ref.update(dimensions, (d) => ({
-      ...d,
-      width: newWidth,
-      height: newHeight,
-    }));
+      yield* Ref.update(dimensions, (d) => ({
+        ...d,
+        width: newWidth,
+        height: newHeight,
+        widthValue: newWidth,
+        heightValue: newHeight,
+      }));
 
-    if (sizeChanged) {
-      yield* onLayoutResize(newWidth, newHeight);
+      if (sizeChanged) {
+        yield* onLayoutResize(newWidth, newHeight);
+      }
     }
   });
 
@@ -600,6 +661,8 @@ export const base = Effect.fn(function* <T extends string, E>(
     if (index === undefined) {
       index = currentRenderables.length;
     }
+
+    // layoutNode.yogaNode.insertChild(container.layoutNode.yogaNode, index);
 
     // Add to renderables
     yield* Ref.update(renderables, (cs) => {

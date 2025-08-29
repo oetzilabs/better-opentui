@@ -6,21 +6,23 @@ interface NodeMetadata {
   [key: string]: any;
 }
 
-class TrackedNode<T extends NodeMetadata = NodeMetadata> {
+class TrackedNode<EType extends string, T extends NodeMetadata = NodeMetadata> {
   static idCounter = 0;
   id: number;
   yogaNode: YogaNode;
   metadata: T;
-  parent: TrackedNode<any> | null;
-  children: TrackedNode<any>[];
+  parent: TrackedNode<any, any> | null;
+  children: TrackedNode<any, any>[];
   protected _destroyed: boolean = false;
+  protected _type: EType;
 
   // Yoga calculates subpixels and the setMeasureFunc throws all over the place when trying to use it,
   // so we make up for rounding errors by calculating the percentual manually.
   protected _width: number | "auto" | `${number}%` = "auto";
   protected _height: number | "auto" | `${number}%` = "auto";
 
-  constructor(yogaNode: YogaNode, metadata: T = {} as T, parent: TrackedNode<any> | null = null) {
+  constructor(type: EType, yogaNode: YogaNode, metadata: T = {} as T, parent: TrackedNode<any, any> | null = null) {
+    this._type = type;
     this.id = TrackedNode.idCounter++;
     this.yogaNode = yogaNode;
     this.metadata = metadata;
@@ -28,7 +30,11 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
     this.children = [];
   }
 
-  parseWidth = (width: number | "auto" | `${number}%`) =>
+  parseWidth: (
+    width: number | "auto" | `${number}%`,
+  ) => Effect.Effect<number | "auto", TrackedNodeDestroyed | ParentTrackedNodeDestroyed, never> = (
+    width: number | "auto" | `${number}%`,
+  ) =>
     Effect.gen(this, function* () {
       if (this._destroyed) {
         // Fatal: Something is very wrong (debug why we are trying to parse width after destruction)
@@ -38,13 +44,20 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
         return width;
       }
       if (!this.parent) {
-        return this.yogaNode.getComputedWidth();
+        if (typeof this._width === "number") {
+          return this._width;
+        }
+        const yogaWidth = this.yogaNode.getComputedWidth();
+        return yogaWidth;
       }
       if (this.parent._destroyed) {
         // Fatal: Something is very wrong (debug why we are trying to parse width after destruction)
         return yield* Effect.fail(new ParentTrackedNodeDestroyed());
       }
-      let pcw = this.parent.yogaNode.getComputedWidth();
+      let pcw = yield* Effect.suspend(() => this.parent!.parseWidth(width));
+      if (pcw === "auto") {
+        return pcw;
+      }
       const parsedInt = parseInt(width);
       if (Number.isNaN(pcw)) {
         pcw = 1;
@@ -52,7 +65,11 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
       return Math.floor((pcw * parsedInt) / 100);
     });
 
-  parseHeight = (height: number | "auto" | `${number}%`) =>
+  parseHeight: (
+    height: number | "auto" | `${number}%`,
+  ) => Effect.Effect<number | "auto", TrackedNodeDestroyed | ParentTrackedNodeDestroyed, never> = (
+    height: number | "auto" | `${number}%`,
+  ) =>
     Effect.gen(this, function* () {
       if (this._destroyed) {
         // Fatal: Something is very wrong (debug why we are trying to parse height after destruction)
@@ -62,13 +79,21 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
         return height;
       }
       if (!this.parent) {
-        return this.yogaNode.getComputedHeight();
+        if (typeof this._height === "number") {
+          return this._height;
+        }
+        const yogaHeight = this.yogaNode.getComputedHeight();
+        return yogaHeight;
       }
       if (this.parent._destroyed) {
         // Fatal: Something is very wrong (debug why we are trying to parse height after destruction)
         return yield* Effect.fail(new ParentTrackedNodeDestroyed());
       }
-      let pch = this.parent.yogaNode.getComputedHeight();
+
+      let pch = yield* Effect.suspend(() => this.parent!.parseHeight(height));
+      if (pch === "auto") {
+        return pch;
+      }
       const parsedInt = parseInt(height);
       if (Number.isNaN(pch)) {
         pch = 1;
@@ -79,26 +104,54 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
   setWidth = (width: number | "auto" | `${number}%`) =>
     Effect.gen(this, function* () {
       this._width = width;
-      const parsedWidth = yield* this.parseWidth(width);
-      if (parsedWidth === "auto") {
+      if (width === "auto") {
         this.yogaNode.setWidthAuto();
       } else {
-        this.yogaNode.setWidth(parsedWidth);
+        if (typeof width === "string" && width.endsWith("%")) {
+          const pw = parseInt(width.slice(0, -1));
+          if (Number.isNaN(pw)) {
+            yield* Effect.fail(new Error(`Failed to set width for ${this._type}`));
+          }
+          yield* Effect.try({
+            try: () => this.yogaNode.setWidthPercent(pw),
+            catch: (e) => new Error(`Failed to set width for ${this._type}`),
+          });
+        } else {
+          const parsedWidth = yield* this.parseWidth(width);
+          yield* Effect.try({
+            try: () => this.yogaNode.setWidth(parsedWidth),
+            catch: (e) => new Error(`Failed to set width for ${this._type}`),
+          });
+        }
       }
     });
 
   setHeight = (height: number | "auto" | `${number}%`) =>
     Effect.gen(this, function* () {
       this._height = height;
-      const parsedHeight = yield* this.parseHeight(height);
-      if (parsedHeight === "auto") {
+      if (height === "auto") {
         this.yogaNode.setHeightAuto();
       } else {
-        this.yogaNode.setHeight(parsedHeight);
+        if (typeof height === "string" && height.endsWith("%")) {
+          const ph = parseInt(height.slice(0, -1));
+          if (Number.isNaN(ph)) {
+            yield* Effect.fail(new Error(`Failed to set height for ${this._type}`));
+          }
+          yield* Effect.try({
+            try: () => this.yogaNode.setHeightPercent(ph),
+            catch: (e) => new Error(`Failed to set width for ${this._type}`),
+          });
+        } else {
+          const parsedHeight = yield* this.parseHeight(height);
+          yield* Effect.try({
+            try: () => this.yogaNode.setHeight(parsedHeight),
+            catch: (e) => new Error(`Failed to set height for ${this._type}`),
+          });
+        }
       }
     });
 
-  addChild = <U extends NodeMetadata>(childNode: TrackedNode<U>) =>
+  addChild = <U extends NodeMetadata>(childNode: TrackedNode<any, U>) =>
     Effect.gen(this, function* () {
       if (childNode.parent) {
         yield* childNode.parent.removeChild(childNode);
@@ -113,8 +166,16 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
       try {
         const pw = yield* childNode.parseWidth(childNode._width);
         const ph = yield* childNode.parseHeight(childNode._height);
-        childNode.yogaNode.setWidth(pw);
-        childNode.yogaNode.setHeight(ph);
+        if (pw === "auto") {
+          childNode.yogaNode.setWidthAuto();
+        } else {
+          childNode.yogaNode.setWidth(pw);
+        }
+        if (ph === "auto") {
+          childNode.yogaNode.setHeightAuto();
+        } else {
+          childNode.yogaNode.setHeight(ph);
+        }
       } catch (e) {
         console.error("Error setting width and height", e);
       }
@@ -122,12 +183,12 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
       return index;
     });
 
-  getChildIndex = <U extends NodeMetadata>(childNode: TrackedNode<U>) =>
+  getChildIndex = <U extends NodeMetadata>(childNode: TrackedNode<any, U>) =>
     Effect.gen(this, function* () {
       return this.children.indexOf(childNode);
     });
 
-  removeChild = <U extends NodeMetadata>(childNode: TrackedNode<U>) =>
+  removeChild = <U extends NodeMetadata>(childNode: TrackedNode<any, U>) =>
     Effect.gen(this, function* () {
       const index = this.children.indexOf(childNode);
       if (index === -1) {
@@ -158,7 +219,7 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
       return childNode;
     });
 
-  moveChild = <U extends NodeMetadata>(childNode: TrackedNode<U>, newIndex: number) =>
+  moveChild = <U extends NodeMetadata>(childNode: TrackedNode<any, U>, newIndex: number) =>
     Effect.gen(this, function* () {
       const currentIndex = this.children.indexOf(childNode);
       if (currentIndex === -1) {
@@ -180,7 +241,7 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
       return boundedNewIndex;
     });
 
-  insertChild = <U extends NodeMetadata>(childNode: TrackedNode<U>, index: number) =>
+  insertChild = <U extends NodeMetadata>(childNode: TrackedNode<any, U>, index: number) =>
     Effect.gen(this, function* () {
       if (childNode.parent) {
         yield* childNode.parent.removeChild(childNode);
@@ -232,7 +293,7 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
       delete this.metadata[key];
     });
 
-  hasChild = <U extends NodeMetadata>(childNode: TrackedNode<U>) =>
+  hasChild = <U extends NodeMetadata>(childNode: TrackedNode<any, U>) =>
     Effect.gen(this, function* () {
       return this.children.includes(childNode);
     });
@@ -254,13 +315,14 @@ class TrackedNode<T extends NodeMetadata = NodeMetadata> {
     });
 }
 
-function createTrackedNode<T extends NodeMetadata>(
+function createTrackedNode<EType extends string, T extends NodeMetadata>(
+  type: EType,
   metadata: T = {} as T,
   yogaConfig?: Config,
-  parent: TrackedNode<T> | null = null,
-): TrackedNode<T> {
+  parent: TrackedNode<EType, T> | null = null,
+): TrackedNode<EType, T> {
   const yogaNode = Yoga.Node.create(yogaConfig);
-  return new TrackedNode<T>(yogaNode, metadata, parent);
+  return new TrackedNode<EType, T>(type, yogaNode, metadata, parent);
 }
 
 export { TrackedNode, createTrackedNode };

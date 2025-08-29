@@ -21,12 +21,17 @@ export const framebuffer = Effect.fn(function* <E, FrameBufferType extends strin
   binds: Binds,
   type: FrameBufferType,
   options: FrameBufferOptions<E>,
+  parentElement: BaseElement<any, any> | null = null,
 ) {
-  const b = yield* base<FrameBufferType, E>(type, {
-    ...options,
-    width: options.width,
-    height: options.height,
-  });
+  const b = yield* base<FrameBufferType, E>(
+    type,
+    {
+      ...options,
+      width: options.width,
+      height: options.height,
+    },
+    parentElement,
+  );
 
   const framebuffer_buffer = yield* OptimizedBuffer.create(options.width, options.height, {
     respectAlpha: options.respectAlpha,

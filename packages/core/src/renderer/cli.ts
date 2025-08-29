@@ -212,20 +212,24 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const stdout = process.stdout;
     const realStdoutWrite = stdout.write;
 
-    const root = yield* elements.create("root", {
-      width: Effect.fn(function* () {
-        return yield* Ref.get(_width);
-      }),
-      height: Effect.fn(function* () {
-        return yield* Ref.get(_height);
-      }),
-      addToHitGrid: Effect.fn(function* (x: number, y: number, width: number, height: number, id: number) {
-        const cr = yield* Ref.get(capturedRenderable);
-        if (id !== cr?.num) {
-          yield* lib.addToHitGrid(renderer, x, y, width, height, id);
-        }
-      }),
-    });
+    const root = yield* elements.create(
+      "root",
+      { width: config.width, height: config.height },
+      {
+        width: Effect.fn(function* () {
+          return yield* Ref.get(_width);
+        }),
+        height: Effect.fn(function* () {
+          return yield* Ref.get(_height);
+        }),
+        addToHitGrid: Effect.fn(function* (x: number, y: number, width: number, height: number, id: number) {
+          const cr = yield* Ref.get(capturedRenderable);
+          if (id !== cr?.num) {
+            yield* lib.addToHitGrid(renderer, x, y, width, height, id);
+          }
+        }),
+      },
+    );
 
     const debugBox = yield* root.create("text", "N", {
       focused: false,
@@ -1141,7 +1145,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           // Effect.forever,
           Effect.catchAll((err) =>
             Effect.gen(function* () {
-              console.debug("Error in root.update", err.toString());
               yield* Ref.update(errors, (errors) => errors.add(err));
             }),
           ),

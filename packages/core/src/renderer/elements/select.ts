@@ -7,9 +7,10 @@ import type { Collection } from "../../errors";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import { PositionAbsolute } from "../utils/position";
+import { PositionAbsolute, PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { type FrameBufferOptions } from "./framebuffer";
+import { group } from "./group";
 import { input } from "./input";
 import type { Binds, ElementOptions } from "./utils";
 
@@ -99,11 +100,28 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
   parentElement: BaseElement<any, any> | null = null,
 ) {
   const lib = yield* Library;
+  const g = yield* group(
+    binds,
+    {
+      selectable: true,
+      visible: true,
+    },
+    parentElement,
+  );
+
+  const parentDimensions = yield* Ref.get(g.dimensions);
+
   const b = yield* base<"select", SelectElement<OptionsType>>(
     "select",
     {
       ...options,
+      position: PositionRelative.make(1),
       selectable: true,
+      height: options.height
+        ? options.height === "auto"
+          ? Math.min((options.options ?? []).length * 2, parentDimensions.heightValue, Infinity) + 1
+          : options.height
+        : options.height,
       colors: {
         bg: options.colors?.bg ?? DEFAULTS.colors.bg,
         fg: options.colors?.fg ?? DEFAULTS.colors.fg,
@@ -111,7 +129,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
         focusedFg: options.colors?.focusedFg ?? DEFAULTS.colors.focusedFg,
       },
     },
-    parentElement,
+    g,
   );
 
   const framebuffer_buffer = yield* b.createFrameBuffer();
@@ -146,29 +164,36 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
         : new Fuse(options.options ?? [], { keys: ["name", "value", "description"] })
       : new Fuse(options.options ?? [], options.searchable);
 
-  const searchinput = yield* input(binds, {
-    ...options,
-    focused: options.focused ?? false,
-    visible: true,
-    colors: options.colors ?? DEFAULTS.colors,
-    width: options.width,
-    height: 1,
-    position: PositionAbsolute.make(2),
-    left: options.left ?? 0,
-    top: options.top ?? 0,
-    value: "",
-    placeholder: "Search options",
-    onUpdate: Effect.fn(function* (self) {
-      const value = yield* self.getValue();
-      if (value.length === 0) {
-        yield* Ref.update(opts, (opts) => options.options ?? []);
-        return;
-      }
-      const filteredOptions = fuse.search(value).map((o) => o.item);
-      yield* Ref.update(opts, (opts) => filteredOptions);
-      yield* updateScrollOffset();
-    }),
-  });
+  const searchinput = yield* input(
+    binds,
+    {
+      ...options,
+      focused: options.focused ?? false,
+      visible: true,
+      colors: options.colors ?? DEFAULTS.colors,
+      width: options.width,
+      height: 1,
+      position: PositionRelative.make(1),
+      left: 0,
+      top: 0,
+      value: "",
+      placeholder: "Search options",
+      onUpdate: Effect.fn(function* (self) {
+        const value = yield* self.getValue();
+        if (value.length === 0) {
+          yield* Ref.update(opts, (opts) => options.options ?? []);
+          return;
+        }
+        const filteredOptions = fuse.search(value).map((o) => o.item);
+        yield* Ref.update(opts, (opts) => filteredOptions);
+        yield* updateScrollOffset();
+      }),
+    },
+    g,
+  );
+
+  yield* g.add(searchinput);
+  yield* g.add(b);
 
   // Helper to update scroll offset
   const updateScrollOffset = Effect.fn(function* () {
@@ -183,7 +208,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
 
   // Rendering
   const render = Effect.fn(function* (buffer: OptimizedBuffer, _dt: number) {
-    const v = yield* Ref.get(b.visible);
+    const v = yield* Ref.get(g.visible);
     if (!v) return;
     const sa = yield* Ref.get(searchable);
 
@@ -284,6 +309,8 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
       // show the input
       yield* searchinput.render(buffer, _dt);
     }
+
+    yield* g.render(buffer, _dt);
   });
 
   // Setters/getters

@@ -3,6 +3,7 @@ import type { KeyboardEvent } from "../../events/keyboard";
 import type { MouseEvent } from "../../events/mouse";
 import { isMouseDown, isMouseDrag, isMouseUp } from "../../inputs/mouse";
 import type { SelectionState } from "../../types";
+import { PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import type { Binds, ElementOptions } from "./utils";
 
@@ -29,6 +30,7 @@ export const group = Effect.fn(function* (
       height: "auto",
       visible: true,
       selectable: false,
+      position: PositionRelative.make(1),
     },
     parentElement,
   );

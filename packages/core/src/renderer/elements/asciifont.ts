@@ -35,15 +35,24 @@ export const DEFAULTS = {
   respectAlpha: true,
 };
 
-export const asciifont = Effect.fn(function* (binds: Binds, options: ASCIIFontOptions) {
+export const asciifont = Effect.fn(function* (
+  binds: Binds,
+  options: ASCIIFontOptions,
+  parentElement: BaseElement<any, any> | null = null,
+) {
   const measurements = yield* measureText({ text: options.text ?? "", font: options.font ?? "tiny" });
-  const b = yield* framebuffer<ASCIIFontElement, "asciifont">(binds, "asciifont", {
-    ...options,
-    width: measurements.width,
-    height: measurements.height,
-    respectAlpha: options.respectAlpha ?? DEFAULTS.respectAlpha,
-    selectable: options.selectable ?? true,
-  });
+  const b = yield* framebuffer<ASCIIFontElement, "asciifont">(
+    binds,
+    "asciifont",
+    {
+      ...options,
+      width: measurements.width,
+      height: measurements.height,
+      respectAlpha: options.respectAlpha ?? DEFAULTS.respectAlpha,
+      selectable: options.selectable ?? true,
+    },
+    parentElement,
+  );
 
   const text = yield* Ref.make(options.text ?? "");
   const font = yield* Ref.make<keyof typeof fonts>(options.font ?? DEFAULTS.font);
