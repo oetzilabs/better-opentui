@@ -97,9 +97,10 @@ const DEFAULTS = {
 export const select = Effect.fn(function* <OptionsType, FBT extends string = "select">(
   binds: Binds,
   options: SelectOptions<OptionsType>,
-  parentElement: BaseElement<any, any>,
+  parentElement: BaseElement<any, any> | null = null,
 ) {
   const lib = yield* Library;
+  if (!parentElement) return yield* Effect.fail(new Error("Parent element is required"));
 
   const parentDimensions = yield* Ref.get(parentElement.dimensions);
 
