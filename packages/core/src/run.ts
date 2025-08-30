@@ -1,11 +1,11 @@
 import { BunContext } from "@effect/platform-bun";
-import * as Errors from "@opentuee/core/src/errors";
-import { CliRenderer, CliRendererLive, type HookFunction, type ShutdownReason } from "@opentuee/core/src/renderer/cli";
-import { Library, LibraryLive } from "@opentuee/core/src/zig";
 import { Cause, Console, Effect, Exit, Logger } from "effect";
-import { Colors } from "./colors";
+import { ClearFromCursor, ShowCursor, SwitchToMainScreen } from "./ansi";
+import * as Errors from "./errors";
 import { createOtelLayer } from "./otel";
+import { CliRenderer, CliRendererLive, type HookFunction, type ShutdownReason } from "./renderer/cli";
 import { Shutdown, ShutdownLive } from "./renderer/latch/shutdown";
+import { Library, LibraryLive } from "./zig";
 
 export type SetupFunction = (
   cli: CliRenderer,
@@ -82,7 +82,14 @@ export const run = (options: RunOptions) =>
     // return yield* Effect.never;
   }).pipe(
     Effect.provide([CliRendererLive]),
-    Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))),
+    Effect.catchAllCause((cause) => {
+      process.stdin.write(SwitchToMainScreen.make("\u001B[?1049l"));
+      process.stdin.write(ShowCursor.make("\u001B[?25h"));
+      process.stdin.write(ClearFromCursor.make("\u001B[J"));
+
+      process.stdin.setRawMode(false);
+      return Console.log(Cause.pretty(cause));
+    }),
     Effect.provide([ShutdownLive, LibraryLive, Logger.pretty, createOtelLayer("opentuee")]),
     Effect.provide(BunContext.layer),
     Effect.scoped,

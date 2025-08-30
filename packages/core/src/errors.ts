@@ -469,9 +469,37 @@ export class CannotCreateCycleInElementTree extends Schema.TaggedError<CannotCre
   cause: Schema.optional(Schema.Unknown),
 }) {}
 
+export class RendererFailedToSetTerminalTitle extends Schema.TaggedError<RendererFailedToSetTerminalTitle>(
+  "RendererFailedToSetTerminalTitle",
+)("RendererFailedToSetTerminalTitle", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class RendererFailedToGetTerminalCapabilities extends Schema.TaggedError<RendererFailedToGetTerminalCapabilities>(
+  "RendererFailedToGetTerminalCapabilities",
+)("RendererFailedToGetTerminalCapabilities", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class RendererFailedToProcessCapabilityResponse extends Schema.TaggedError<RendererFailedToProcessCapabilityResponse>(
+  "RendererFailedToProcessCapabilityResponse",
+)("RendererFailedToProcessCapabilityResponse", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class RendererFailedToSetupTerminal extends Schema.TaggedError<RendererFailedToSetupTerminal>(
+  "RendererFailedToSetupTerminal",
+)("RendererFailedToSetupTerminal", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
 // all errors
 export type Collection =
   | Error
+  | RendererFailedToSetupTerminal
+  | RendererFailedToProcessCapabilityResponse
+  | RendererFailedToSetTerminalTitle
+  | RendererFailedToGetTerminalCapabilities
   | CannotAddElementToItself
   | CannotCreateCycleInElementTree
   | MissingRoot

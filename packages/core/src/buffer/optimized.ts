@@ -1,4 +1,4 @@
-import { RGBA } from "@opentuee/core/src/types";
+import { RGBA, type WidthMethod } from "@opentuee/core/src/types";
 import { packDrawOptions } from "@opentuee/core/src/utils";
 import { Library } from "@opentuee/core/src/zig";
 import { type Pointer } from "bun:ffi";
@@ -45,10 +45,15 @@ export class OptimizedBuffer {
     this.buffer = buffer;
   }
 
-  static create = Effect.fn(function* (width: number, height: number, options: { respectAlpha?: boolean } = {}) {
+  static create = Effect.fn(function* (
+    width: number,
+    height: number,
+    widthMethod: WidthMethod,
+    options: { respectAlpha?: boolean } = {},
+  ) {
     const lib = yield* Library;
     const respectAlpha = options.respectAlpha || false;
-    const attributes = yield* lib.createOptimizedBufferAttributes(width, height, respectAlpha);
+    const attributes = yield* lib.createOptimizedBufferAttributes(width, height, widthMethod, respectAlpha);
     return new OptimizedBuffer(attributes.bufferPtr, attributes.buffers, width, height, options);
   });
 

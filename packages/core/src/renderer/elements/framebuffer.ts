@@ -1,5 +1,4 @@
 import { Effect, Ref } from "effect";
-import { measureText } from "../../ascii/ascii.font";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { RendererFailedToResizeBuffer } from "../../errors";
 import { base, type BaseElement } from "./base";
@@ -25,6 +24,7 @@ export const framebuffer = Effect.fn(function* <E, FrameBufferType extends strin
 ) {
   const b = yield* base<FrameBufferType, E>(
     type,
+    binds,
     {
       ...options,
       width: options.width,
@@ -32,8 +32,8 @@ export const framebuffer = Effect.fn(function* <E, FrameBufferType extends strin
     },
     parentElement,
   );
-
-  const framebuffer_buffer = yield* OptimizedBuffer.create(options.width, options.height, {
+  const { widthMethod } = yield* Ref.get(binds.context);
+  const framebuffer_buffer = yield* OptimizedBuffer.create(options.width, options.height, widthMethod, {
     respectAlpha: options.respectAlpha,
   });
 

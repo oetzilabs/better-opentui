@@ -208,6 +208,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const resizeFork = yield* Ref.make<Fiber.RuntimeFiber<never, Error | NoSuchElementException> | null>(null);
     const signalWatcherFork = yield* Ref.make<Fiber.RuntimeFiber<never, Error | NoSuchElementException> | null>(null);
 
+    const capabilities = yield* lib.getTerminalCapabilities(renderer);
+    const processedCapabilities = yield* Ref.make(false);
+
     const stdin = process.stdin;
     const stdout = process.stdout;
     const realStdoutWrite = stdout.write;
@@ -216,6 +219,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       "root",
       { width: config.width, height: config.height },
       {
+        cli: renderer,
         width: Effect.fn(function* () {
           return yield* Ref.get(_width);
         }),
@@ -228,6 +232,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             yield* lib.addToHitGrid(renderer, x, y, width, height, id);
           }
         }),
+        widthMethod: capabilities.unicode === "unicode" ? "unicode" : "wcwidth",
       },
     );
 
@@ -509,6 +514,11 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             const isD = yield* Ref.get(_isDestroyed);
             if (!ir || isD) return;
             const str = data.toString();
+            const pc = yield* Ref.get(processedCapabilities);
+            if (!pc) {
+              yield* lib.processCapabilityResponse(renderer, str);
+              yield* Ref.set(processedCapabilities, true);
+            }
             const wfpr = yield* Ref.get(_isWaitingForPixelResolution);
             const numberParser = Schema.decodeUnknown(Schema.Int);
             if (wfpr && /\x1b\[4;\d+;\d+t/.test(str)) {
@@ -615,6 +625,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         Effect.retry(Schedule.recurs(10)),
         Effect.fork,
       );
+
       yield* Ref.set(terminalInputFork, f);
 
       const signals = ["SIGINT", "SIGTERM", "SIGQUIT", "SIGABRT", "SIGHUP"] as const;
@@ -676,12 +687,15 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       const uas = yield* Ref.get(_useAlternateScreen);
       if (uas) {
-        yield* writeOut(SwitchToAlternateScreen.make("\u001B[?1049h"));
+        const pc = yield* Ref.get(processedCapabilities);
+        if (!pc) {
+          yield* lib.setupTerminal(renderer, uas);
+          yield* Effect.sleep(Duration.millis(50));
+        }
       } else {
         const h = yield* Ref.get(_height);
         yield* writeOut(yield* makeRoomForRenderer(h - 1));
       }
-      yield* setCursorPosition(0, 0, false);
     });
 
     const handleMouseData = Effect.fn("cli.handleMouseData")(function* (data: Buffer) {
@@ -999,7 +1013,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       y: number,
       visible: boolean = true,
     ) {
-      yield* lib.setCursorPosition(x, y, visible);
+      yield* lib.setCursorPosition(renderer, x, y, visible);
     });
 
     const setCursorStyle = Effect.fn("cli.setCursorStyle")(function* (
@@ -1007,16 +1021,16 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       blinking: boolean = false,
       color?: Input,
     ) {
-      yield* lib.setCursorStyle(style, blinking);
+      yield* lib.setCursorStyle(renderer, style, blinking);
       if (color) {
         const parsedColor = yield* parseColor(color);
-        yield* lib.setCursorColor(parsedColor);
+        yield* lib.setCursorColor(renderer, parsedColor);
       }
     });
 
     const setCursorColor = Effect.fn("cli.setCursorColor")(function* (color: Input) {
       const parsedColor = yield* parseColor(color);
-      yield* lib.setCursorColor(parsedColor);
+      yield* lib.setCursorColor(renderer, parsedColor);
     });
 
     const addPostProcessFn = Effect.fn("cli.addPostProcessFn")(function* (
@@ -1130,7 +1144,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       if (isD) return;
       yield* root.destroy();
       yield* elements.destroy();
-      yield* lib.destroyRenderer(renderer);
+      const uas = yield* Ref.get(_useAlternateScreen);
+      const sh = yield* Ref.get(_splitHeight);
+      yield* lib.destroyRenderer(renderer, uas, sh);
       yield* Ref.set(_isDestroyed, true);
     });
 
@@ -1551,6 +1567,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       return yield* Ref.get(errors);
     });
 
+    const setTitle = Effect.fn(function* (title: string) {
+      yield* lib.setTerminalTitle(renderer, title);
+    });
+
     return {
       getErrors,
       getSelectionText,
@@ -1598,6 +1618,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       hasSelection,
       clearSelection,
       setupTerminal,
+      setTitle,
     } as const;
   }),
 }) {}

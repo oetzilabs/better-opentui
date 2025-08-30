@@ -9,7 +9,7 @@ import { parseColor } from "../../utils";
 import { Library } from "../../zig";
 import { ASCIIFontSelectionHelper } from "../utils/selection";
 import type { BaseElement } from "./base";
-import { framebuffer, type FrameBufferElement, type FrameBufferOptions } from "./framebuffer";
+import { framebuffer, type FrameBufferOptions } from "./framebuffer";
 import type { Binds } from "./utils";
 
 export interface ASCIIFontElement extends BaseElement<"asciifont", ASCIIFontElement> {

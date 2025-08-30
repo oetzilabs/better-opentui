@@ -1,20 +1,17 @@
 import { Effect, Ref } from "effect";
-import { MeasureMode, PositionType } from "yoga-layout";
+import { MeasureMode } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { TextBuffer, TextChunkSchema } from "../../buffer/text";
-import { Colors, Input } from "../../colors";
-import type { CantParseHexColor, Collection } from "../../errors";
-import type { KeyboardEvent } from "../../events/keyboard";
-import type { MouseEvent } from "../../events/mouse";
-import { isMouseDown, isMouseDrag, isMouseUp } from "../../inputs/mouse";
+import { Input } from "../../colors";
+import type { Collection } from "../../errors";
 import type { SelectionState } from "../../types";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import { isPositionAbsolute, PositionAbsolute } from "../utils/position";
+import { isPositionAbsolute } from "../utils/position";
 import { TextSelectionHelper } from "../utils/selection";
 import { StyledText } from "../utils/styled-text";
 import { base, type BaseElement } from "./base";
-import type { Binds, ElementOptions, RenderContextInterface } from "./utils";
+import type { Binds, ElementOptions } from "./utils";
 
 export interface TextElement extends BaseElement<"text", TextElement> {
   setContent: (content: string | StyledText) => Effect.Effect<void, Collection, Library>;
@@ -31,7 +28,7 @@ export type TextOptions = ElementOptions<"text", TextElement> & {
 
 export const text = Effect.fn(function* (binds: Binds, content: string, options: TextOptions = {}) {
   const lib = yield* Library;
-  const b = yield* base("text", options);
+  const b = yield* base("text", binds, options);
 
   b.onUpdate = Effect.fn(function* (self) {
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
@@ -57,7 +54,8 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     height: options.height ?? "auto",
   }));
   const capacity = 256 as const;
-  const tba = yield* lib.createTextBuffer(capacity);
+  const { widthMethod } = yield* Ref.get(binds.context);
+  const tba = yield* lib.createTextBufferAttributes(capacity, widthMethod);
   const textBuffer = new TextBuffer(tba.bufferPtr, tba.buffers, capacity);
   const c = yield* Ref.get(b.colors);
   const bgC = yield* parseColor(c.bg);

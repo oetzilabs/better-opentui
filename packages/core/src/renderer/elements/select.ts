@@ -7,10 +7,9 @@ import type { Collection } from "../../errors";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import { PositionAbsolute, PositionRelative } from "../utils/position";
+import { PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { type FrameBufferOptions } from "./framebuffer";
-import { group } from "./group";
 import { input } from "./input";
 import type { Binds, ElementOptions } from "./utils";
 
@@ -106,6 +105,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
 
   const b = yield* base<"select", SelectElement<OptionsType>>(
     "select",
+    binds,
     {
       ...options,
       position: PositionRelative.make(1),

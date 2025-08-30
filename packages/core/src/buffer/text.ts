@@ -1,8 +1,8 @@
-import { RGBA } from "@opentuee/core/src/types";
-import { Library } from "@opentuee/core/src/zig";
 import { type Pointer } from "bun:ffi";
 import { Effect, Schema } from "effect";
 import type { StyledText } from "../renderer/utils/styled-text";
+import { RGBA, type WidthMethod } from "../types";
+import { Library } from "../zig";
 
 export class TextBuffer {
   private bufferPtr: Pointer;
@@ -31,10 +31,10 @@ export class TextBuffer {
     this._capacity = capacity;
   }
 
-  static create = (capacity: number = 256) =>
+  static create = (capacity: number = 256, widthMethod: WidthMethod) =>
     Effect.gen(function* () {
       const lib = yield* Library;
-      const textBufferAttributes = yield* lib.createTextBuffer(capacity);
+      const textBufferAttributes = yield* lib.createTextBufferAttributes(capacity, widthMethod);
       return new TextBuffer(textBufferAttributes.bufferPtr, textBufferAttributes.buffers, capacity);
     });
 

@@ -1,12 +1,5 @@
 import { Schema } from "effect";
 
-// export enum LayoutEvents {
-//   LAYOUT_CHANGED = "layout-changed",
-//   ELEMENT_ADDED = "element-added",
-//   ELEMENT_REMOVED = "element-removed",
-//   RESIZED = "resized",
-// }
-
 export const LayoutChanged = Schema.Literal("layout-changed").pipe(Schema.brand("layout-changed"));
 export type LayoutChanged = typeof LayoutChanged.Type;
 export const ElementAdded = Schema.Literal("element-added").pipe(Schema.brand("element-added"));

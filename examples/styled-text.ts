@@ -1,13 +1,8 @@
 import { BunRuntime } from "@effect/platform-bun";
 import { Colors } from "@opentuee/core/src/colors";
-import { isMouseDown, isMouseDrag, isMouseOver, isMouseUp } from "@opentuee/core/src/inputs/mouse";
-import type { BaseElement } from "@opentuee/core/src/renderer/elements/base";
-import type { InputElement } from "@opentuee/core/src/renderer/elements/input";
-import type { SelectElement, SelectOption } from "@opentuee/core/src/renderer/elements/select";
-import type { TextElement } from "@opentuee/core/src/renderer/elements/text";
-import { PositionAbsolute } from "@opentuee/core/src/renderer/utils/position";
+import type { SelectOption } from "@opentuee/core/src/renderer/elements/select";
 import { run } from "@opentuee/core/src/run";
-import { Effect, Ref } from "effect";
+import { Effect } from "effect";
 
 if (import.meta.main) {
   BunRuntime.runMain(

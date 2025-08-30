@@ -1,10 +1,7 @@
 import { FileSystem, Path } from "@effect/platform";
-import { dlopen, suffix, toArrayBuffer, type Pointer } from "bun:ffi";
-import { Config, Console, Context, Effect } from "effect";
-import type { OptimizedBuffer } from "./buffer";
-import * as Cursor from "./cursor-style";
+import { dlopen, suffix } from "bun:ffi";
+import { Config, Effect } from "effect";
 import { OpenTueeLibraryNotFound, OpenTueeLibraryNotLoaded } from "./errors";
-import type { DebugOverlayCorner, RGBA, RGBAv2 } from "./types";
 import { getPlatformTarget } from "./utils";
 
 export const findLibrary = Effect.gen(function* () {
@@ -42,7 +39,7 @@ export class OpenTUI extends Effect.Service<OpenTUI>()("OpenTUI", {
             returns: "ptr",
           },
           destroyRenderer: {
-            args: ["ptr"],
+            args: ["ptr", "bool", "u32"],
             returns: "void",
           },
           setUseThread: {
@@ -79,7 +76,7 @@ export class OpenTUI extends Effect.Service<OpenTUI>()("OpenTUI", {
           },
 
           createOptimizedBuffer: {
-            args: ["u32", "u32", "bool"],
+            args: ["u32", "u32", "bool", "u8"],
             returns: "ptr",
           },
           destroyOptimizedBuffer: {
@@ -150,17 +147,17 @@ export class OpenTUI extends Effect.Service<OpenTUI>()("OpenTUI", {
             returns: "void",
           },
 
-          // Global cursor functions
+          // Cursor functions (now renderer-scoped)
           setCursorPosition: {
-            args: ["i32", "i32", "bool"],
+            args: ["ptr", "i32", "i32", "bool"],
             returns: "void",
           },
           setCursorStyle: {
-            args: ["ptr", "u32", "bool"],
+            args: ["ptr", "ptr", "u32", "bool"],
             returns: "void",
           },
           setCursorColor: {
-            args: ["ptr"],
+            args: ["ptr", "ptr"],
             returns: "void",
           },
 
@@ -173,6 +170,10 @@ export class OpenTUI extends Effect.Service<OpenTUI>()("OpenTUI", {
           // Terminal control
           clearTerminal: {
             args: ["ptr"],
+            returns: "void",
+          },
+          setTerminalTitle: {
+            args: ["ptr", "ptr", "usize"],
             returns: "void",
           },
 
@@ -217,10 +218,22 @@ export class OpenTUI extends Effect.Service<OpenTUI>()("OpenTUI", {
             args: ["ptr"],
             returns: "void",
           },
+          enableKittyKeyboard: {
+            args: ["ptr", "u8"],
+            returns: "void",
+          },
+          disableKittyKeyboard: {
+            args: ["ptr"],
+            returns: "void",
+          },
+          setupTerminal: {
+            args: ["ptr", "bool"],
+            returns: "void",
+          },
 
           // TextBuffer functions
           createTextBuffer: {
-            args: ["u32"],
+            args: ["u32", "u8"],
             returns: "ptr",
           },
           destroyTextBuffer: {
@@ -313,6 +326,16 @@ export class OpenTUI extends Effect.Service<OpenTUI>()("OpenTUI", {
           },
           bufferDrawTextBuffer: {
             args: ["ptr", "ptr", "i32", "i32", "i32", "i32", "u32", "u32", "bool"],
+            returns: "void",
+          },
+
+          // Terminal capability functions
+          getTerminalCapabilities: {
+            args: ["ptr", "ptr"],
+            returns: "void",
+          },
+          processCapabilityResponse: {
+            args: ["ptr", "ptr", "usize"],
             returns: "void",
           },
         }),

@@ -1,12 +1,12 @@
 import { Effect, Ref } from "effect";
 import { Direction } from "yoga-layout";
-import { OptimizedBuffer } from "../../buffer/optimized";
 import { base, type BaseElement } from "./base";
+import type { Binds } from "./utils";
 
 export interface RootElement extends BaseElement<"root", RootElement> {}
 
-export const root = Effect.fn(function* (initial: { width: number; height: number }) {
-  const b = yield* base<"root", RootElement>("root", {
+export const root = Effect.fn(function* (binds: Binds, initial: { width: number; height: number }) {
+  const b = yield* base<"root", RootElement>("root", binds, {
     visible: true,
     selectable: false,
     zIndex: 0,

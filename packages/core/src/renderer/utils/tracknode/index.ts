@@ -1,6 +1,6 @@
-import { FailedToFreeYogaNode, ParentTrackedNodeDestroyed, TrackedNodeDestroyed } from "@opentuee/ui/src/lib/errors";
-import { Console, Effect } from "effect";
+import { Effect } from "effect";
 import Yoga, { type Config, type Node as YogaNode } from "yoga-layout";
+import { FailedToFreeYogaNode, ParentTrackedNodeDestroyed, TrackedNodeDestroyed } from "./errors";
 
 interface NodeMetadata {
   [key: string]: any;
@@ -325,4 +325,4 @@ function createTrackedNode<EType extends string, T extends NodeMetadata>(
   return new TrackedNode<EType, T>(type, yogaNode, metadata, parent);
 }
 
-export { TrackedNode, createTrackedNode };
+export { createTrackedNode, TrackedNode };

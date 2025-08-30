@@ -1,12 +1,7 @@
-// https://github.com/sst/opentui/blob/main/src/zig.ts
-// converted to Effect
-
-import { BunContext } from "@effect/platform-bun";
 import { toArrayBuffer, type Pointer } from "bun:ffi";
-import { Context, Effect, Layer } from "effect";
+import { Effect } from "effect";
 import * as Cursor from "./cursor-style";
 import {
-  FailedToCreateOptimizedBuffer,
   RendererFailedToAddToHitGrid,
   RendererFailedToCheckHit,
   RendererFailedToClearBuffer,
@@ -39,11 +34,13 @@ import {
   RendererFailedToGetForegroundPointer,
   RendererFailedToGetNextBuffer,
   RendererFailedToGetRespectAlpha,
+  RendererFailedToGetTerminalCapabilities,
   RendererFailedToGetTextBuffer,
   RendererFailedToGetTextBufferAttributesPtr,
   RendererFailedToGetTextBufferBgPtr,
   RendererFailedToGetTextBufferCharPtr,
   RendererFailedToGetTextBufferFgPtr,
+  RendererFailedToProcessCapabilityResponse,
   RendererFailedToRender,
   RendererFailedToResetTextBuffer,
   RendererFailedToResizeBuffer,
@@ -55,20 +52,14 @@ import {
   RendererFailedToSetCursorStyle,
   RendererFailedToSetOffset,
   RendererFailedToSetRespectAlpha,
+  RendererFailedToSetTerminalTitle,
+  RendererFailedToSetupTerminal,
   RendererFailedToSetUseThread,
   RendererFailedToUpdateMemoryStats,
   RendererFailedToUpdateStats,
 } from "./errors";
 import { OpenTUI, OpenTUILive } from "./lib";
-import { RGBA } from "./types";
-
-export class RenderPointer extends Context.Tag("RenderPointer")<RenderPointer, Pointer>() {}
-
-export const makeRenderPointer = (pointer: Pointer) => Layer.succeed(RenderPointer, pointer);
-
-export class LibPath extends Context.Tag("LibPath")<LibPath, string | undefined>() {}
-
-export const makeLibPath = (path?: string | undefined) => Layer.succeed(LibPath, path);
+import { RGBA, type WidthMethod } from "./types";
 
 export enum DebugOverlayCorner {
   topLeft = 0,
@@ -81,6 +72,9 @@ export class Library extends Effect.Service<Library>()("Library", {
   dependencies: [OpenTUILive],
   effect: Effect.gen(function* () {
     const opentui = yield* OpenTUI;
+
+    const encoder = new TextEncoder();
+
     const createRenderer = Effect.fn(function* (width: number, height: number) {
       const rendererPointer = yield* Effect.try({
         try: () => opentui.symbols.createRenderer(width, height),
@@ -92,11 +86,13 @@ export class Library extends Effect.Service<Library>()("Library", {
       return rendererPointer;
     });
 
-    const encoder = new TextEncoder();
-
-    const destroyRenderer = Effect.fn(function* (rendererPointer: Pointer) {
+    const destroyRenderer = Effect.fn(function* (
+      rendererPointer: Pointer,
+      useAlternateScreen: boolean,
+      splitHeight: number,
+    ) {
       yield* Effect.try({
-        try: () => opentui.symbols.destroyRenderer(rendererPointer),
+        try: () => opentui.symbols.destroyRenderer(rendererPointer, useAlternateScreen, splitHeight),
         catch: (error) => new RendererFailedToDestroy({ cause: error }),
       });
     });
@@ -420,26 +416,26 @@ export class Library extends Effect.Service<Library>()("Library", {
       });
     });
 
-    const setCursorPosition = Effect.fn(function* (x: number, y: number, visible: boolean) {
+    const setCursorPosition = Effect.fn(function* (renderer: Pointer, x: number, y: number, visible: boolean) {
       yield* Effect.try({
-        try: () => opentui.symbols.setCursorPosition(x, y, visible),
+        try: () => opentui.symbols.setCursorPosition(renderer, x, y, visible),
         catch: (e) => new RendererFailedToSetCursorPosition({ cause: e }),
       });
     });
 
-    const setCursorStyle = Effect.fn(function* (style: Cursor.Style, blinking: boolean) {
+    const setCursorStyle = Effect.fn(function* (renderer: Pointer, style: Cursor.Style, blinking: boolean) {
       const stylePtr = encoder.encode(style);
       const styleLength = stylePtr.byteLength;
       yield* Effect.try({
-        try: () => opentui.symbols.setCursorStyle(stylePtr, styleLength, blinking),
+        try: () => opentui.symbols.setCursorStyle(renderer, stylePtr, styleLength, blinking),
         catch: (e) => new RendererFailedToSetCursorStyle({ cause: e }),
       });
     });
 
-    const setCursorColor = Effect.fn(function* (color: RGBA) {
+    const setCursorColor = Effect.fn(function* (renderer: Pointer, color: RGBA) {
       const c = color.buffer;
       yield* Effect.try({
-        try: () => opentui.symbols.setCursorColor(c),
+        try: () => opentui.symbols.setCursorColor(renderer, c),
         catch: (e) => new RendererFailedToSetCursorColor({ cause: e }),
       });
     });
@@ -524,9 +520,11 @@ export class Library extends Effect.Service<Library>()("Library", {
     const createOptimizedBufferAttributes = Effect.fn(function* (
       width: number,
       height: number,
+      widthMethod: WidthMethod,
       respectAlpha: boolean = false,
     ) {
-      const bufferPtr = opentui.symbols.createOptimizedBuffer(width, height, respectAlpha);
+      const widthMethodCode = widthMethod === "wcwidth" ? 0 : 1;
+      const bufferPtr = opentui.symbols.createOptimizedBuffer(width, height, respectAlpha, widthMethodCode);
       if (!bufferPtr) {
         // return yield* Effect.fail(new Error(`Failed to create optimized buffer: ${width}x${height}`));
         return yield* Effect.fail(new RendererFailedToCreateFrameBuffer());
@@ -576,9 +574,10 @@ export class Library extends Effect.Service<Library>()("Library", {
       });
     });
 
-    const createTextBuffer = Effect.fn(function* (capacity: number) {
+    const createTextBufferAttributes = Effect.fn(function* (capacity: number, widthMethod: WidthMethod) {
+      const widthMethodCode = widthMethod === "wcwidth" ? 0 : 1;
       const bufferPtr = yield* Effect.try({
-        try: () => opentui.symbols.createTextBuffer(capacity),
+        try: () => opentui.symbols.createTextBuffer(capacity, widthMethodCode),
         catch: (error) => new RendererFailedToCreateTextBuffer({ cause: error }),
       });
       if (!bufferPtr) {
@@ -880,12 +879,63 @@ export class Library extends Effect.Service<Library>()("Library", {
       });
     });
 
+    const setTerminalTitle = Effect.fn(function* (renderer: Pointer, title: string) {
+      const titleBytes = encoder.encode(title);
+      const titleLength = titleBytes.byteLength;
+      return yield* Effect.try({
+        try: () => opentui.symbols.setTerminalTitle(renderer, titleBytes, titleLength),
+        catch: (e) => new RendererFailedToSetTerminalTitle({ cause: e }),
+      });
+    });
+
+    const getTerminalCapabilities = Effect.fn(function* (renderer: Pointer) {
+      const capsBuffer = new Uint8Array(64);
+      yield* Effect.try({
+        try: () => opentui.symbols.getTerminalCapabilities(renderer, capsBuffer),
+        catch: (e) => new RendererFailedToGetTerminalCapabilities({ cause: e }),
+      });
+
+      let offset = 0;
+      const capabilities = {
+        kitty_keyboard: capsBuffer[offset++] !== 0,
+        kitty_graphics: capsBuffer[offset++] !== 0,
+        rgb: capsBuffer[offset++] !== 0,
+        unicode: capsBuffer[offset++] === 0 ? ("wcwidth" as const) : ("unicode" as const),
+        sgr_pixels: capsBuffer[offset++] !== 0,
+        color_scheme_updates: capsBuffer[offset++] !== 0,
+        explicit_width: capsBuffer[offset++] !== 0,
+        scaled_text: capsBuffer[offset++] !== 0,
+        sixel: capsBuffer[offset++] !== 0,
+        focus_tracking: capsBuffer[offset++] !== 0,
+        sync: capsBuffer[offset++] !== 0,
+        bracketed_paste: capsBuffer[offset++] !== 0,
+        hyperlinks: capsBuffer[offset++] !== 0,
+      };
+
+      return capabilities;
+    });
+
+    const processCapabilityResponse = Effect.fn(function* (renderer: Pointer, response: string) {
+      const responseBytes = encoder.encode(response);
+      yield* Effect.try({
+        try: () => opentui.symbols.processCapabilityResponse(renderer, responseBytes, responseBytes.length),
+        catch: (e) => new RendererFailedToProcessCapabilityResponse({ cause: e }),
+      });
+    });
+
+    const setupTerminal = Effect.fn(function* (renderer: Pointer, useAlternateScreen: boolean) {
+      yield* Effect.try({
+        try: () => opentui.symbols.setupTerminal(renderer, useAlternateScreen),
+        catch: (e) => new RendererFailedToSetupTerminal({ cause: e }),
+      });
+    });
+
     return {
       enableMouse,
       disableMouse,
       createRenderer,
       bufferDrawBox,
-      createTextBuffer,
+      createTextBufferAttributes,
       destroyRenderer,
       createOptimizedBufferAttributes,
       destroyOptimizedBuffer,
@@ -947,6 +997,10 @@ export class Library extends Effect.Service<Library>()("Library", {
       destroyTextBuffer,
       setDebugOverlay,
       clearTerminal,
+      setTerminalTitle,
+      getTerminalCapabilities,
+      processCapabilityResponse,
+      setupTerminal,
     } as const;
   }),
 }) {}

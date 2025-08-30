@@ -1,6 +1,3 @@
-// https://github.com/sst/opentui/blob/main/src/types.ts
-// converted to Effect
-
 import { Effect, Ref, Schema } from "effect";
 import { type Input } from "./colors";
 import { hexToRgb, rgbToHex } from "./utils";
@@ -300,3 +297,5 @@ export class RGBAv2 extends Effect.Service<RGBAv2>()("@opentuee/rgb-v2", {
 }) {}
 
 export const RGBAv2Live = RGBAv2.Default;
+
+export type WidthMethod = "wcwidth" | "unicode";

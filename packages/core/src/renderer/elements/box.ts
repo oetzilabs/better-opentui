@@ -51,7 +51,7 @@ export const DEFAULTS = {
 
 export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = DEFAULTS) {
   // const lib = yield* Library;
-  const b = yield* base<"box", BoxElement>("box", {
+  const b = yield* base<"box", BoxElement>("box", binds, {
     ...options,
     colors: {
       ...DEFAULTS.colors,

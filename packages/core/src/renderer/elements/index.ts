@@ -24,7 +24,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
 
     const _root = Effect.fn(function* (initial: { width: number; height: number }, ctx: RenderContextInterface) {
       yield* Ref.set(context, ctx);
-      const r = yield* root(initial);
+      const r = yield* root({ context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection }, initial);
       yield* Ref.update(renderables, (es) => {
         es.push(r);
         return es;

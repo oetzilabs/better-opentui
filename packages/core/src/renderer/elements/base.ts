@@ -38,7 +38,7 @@ import {
   PositionRelative,
 } from "../utils/position";
 import { createTrackedNode, TrackedNode } from "../utils/tracknode";
-import { type ElementOptions } from "./utils";
+import { type Binds, type ElementOptions } from "./utils";
 
 const validateOptions = Effect.fn(function* <T extends string, E>(id: string, options: ElementOptions<T, E>) {
   if (typeof options.width === "number") {
@@ -157,6 +157,7 @@ export const elementCounter = Metric.counter("element_counter", {
 
 export const base = Effect.fn(function* <T extends string, E>(
   type: T,
+  binds: Binds,
   options: ElementOptions<T, E> = {
     visible: true,
     selectable: true,
@@ -524,8 +525,8 @@ export const base = Effect.fn(function* <T extends string, E>(
     if (w <= 0 || h <= 0) {
       return yield* Effect.fail(new RendererFailedToCreateFrameBuffer());
     }
-
-    const fb = yield* OptimizedBuffer.create(w, h, {
+    const { widthMethod } = yield* Ref.get(binds.context);
+    const fb = yield* OptimizedBuffer.create(w, h, widthMethod, {
       respectAlpha: true,
     });
     return fb;

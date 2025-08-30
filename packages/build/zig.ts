@@ -2,12 +2,12 @@
 import { CliConfig, Command, Options } from "@effect/cli";
 import { Command as C, FileSystem, Path } from "@effect/platform";
 import { BunContext, BunPath, BunRuntime } from "@effect/platform-bun";
-import packageJson from "./package.json" assert { type: "json" };
-import { Cause, Config, Console, Effect, Layer, Match, Option } from "effect";
-import { UnknownArchitecture, UnknownPlattform } from "./errors";
-import { DownloaderService, DownloaderLive } from "./downloader";
-import { cmdExec } from "./cmd";
 import * as minisignVerify from "@threema/wasm-minisign-verify";
+import { Cause, Config, Console, Effect, Layer, Match, Option } from "effect";
+import { cmdExec } from "./cmd";
+import { DownloaderLive, DownloaderService } from "./downloader";
+import { UnknownArchitecture, UnknownPlattform } from "./errors";
+import packageJson from "./package.json" with { type: "json" };
 
 // CLI options
 const production = Options.boolean("production").pipe(Options.withDefault(false), Options.optional);
@@ -210,7 +210,8 @@ const command = Command.make(
           Match.orElse(() => "tar.xz"),
         );
 
-        const version = yield* getLatestZigVersion;
+        const latestVersion = yield* getLatestZigVersion;
+        const version = yield* Config.string("ZIG_VERSION").pipe(Config.withDefault(latestVersion));
         const tarball = `zig-${arch}-${platform}-${version}.${ext}`;
 
         const mirrors = shuffle(yield* fetchMirrors);

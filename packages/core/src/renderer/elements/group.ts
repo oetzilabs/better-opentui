@@ -24,6 +24,7 @@ export const group = Effect.fn(function* (
 ) {
   const b = yield* base(
     "group",
+    binds,
     {
       ...options,
       width: "auto",

@@ -61,8 +61,10 @@ export const input = Effect.fn(function* (
   parentElement: BaseElement<any, any> | null = null,
 ) {
   const lib = yield* Library;
+  const { cli } = yield* Ref.get(binds.context);
   const b = yield* base<"input", InputElement>(
     "input",
+    binds,
     {
       ...options,
       selectable: true,
@@ -112,8 +114,9 @@ export const input = Effect.fn(function* (
       const absoluteCursorY = loc.y + 1;
       const cc = yield* Ref.get(cursorColor);
       const parsedCC = yield* parseColor(cc);
-      yield* lib.setCursorPosition(absoluteCursorX, absoluteCursorY, true);
-      yield* lib.setCursorColor(parsedCC);
+
+      yield* lib.setCursorPosition(cli, absoluteCursorX, absoluteCursorY, true);
+      yield* lib.setCursorColor(cli, parsedCC);
     }
   });
 
@@ -122,11 +125,11 @@ export const input = Effect.fn(function* (
     if (focused) {
       const cc = yield* Ref.get(cursorColor);
       const parsedCC = yield* parseColor(cc);
-      yield* lib.setCursorColor(parsedCC);
-      yield* lib.setCursorStyle(Block.make("block"), true);
+      yield* lib.setCursorColor(cli, parsedCC);
+      yield* lib.setCursorStyle(cli, Block.make("block"), true);
       yield* updateCursorPosition();
     } else {
-      yield* lib.setCursorPosition(0, 0, false);
+      yield* lib.setCursorPosition(cli, 0, 0, false);
       const v = yield* Ref.get(value);
       const last = yield* Ref.get(lastCommittedValue);
       if (v !== last) {
@@ -371,7 +374,7 @@ export const input = Effect.fn(function* (
   const destroy = Effect.fn(function* () {
     const focused = yield* Ref.get(b.focused);
     if (focused) {
-      yield* lib.setCursorPosition(0, 0, false);
+      yield* lib.setCursorPosition(cli, 0, 0, false);
     }
     yield* framebuffer_buffer.destroy;
     yield* b.destroy();
