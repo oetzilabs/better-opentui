@@ -1,6 +1,8 @@
 import { BunRuntime } from "@effect/platform-bun";
 import { Colors } from "@opentuee/core/src/colors";
 import type { SelectOption } from "@opentuee/core/src/renderer/elements/select";
+import type { TabSelectElement, TabSelectOption } from "@opentuee/core/src/renderer/elements/tabselect";
+import { PositionRelative } from "@opentuee/core/src/renderer/utils/position";
 import { run } from "@opentuee/core/src/run";
 import { Effect } from "effect";
 
@@ -12,57 +14,37 @@ if (import.meta.main) {
         yield* cli.setBackgroundColor(Colors.Transparent);
         const parentContainer = yield* cli.createElement("group");
 
-        const bigHello = yield* parentContainer.create("asciifont", {
-          left: 20,
-          top: 20,
-          text: "Hello World",
-          font: "tiny",
-          zIndex: 2,
-        });
-
-        const options = [
-          { name: "Option 1", value: "1" },
-          { name: "Option 2", value: "2" },
-          { name: "Option 3", value: "3" },
-          { name: "Option 4", value: "4", description: "ASDF" },
-          { name: "Option 5", value: "5" },
-          { name: "Option 6", value: "6" },
-          { name: "Option 7", value: "7" },
-          { name: "Option 8", value: "8" },
-          { name: "Option 9", value: "9" },
-          { name: "Option 10", value: "10" },
-          { name: "Option 11", value: "11" },
-          { name: "Option 12", value: "12" },
-          { name: "Option 13", value: "13" },
-          { name: "Option 14", value: "14" },
-          { name: "Option 15", value: "15" },
-          { name: "Option 16", value: "16" },
-          { name: "Option 17", value: "17" },
-          { name: "Option 18", value: "18" },
-          { name: "Option 19", value: "19" },
-          { name: "Option 20", value: "20" },
-        ] as SelectOption<string>[];
-
-        const select = yield* parentContainer.create("select", {
+        const tabSelect = yield* parentContainer.create("tabselect", {
           focused: true,
-          searchable: true,
-          zIndex: 1,
+          position: PositionRelative.make(1),
           left: 0,
           top: 0,
-          options,
+          width: 70,
+          options: [
+            { name: "Option 1", value: "1", description: "ASDF" },
+            { name: "Option 2", value: "2", description: "ASDF 2" },
+          ],
+          tabWidth: 20,
+          wrapSelection: true,
           showDescription: true,
-          selectedIndex: 0,
-          width: "100%",
-          height: "auto",
-          onSelect: Effect.fn(function* (option) {
-            if (!option) return;
-            const value = option.value as string;
-            yield* bigHello.setText(value);
+          showUnderline: true,
+          showScrollArrows: true,
+          colors: {
+            bg: Colors.Transparent,
+            fg: Colors.White,
+            selectedBg: Colors.Custom("#334455"),
+            selectedFg: Colors.Yellow,
+            focusedBg: Colors.Custom("#1a1a1a"),
+            focusedFg: Colors.White,
+            selectedDescriptionColor: Colors.Gray,
+          },
+          onSelect: Effect.fn("styled-text.onSelect")(function* (option) {
+            const value = option?.value;
+            yield* Effect.annotateCurrentSpan("styled-text.onSelect", value);
           }),
         });
 
-        yield* parentContainer.add(bigHello);
-        yield* parentContainer.add(select);
+        yield* parentContainer.add(tabSelect);
 
         yield* cli.add(parentContainer);
       }),

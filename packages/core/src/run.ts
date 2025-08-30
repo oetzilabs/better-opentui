@@ -83,11 +83,11 @@ export const run = (options: RunOptions) =>
   }).pipe(
     Effect.provide([CliRendererLive]),
     Effect.catchAllCause((cause) => {
-      process.stdin.write(SwitchToMainScreen.make("\u001B[?1049l"));
-      process.stdin.write(ShowCursor.make("\u001B[?25h"));
-      process.stdin.write(ClearFromCursor.make("\u001B[J"));
+      // process.stdin.write(SwitchToMainScreen.make("\u001B[?1049l"));
+      // process.stdin.write(ShowCursor.make("\u001B[?25h"));
+      // process.stdin.write(ClearFromCursor.make("\u001B[J"));
 
-      process.stdin.setRawMode(false);
+      // process.stdin.setRawMode(false);
       return Console.log(Cause.pretty(cause));
     }),
     Effect.provide([ShutdownLive, LibraryLive, Logger.pretty, createOtelLayer("opentuee")]),

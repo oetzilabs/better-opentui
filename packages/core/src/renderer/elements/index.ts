@@ -10,6 +10,7 @@ import { group } from "./group";
 import { input } from "./input";
 import { root } from "./root";
 import { select } from "./select";
+import { tabselect } from "./tabselect";
 import { text } from "./text";
 import { type RemoveBindsFromArgs, type RenderContextInterface } from "./utils";
 
@@ -191,6 +192,33 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       yield* Ref.set(renderables, []);
     });
 
+    const _tabselect = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof tabselect>>) {
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = tabselect.bind(tabselect, {
+        context: context as Ref.Ref<RenderContextInterface>,
+        cachedGlobalSelection,
+      });
+      const r = yield* fn(...args);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
+      const initialLocation = yield* Ref.get(r.location);
+      const initialDimensions = yield* Ref.get(r.dimensions);
+
+      yield* ctx.addToHitGrid(
+        initialLocation.x,
+        initialLocation.y,
+        initialDimensions.widthValue,
+        initialDimensions.heightValue,
+        r.num,
+      );
+      return r;
+    });
+
     const element_functions = {
       root: _root,
       box: _box,
@@ -200,6 +228,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       framebuffer: _framebuffer,
       input: _input,
       select: _select,
+      tabselect: _tabselect,
     } as const;
 
     const _create_non_parent = Effect.fn(function* <T extends Methods>(
