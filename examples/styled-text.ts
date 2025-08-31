@@ -1,4 +1,3 @@
-import { BunRuntime } from "@effect/platform-bun";
 import { Colors } from "@opentuee/core/src/colors";
 import { run } from "@opentuee/core/src/run";
 import { Effect } from "effect";
