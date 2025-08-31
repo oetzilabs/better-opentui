@@ -1,4 +1,3 @@
-import { Colors } from "@opentuee/core/src/colors";
 import { run } from "@opentuee/core/src/run";
 import { Effect } from "effect";
 
@@ -6,7 +5,6 @@ if (import.meta.main) {
   run({
     // debug: true,
     setup: Effect.fn("run.setup")(function* (cli) {
-      yield* cli.setBackgroundColor(Colors.Transparent);
       const parentContainer = yield* cli.createElement("group");
 
       const styledText = yield* parentContainer.create("text", "Hello World", {});
