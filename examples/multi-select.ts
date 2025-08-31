@@ -23,9 +23,8 @@ if (import.meta.main) {
         ],
         selectedIds: ["apple", "cherry"], // Pre-select Apple and Cherry
         searchable: true,
-        showDescription: true,
-        showHeader: true,
-        headerText: "Selected Fruits",
+        showDescription: false,
+        // headerText: "Selected Fruits",
         width: "auto",
         height: 10,
         onSelect: Effect.fn(function* (options) {

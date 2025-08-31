@@ -98,7 +98,7 @@ const DEFAULTS = {
   wrapSelection: false,
   showDescription: true,
   showScrollIndicator: false,
-  showHeader: true,
+  showHeader: false,
   selectedIndices: [],
   focusedIndex: 0,
   itemSpacing: 0,
@@ -220,11 +220,14 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
   const fontHeight = options.font ? (yield* measureText({ text: "A", font: options.font })).height : 1;
 
   const searchable = yield* Ref.make(options.searchable ?? DEFAULTS.searchable);
+
+  const keys = options.showDescription ? ["name", "value", "description"] : ["name", "value"];
+
   const fuse =
     options.searchable !== undefined
       ? typeof options.searchable === "boolean" && options.searchable
-        ? new Fuse(options.options ?? [], { keys: ["name", "value", "description"] })
-        : new Fuse(options.options ?? [], { keys: ["name", "value", "description"] })
+        ? new Fuse(options.options ?? [], { keys })
+        : new Fuse(options.options ?? [], { keys })
       : new Fuse(options.options ?? [], options.searchable);
 
   const searchinput = yield* input(
@@ -242,6 +245,8 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
       value: "",
       placeholder: "Search options",
       onUpdate: Effect.fn(function* (self) {
+        const f = yield* Ref.get(self.focused);
+        if (!f) return;
         const value = yield* self.getValue();
         if (value.length === 0) {
           const originalOptions = yield* Ref.get(originalOpts);
@@ -623,7 +628,8 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
       Match.orElse(
         Effect.fn(function* () {
           // If searchable, let search input handle other keys when list is focused
-          if (sa) {
+          const f = yield* Ref.get(searchinput.focused);
+          if (sa && f) {
             return yield* searchinput.handleKeyPress(key);
           }
           return false;
