@@ -44,7 +44,7 @@ const DEFAULTS = {
 export const text = Effect.fn(function* (
   binds: Binds,
   content: string,
-  options: TextOptions = DEFAULTS,
+  options: TextOptions,
   parentElement: BaseElement<any, any> | null = null,
 ) {
   const lib = yield* Library;
