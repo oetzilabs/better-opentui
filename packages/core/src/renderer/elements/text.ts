@@ -2,12 +2,12 @@ import { Effect, Ref } from "effect";
 import { MeasureMode } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { TextBuffer, TextChunkSchema } from "../../buffer/text";
-import { Input } from "../../colors";
+import { Colors, Input } from "../../colors";
 import type { Collection } from "../../errors";
 import type { SelectionState } from "../../types";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import { isPositionAbsolute } from "../utils/position";
+import { isPositionAbsolute, PositionAbsolute, PositionRelative } from "../utils/position";
 import { TextSelectionHelper } from "../utils/selection";
 import { StyledText } from "../utils/styled-text";
 import { base, type BaseElement } from "./base";
@@ -24,23 +24,64 @@ export type TextOptions = ElementOptions<"text", TextElement> & {
   onMouseEvent?: BaseElement<"text", TextElement>["onMouseEvent"];
   onKeyboardEvent?: BaseElement<"text", TextElement>["onKeyboardEvent"];
   onUpdate?: (self: TextElement) => Effect.Effect<void, Collection, Library>;
+  onResize?: (width: number, height: number) => Effect.Effect<void, Collection, Library>;
 };
 
-export const text = Effect.fn(function* (binds: Binds, content: string, options: TextOptions = {}) {
-  const lib = yield* Library;
-  const b = yield* base("text", binds, options);
+const DEFAULTS = {
+  colors: {
+    bg: Colors.White,
+    fg: Colors.Black,
+    selectableBg: Colors.Custom("#334455"),
+    selectableFg: Colors.Yellow,
+  },
+  width: "auto",
+  height: "auto",
+  left: 0,
+  top: 0,
+  position: PositionRelative.make(1),
+} satisfies TextOptions;
 
-  b.onUpdate = Effect.fn(function* (self) {
+export const text = Effect.fn(function* (
+  binds: Binds,
+  content: string,
+  options: TextOptions = DEFAULTS,
+  parentElement: BaseElement<any, any> | null = null,
+) {
+  const lib = yield* Library;
+  const b = yield* base(
+    "text",
+    binds,
+    {
+      ...options,
+      position: options.position ?? DEFAULTS.position,
+      width: options.width ?? DEFAULTS.width,
+      height: options.height ?? DEFAULTS.height,
+      left: options.left ?? DEFAULTS.left,
+      top: options.top ?? DEFAULTS.top,
+      colors: {
+        ...options.colors,
+        bg: options.colors?.bg ?? DEFAULTS.colors.bg,
+        fg: options.colors?.fg ?? DEFAULTS.colors.fg,
+        selectableBg: options.colors?.selectableBg ?? DEFAULTS.colors.selectableBg,
+        selectableFg: options.colors?.selectableFg ?? DEFAULTS.colors.selectableFg,
+      },
+    },
+    parentElement,
+  );
+
+  const onUpdate: TextElement["onUpdate"] = Effect.fn(function* (self) {
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
     const ctx = yield* Ref.get(binds.context);
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
     yield* ctx.addToHitGrid(x, y, w, h, b.num);
+    yield* b.updateFromLayout();
     yield* updateTextInfo();
   });
 
   const textEncoder = new TextEncoder();
+
   const chunk = TextChunkSchema.make({
     __isChunk: true as const,
     text: textEncoder.encode(content),
@@ -48,22 +89,24 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
   });
   const st = new StyledText([chunk]);
   const _content = yield* Ref.make(st);
-  yield* Ref.update(b.dimensions, (d) => ({
-    ...d,
-    width: options.width ?? "auto",
-    height: options.height ?? "auto",
-  }));
+  const contentLength = st.toString().length;
+
   const capacity = 256 as const;
   const { widthMethod } = yield* Ref.get(binds.context);
+
   const tba = yield* lib.createTextBufferAttributes(capacity, widthMethod);
   const textBuffer = new TextBuffer(tba.bufferPtr, tba.buffers, capacity);
+
   const c = yield* Ref.get(b.colors);
   const bgC = yield* parseColor(c.bg);
   yield* textBuffer.setDefaultBg(bgC);
+
   const fgC = yield* parseColor(c.fg);
   yield* textBuffer.setDefaultFg(fgC);
+
   const attrs = yield* Ref.get(b.attributes);
   yield* textBuffer.setDefaultAttributes(attrs);
+
   const selectionHelper = new TextSelectionHelper(
     Effect.fn(function* () {
       const loc = yield* Ref.get(b.location);
@@ -79,28 +122,26 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     }),
     () => b.lineInfo,
   );
+
   const measureFunc = (
     width: number,
     widthMode: MeasureMode,
     height: number,
     heightMode: MeasureMode,
   ): { width: number; height: number } => {
-    const maxLineWidth = Math.max(...b.lineInfo.lineWidths, 0);
-    const numLines = b.lineInfo.lineStarts.length || 1;
-
-    let measuredWidth = maxLineWidth;
-    let measuredHeight = numLines;
+    let measuredWidth = contentLength;
+    let measuredHeight = Math.ceil(contentLength / Math.max(1, width));
 
     if (widthMode === MeasureMode.Exactly) {
       measuredWidth = width;
     } else if (widthMode === MeasureMode.AtMost) {
-      measuredWidth = Math.min(maxLineWidth, width);
+      measuredWidth = Math.min(contentLength, width);
     }
 
     if (heightMode === MeasureMode.Exactly) {
       measuredHeight = height;
     } else if (heightMode === MeasureMode.AtMost) {
-      measuredHeight = Math.min(numLines, height);
+      measuredHeight = Math.min(measuredHeight, height);
     }
 
     return {
@@ -136,9 +177,9 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     b.lineInfo = yield* textBuffer.getLineInfo();
 
     const numLines = b.lineInfo.lineStarts.length;
-    const { width, height } = yield* Ref.get(b.dimensions);
+    const { width, height, heightValue: currentHeight, widthValue: currentWidth } = yield* Ref.get(b.dimensions);
     const loc = yield* Ref.get(b.location);
-    if (isPositionAbsolute(loc.type) && height === "auto") {
+    if (isPositionAbsolute(loc.type) && height === "auto" && numLines !== currentHeight) {
       yield* Ref.update(b.dimensions, (d) => ({
         ...d,
         heightValue: numLines,
@@ -147,8 +188,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     }
 
     const maxLineWidth = Math.max(...b.lineInfo.lineWidths);
-    if (isPositionAbsolute(loc.type) && width === "auto") {
-      // widthValue = maxLineWidth;
+    if (isPositionAbsolute(loc.type) && width === "auto" && maxLineWidth !== currentWidth) {
       yield* Ref.update(b.dimensions, (d) => ({
         ...d,
         widthValue: maxLineWidth,
@@ -162,14 +202,16 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     }
   });
 
-  b.onResize = Effect.fn(function* (width: number, height: number) {
+  const onResize = Effect.fn(function* (width: number, height: number) {
+    const fn = options.onResize ?? Effect.fn(function* (width: number, height: number) {});
+    yield* fn(width, height);
     const changed = yield* selectionHelper.reevaluateSelection(width, height);
     if (changed) {
       yield* syncSelectionToTextBuffer();
     }
   });
 
-  b.render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
+  const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
     // we are in the `render` method of the text element, so we need to render only the text
     const v = yield* Ref.get(b.visible);
     if (!v) return;
@@ -220,18 +262,12 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     return selectionHelper.hasSelection();
   });
 
-  // b.onMouseEvent = Effect.fn("text.onMouseEvent")(function* (event) {
-  //   yield* Effect.annotateCurrentSpan("text.onMouseEvent", event);
-  //   const fn: BaseElement<"text", TextElement>["onMouseEvent"] =
-  //     options.onMouseEvent ?? Effect.fn(function* (event) {});
-  //   yield* fn(event);
-  // });
-
-  b.destroy = Effect.fn(function* () {
+  const destroy = Effect.fn(function* () {
     yield* textBuffer.destroy();
+    yield* b.destroy();
   });
 
-  b.toString = Effect.fn(function* () {
+  const toString = Effect.fn(function* () {
     const c = yield* Ref.get(_content);
     return c.toString();
   });
@@ -239,7 +275,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
   const getSelectedText = Effect.fn(function* () {
     const selection = selectionHelper.getSelection();
     if (!selection) return "";
-    const _plainText = yield* b.toString();
+    const _plainText = yield* toString();
     return _plainText.slice(selection.start, selection.end);
   });
 
@@ -270,26 +306,27 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
   });
 
   const setSelectionBackgroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
-    let colors;
     if (typeof color === "function") {
-      colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableBg: color(c.selectableBg) }));
+      yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableBg: color(c.selectableBg) }));
     } else {
-      colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableBg: color }));
+      yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableBg: color }));
     }
   });
 
   const setSelectionForegroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
-    let colors;
     if (typeof color === "function") {
-      colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableFg: color(c.selectableFg) }));
+      yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableFg: color(c.selectableFg) }));
     } else {
-      colors = yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableFg: color }));
+      yield* Ref.updateAndGet(b.colors, (c) => ({ ...c, selectableFg: color }));
     }
   });
   yield* updateTextInfo();
 
   return {
     ...b,
+    onResize,
+    render,
+    onUpdate,
     getSelectedText,
     setContent,
     getContent,
@@ -297,5 +334,7 @@ export const text = Effect.fn(function* (binds: Binds, content: string, options:
     setForegroundColor,
     setSelectionBackgroundColor,
     setSelectionForegroundColor,
+    destroy,
+    toString,
   } satisfies TextElement;
 });

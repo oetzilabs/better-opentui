@@ -1,7 +1,5 @@
 import { BunRuntime } from "@effect/platform-bun";
 import { Colors } from "@opentuee/core/src/colors";
-import type { SelectOption } from "@opentuee/core/src/renderer/elements/select";
-import type { TabSelectElement, TabSelectOption } from "@opentuee/core/src/renderer/elements/tabselect";
 import { PositionRelative } from "@opentuee/core/src/renderer/utils/position";
 import { run } from "@opentuee/core/src/run";
 import { Effect } from "effect";
@@ -14,37 +12,9 @@ if (import.meta.main) {
         yield* cli.setBackgroundColor(Colors.Transparent);
         const parentContainer = yield* cli.createElement("group");
 
-        const tabSelect = yield* parentContainer.create("tabselect", {
-          focused: true,
-          position: PositionRelative.make(1),
-          left: 0,
-          top: 0,
-          width: 70,
-          options: [
-            { name: "Option 1", value: "1", description: "ASDF" },
-            { name: "Option 2", value: "2", description: "ASDF 2" },
-          ],
-          tabWidth: 20,
-          wrapSelection: true,
-          showDescription: true,
-          showUnderline: true,
-          showScrollArrows: true,
-          colors: {
-            bg: Colors.Transparent,
-            fg: Colors.White,
-            selectedBg: Colors.Custom("#334455"),
-            selectedFg: Colors.Yellow,
-            focusedBg: Colors.Custom("#1a1a1a"),
-            focusedFg: Colors.White,
-            selectedDescriptionColor: Colors.Gray,
-          },
-          onSelect: Effect.fn("styled-text.onSelect")(function* (option) {
-            const value = option?.value;
-            yield* Effect.annotateCurrentSpan("styled-text.onSelect", value);
-          }),
-        });
+        const styledText = yield* parentContainer.create("text", "Hello World", {});
 
-        yield* parentContainer.add(tabSelect);
+        yield* parentContainer.add(styledText);
 
         yield* cli.add(parentContainer);
       }),
