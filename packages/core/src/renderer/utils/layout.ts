@@ -1,8 +1,7 @@
-import type { Align } from "@opentuee/core/src/renderer/utils/align";
-import type { FlexDirection } from "@opentuee/core/src/renderer/utils/flex";
-import type { Justify } from "@opentuee/core/src/renderer/utils/justify";
-import type { PositionInput, PositionTypeString } from "@opentuee/core/src/renderer/utils/position";
-import type { Position } from "@opentuee/ui/src/types";
+import type { Align } from "./align";
+import type { FlexDirection } from "./flex";
+import type { Justify } from "./justify";
+import type { PositionInput, PositionTypeString } from "./position";
 
 export interface LayoutOptions {
   width?: PositionInput;
@@ -23,12 +22,14 @@ export interface LayoutOptions {
   minHeight?: number;
   maxWidth?: number;
   maxHeight?: number;
-  margin?: {
-    top?: PositionInput;
-    right?: PositionInput;
-    bottom?: PositionInput;
-    left?: PositionInput;
-  };
+  margin?:
+    | {
+        top?: PositionInput;
+        right?: PositionInput;
+        bottom?: PositionInput;
+        left?: PositionInput;
+      }
+    | PositionInput;
   padding?:
     | {
         top?: PositionInput;

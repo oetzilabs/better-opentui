@@ -144,11 +144,16 @@ export const tabselect = Effect.fn(function* <OptionsType, FBT extends string = 
 
   // helpers
   const updateScrollOffset = Effect.fn(function* () {
+    const mvt = yield* Ref.get(maxVisibleTabs);
+    const halfVisible = Math.floor(mvt / 2);
     const idx = yield* Ref.get(selectedIndex);
+    const so = yield* Ref.get(scrollOffset);
     const arr = yield* Ref.get(opts);
-    const maxTabs = Math.max(1, Math.floor((yield* Ref.get(b.dimensions)).widthValue / (yield* Ref.get(tabWidth))));
-    const halfVisible = Math.floor(maxTabs / 2);
-    yield* Ref.set(scrollOffset, Math.max(0, Math.min(idx - halfVisible, arr.length - maxTabs)));
+    const newScrollOffset = Math.max(0, Math.min(idx - halfVisible, arr.length - mvt));
+
+    if (newScrollOffset !== so) {
+      yield* Ref.set(scrollOffset, newScrollOffset);
+    }
   });
 
   const moveLeft = Effect.fn(function* () {
@@ -257,7 +262,7 @@ export const tabselect = Effect.fn(function* <OptionsType, FBT extends string = 
 
     const visibleOptions = optionsArr.slice(so, so + mvt);
 
-    const si = yield* Ref.get(scrollIndex);
+    const si = yield* Ref.get(selectedIndex);
     if (si >= visibleOptions.length) return;
     const tw = yield* Ref.get(tabWidth);
     const selBg = yield* Ref.get(selectedBg);
@@ -265,9 +270,7 @@ export const tabselect = Effect.fn(function* <OptionsType, FBT extends string = 
     const sbgc = yield* parseColor(selBg);
     const sfgc = yield* parseColor(selFg);
     const fgC = yield* parseColor(colors.fg);
-    const bgC = yield* parseColor(colors.bg);
     const focusedFgC = yield* parseColor(colors.focusedFg);
-    const focusedBgC = yield* parseColor(colors.focusedBg);
     const baseTextColor = focused ? focusedFgC : fgC;
     const su = yield* Ref.get(showUnderline);
     const showDesc = yield* Ref.get(showDescription);
