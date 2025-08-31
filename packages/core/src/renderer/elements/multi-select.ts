@@ -7,7 +7,7 @@ import type { Collection } from "../../errors";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import { PositionRelative } from "../utils/position";
+import { PositionAbsolute } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { type FrameBufferOptions } from "./framebuffer";
 import { group, type GroupElement } from "./group";
@@ -20,14 +20,15 @@ export interface SelectOption<T> {
   description?: string;
   value?: T;
   disabled?: boolean;
+  id?: string; // Optional ID for stable identification
 }
 
 export interface MultiSelectElement<T = any, FBT extends string = "multi-select">
   extends BaseElement<"multi-select", MultiSelectElement<T, FBT>> {
   setOptions: (options: SelectOption<T>[]) => Effect.Effect<void, Collection, Library>;
   getOptions: () => Effect.Effect<SelectOption<T>[], Collection, Library>;
-  setSelectedIndices: (indices: number[]) => Effect.Effect<void, Collection, Library>;
-  getSelectedIndices: () => Effect.Effect<number[], Collection, Library>;
+  setSelectedIds: (ids: string[]) => Effect.Effect<void, Collection, Library>;
+  getSelectedIds: () => Effect.Effect<string[], Collection, Library>;
   getSelectedOptions: () => Effect.Effect<SelectOption<T>[], Collection, Library>;
   toggleSelection: (index: number) => Effect.Effect<void, Collection, Library>;
   setFocusedIndex: (index: number) => Effect.Effect<void, Collection, Library>;
@@ -64,7 +65,7 @@ export type MultiSelectOptions<OptionsType = any, FBT extends string = "multi-se
     headerFg?: Input;
   };
   options?: SelectOption<OptionsType>[];
-  selectedIndices?: number[];
+  selectedIds?: string[];
   focusedIndex?: number;
   wrapSelection?: boolean;
   showDescription?: boolean;
@@ -118,42 +119,28 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
 
   const parentDimensions = yield* Ref.get(parentElement.dimensions);
 
-  // Create header group
-  const headerGroup = yield* group(
-    binds,
-    {
-      visible: options.showHeader ?? DEFAULTS.showHeader,
-      position: PositionRelative.make(1),
-      left: 0,
-      top: 0,
-      width: "auto",
-      height: 1,
-    },
-    parentElement,
-  );
-
   // Create header text element
   const headerTextElement = yield* text(
     binds,
     `${options.headerText ?? DEFAULTS.headerText}: `,
     {
       visible: true,
-      position: PositionRelative.make(1),
+      position: PositionAbsolute.make(2),
       left: 0,
       top: 0,
-      width: "auto",
+      width: "100%",
       height: 1,
       colors: {
         fg: options.colors?.headerFg ?? DEFAULTS.colors.headerFg,
         bg: options.colors?.headerBg ?? DEFAULTS.colors.headerBg,
       },
     },
-    headerGroup,
+    parentElement,
   );
 
   // Add header group to parent if header is enabled
   if (options.showHeader ?? DEFAULTS.showHeader) {
-    yield* parentElement.add(headerGroup);
+    yield* parentElement.add(headerTextElement);
   }
 
   const b = yield* base<"multi-select", MultiSelectElement<OptionsType>>(
@@ -161,14 +148,28 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     binds,
     {
       ...options,
-      position: PositionRelative.make(1),
+      position: PositionAbsolute.make(2),
       selectable: true,
-      top: (options.showHeader ?? DEFAULTS.showHeader) ? 1 : 0, // Position below header if shown
+      top:
+        (options.showHeader ?? DEFAULTS.showHeader)
+          ? options.searchable
+            ? 2 // Header + search input
+            : 1 // search input
+          : options.searchable
+            ? 1 // search input
+            : 0, // nothing
       height: options.height
         ? options.height === "auto"
           ? Math.min(
               (options.options ?? []).length * 2,
-              parentDimensions.heightValue - ((options.showHeader ?? DEFAULTS.showHeader) ? 2 : 1),
+              parentDimensions.heightValue -
+                ((options.showHeader ?? DEFAULTS.showHeader)
+                  ? options.searchable
+                    ? 3
+                    : 2 // Header + search + 1 for spacing
+                  : options.searchable
+                    ? 2
+                    : 1), // Search + 1 for spacing
               Infinity,
             ) + 1
           : options.height
@@ -185,9 +186,19 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
 
   const framebuffer_buffer = yield* b.createFrameBuffer();
 
-  const opts = yield* Ref.make(options.options ?? []);
-  const selectedIndices = yield* Ref.make(options.selectedIndices ?? DEFAULTS.selectedIndices);
+  const originalOpts = yield* Ref.make(options.options ?? []); // Always contains full original options
+  const opts = yield* Ref.make(options.options ?? []); // Current display options (filtered or full)
+  const selectedIds = yield* Ref.make<string[]>([]); // Selected option IDs
   const focusedIndex = yield* Ref.make(options.focusedIndex ?? DEFAULTS.focusedIndex);
+
+  // Helper function to get or generate ID for an option
+  const getOptionId = (option: SelectOption<OptionsType>, index: number): string => {
+    return option.id || `option-${index}`;
+  };
+
+  // Initialize selected IDs from provided IDs
+  const initialSelectedIds = options.selectedIds ?? [];
+  yield* Ref.set(selectedIds, initialSelectedIds);
   const wrapSelection = yield* Ref.make(options.wrapSelection ?? DEFAULTS.wrapSelection);
   const showDescription = yield* Ref.make(options.showDescription ?? DEFAULTS.showDescription);
   const showScrollIndicator = yield* Ref.make(options.showScrollIndicator ?? DEFAULTS.showScrollIndicator);
@@ -225,19 +236,20 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
       colors: options.colors ?? DEFAULTS.colors,
       width: options.width,
       height: 1,
-      position: PositionRelative.make(1),
+      position: PositionAbsolute.make(2), // Position relative to parent
       left: 0,
-      top: 1,
+      top: (options.showHeader ?? DEFAULTS.showHeader) ? 1 : 0,
       value: "",
       placeholder: "Search options",
       onUpdate: Effect.fn(function* (self) {
         const value = yield* self.getValue();
         if (value.length === 0) {
-          yield* Ref.update(opts, (opts) => options.options ?? []);
+          const originalOptions = yield* Ref.get(originalOpts);
+          yield* Ref.set(opts, originalOptions);
           return;
         }
         const filteredOptions = fuse.search(value).map((o) => o.item);
-        yield* Ref.update(opts, (opts) => filteredOptions);
+        yield* Ref.set(opts, filteredOptions);
         yield* updateScrollOffset();
       }),
     },
@@ -247,34 +259,12 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
   // Helper to update scroll offset
   const updateScrollOffset = Effect.fn(function* () {
     const idx = yield* Ref.get(focusedIndex);
-    const optionsArr = yield* Ref.get(opts);
+    const optionsArr = yield* Ref.get(opts); // Use current display options for scrolling
     const { heightValue: height } = yield* Ref.get(b.dimensions);
     const maxVisibleItems = Math.max(1, Math.floor(height / (yield* Ref.get(linesPerItem))));
     const halfVisible = Math.floor(maxVisibleItems / 2);
     const newScrollOffset = Math.max(0, Math.min(idx - halfVisible, optionsArr.length - maxVisibleItems));
     yield* Ref.set(scrollOffset, newScrollOffset);
-  });
-
-  // Helper to update header text
-  const updateHeaderText = Effect.fn(function* () {
-    const selectedOpts = yield* getSelectedOptions();
-    const maxItems = options.maxHeaderItems ?? DEFAULTS.maxHeaderItems;
-    const headerTxt = options.headerText ?? DEFAULTS.headerText;
-
-    let displayText = `${headerTxt}: `;
-    if (selectedOpts.length === 0) {
-      displayText += "none";
-    } else if (selectedOpts.length <= maxItems) {
-      displayText += selectedOpts.map((opt) => opt.name).join(", ");
-    } else {
-      const shown = selectedOpts
-        .slice(0, maxItems)
-        .map((opt) => opt.name)
-        .join(", ");
-      displayText += `${shown} (+${selectedOpts.length - maxItems} more)`;
-    }
-
-    yield* headerTextElement.setContent(displayText);
   });
 
   // Rendering
@@ -291,7 +281,7 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     yield* framebuffer_buffer.clear(bgColor);
 
     const optionsArr = yield* Ref.get(opts);
-    const selIndices = yield* Ref.get(selectedIndices);
+    const selIds = yield* Ref.get(selectedIds);
     const focIdx = yield* Ref.get(focusedIndex);
     const scroll = yield* Ref.get(scrollOffset);
     const showDesc = yield* Ref.get(showDescription);
@@ -310,7 +300,7 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     const fnt = yield* Ref.get(font);
 
     const contentX = 0;
-    const contentY = sa ? 1 : 0;
+    const contentY = 0; // Always start from top since positioning is handled by the 'top' property
     const { widthValue: contentWidth, heightValue: contentHeight } = yield* Ref.get(b.dimensions);
     const maxVisibleItems = Math.max(1, Math.floor(contentHeight / (yield* Ref.get(linesPerItem))));
 
@@ -322,7 +312,8 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
       const so = yield* Ref.get(scrollOffset);
       const actualIndex = so + i;
       const option = visibleOptions[i];
-      const isSelected = selIndices.includes(actualIndex);
+      const optionId = getOptionId(option, actualIndex);
+      const isSelected = selIds.includes(optionId);
       const isFocused = actualIndex === focIdx;
       const itemY = contentY + i * lpi;
 
@@ -386,13 +377,14 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
 
   // Setters/getters
   const setOptions = Effect.fn(function* (optionsArr: SelectOption<OptionsType>[]) {
-    yield* Ref.set(opts, optionsArr);
+    yield* Ref.set(originalOpts, optionsArr); // Update original options
+    yield* Ref.set(opts, optionsArr); // Update current display options
     const focIdx = yield* Ref.get(focusedIndex);
     yield* Ref.set(focusedIndex, Math.min(focIdx, Math.max(0, optionsArr.length - 1)));
-    // Filter out invalid selected indices
-    const selIndices = yield* Ref.get(selectedIndices);
-    const validIndices = selIndices.filter((idx) => idx >= 0 && idx < optionsArr.length);
-    yield* Ref.set(selectedIndices, validIndices);
+    // Filter out invalid selected IDs
+    const selIds = yield* Ref.get(selectedIds);
+    const validIds = selIds.filter((id) => optionsArr.some((option, index) => getOptionId(option, index) === id));
+    yield* Ref.set(selectedIds, validIds);
     yield* updateScrollOffset();
     yield* updateHeaderText();
   });
@@ -401,43 +393,73 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     return yield* Ref.get(opts);
   });
 
-  const setSelectedIndices = Effect.fn(function* (indices: number[]) {
-    const optionsArr = yield* Ref.get(opts);
-    const validIndices = indices.filter((idx) => idx >= 0 && idx < optionsArr.length);
-    yield* Ref.set(selectedIndices, validIndices);
+  const setSelectedIds = Effect.fn(function* (ids: string[]) {
+    const optionsArr = yield* Ref.get(originalOpts); // Validate against original options
+    const validIds = ids.filter((id) => optionsArr.some((option, index) => getOptionId(option, index) === id));
+    yield* Ref.set(selectedIds, validIds);
     yield* updateHeaderText();
   });
 
-  const getSelectedIndices = Effect.fn(function* () {
-    return yield* Ref.get(selectedIndices);
+  const getSelectedIds = Effect.fn(function* () {
+    return yield* Ref.get(selectedIds);
   });
 
   const getSelectedOptions = Effect.fn(function* () {
-    const optionsArr = yield* Ref.get(opts);
-    const selIndices = yield* Ref.get(selectedIndices);
-    return selIndices.map((idx) => optionsArr[idx]).filter(Boolean);
+    const optionsArr = yield* Ref.get(originalOpts); // Always use original options
+    const selIds = yield* Ref.get(selectedIds);
+    return optionsArr.filter((option) => selIds.includes(getOptionId(option, optionsArr.indexOf(option))));
   });
+
+  // Helper to update header text
+  const updateHeaderText = Effect.fn(function* () {
+    const selectedOpts = yield* getSelectedOptions();
+    const maxItems = options.maxHeaderItems ?? DEFAULTS.maxHeaderItems;
+    const headerTxt = options.headerText ?? DEFAULTS.headerText;
+
+    let displayText = `${headerTxt}: `;
+    if (selectedOpts.length === 0) {
+      displayText += "none";
+    } else if (selectedOpts.length <= maxItems) {
+      displayText += selectedOpts.map((opt) => opt.name).join(", ");
+    } else {
+      const shown = selectedOpts
+        .slice(0, maxItems)
+        .map((opt) => opt.name)
+        .join(", ");
+      displayText += `${shown} (+${selectedOpts.length - maxItems} more)`;
+    }
+
+    yield* headerTextElement.setContent(displayText);
+  });
+
+  // Update header text initially if header is enabled
+  if (options.showHeader ?? DEFAULTS.showHeader) {
+    yield* updateHeaderText();
+  }
 
   const toggleSelection = Effect.fn(function* (index: number) {
     const optionsArr = yield* Ref.get(opts);
     if (index < 0 || index >= optionsArr.length) return;
 
-    const selIndices = yield* Ref.get(selectedIndices);
-    const isSelected = selIndices.includes(index);
+    const selectedOption = optionsArr[index];
+    const optionId = getOptionId(selectedOption, index);
+
+    const selIds = yield* Ref.get(selectedIds);
+    const isSelected = selIds.includes(optionId);
 
     if (isSelected) {
       yield* Ref.set(
-        selectedIndices,
-        selIndices.filter((idx) => idx !== index),
+        selectedIds,
+        selIds.filter((id) => id !== optionId),
       );
     } else {
-      yield* Ref.set(selectedIndices, [...selIndices, index]);
+      yield* Ref.set(selectedIds, [...selIds, optionId]);
     }
     yield* updateHeaderText();
   });
 
   const setFocusedIndex = Effect.fn(function* (index: number) {
-    const optionsArr = yield* Ref.get(opts);
+    const optionsArr = yield* Ref.get(opts); // Use current display options for bounds checking
     if (index >= 0 && index < optionsArr.length) {
       yield* Ref.set(focusedIndex, index);
       yield* updateScrollOffset();
@@ -508,7 +530,7 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
   // Keyboard navigation
   const moveUp = Effect.fn(function* (steps: number = 1) {
     const idx = yield* Ref.get(focusedIndex);
-    const optionsArr = yield* Ref.get(opts);
+    const optionsArr = yield* Ref.get(opts); // Use current display options for navigation
     const wrap = yield* Ref.get(wrapSelection);
     let newIndex = idx - steps;
     if (newIndex >= 0) {
@@ -523,7 +545,7 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
 
   const moveDown = Effect.fn(function* (steps: number = 1) {
     const idx = yield* Ref.get(focusedIndex);
-    const optionsArr = yield* Ref.get(opts);
+    const optionsArr = yield* Ref.get(opts); // Use current display options for navigation
     const wrap = yield* Ref.get(wrapSelection);
     let newIndex = idx + steps;
     if (newIndex < optionsArr.length) {
@@ -635,7 +657,7 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
 
   const destroy = Effect.fn(function* () {
     yield* framebuffer_buffer.destroy;
-    yield* headerGroup.destroy();
+    yield* headerTextElement.destroy();
     yield* b.destroy();
   });
 
@@ -653,8 +675,8 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     render,
     setOptions,
     getOptions,
-    setSelectedIndices,
-    getSelectedIndices,
+    setSelectedIds,
+    getSelectedIds,
     getSelectedOptions,
     toggleSelection,
     setFocusedIndex,

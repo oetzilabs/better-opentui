@@ -9,32 +9,32 @@ if (import.meta.main) {
       const parentContainer = yield* cli.createElement("group");
 
       const multiSelectElement = yield* parentContainer.create("multi-select", {
+        visible: true,
         focused: true,
         options: [
-          { name: "Apple", value: "apple", description: "A red or green fruit" },
-          { name: "Banana", value: "banana", description: "A yellow curved fruit" },
-          { name: "Cherry", value: "cherry", description: "A small red fruit" },
-          { name: "Date", value: "date", description: "A sweet brown fruit" },
-          { name: "Elderberry", value: "elderberry", description: "A dark purple berry" },
-          { name: "Fig", value: "fig", description: "A soft pear-shaped fruit" },
-          { name: "Grape", value: "grape", description: "A small round fruit" },
-          { name: "Honeydew", value: "honeydew", description: "A large green melon" },
+          { name: "Apple", id: "apple", value: "apple", description: "A red or green fruit" },
+          { name: "Banana", id: "banana", value: "banana", description: "A yellow curved fruit" },
+          { name: "Cherry", id: "cherry", value: "cherry", description: "A small red fruit" },
+          { name: "Date", id: "date", value: "date", description: "A sweet brown fruit" },
+          { name: "Elderberry", id: "elderberry", value: "elderberry", description: "A dark purple berry" },
+          { name: "Fig", id: "fig", value: "fig", description: "A soft pear-shaped fruit" },
+          { name: "Grape", id: "grape", value: "grape", description: "A small round fruit" },
+          { name: "Honeydew", id: "honeydew", value: "honeydew", description: "A large green melon" },
         ],
-        selectedIndices: [0, 2], // Pre-select Apple and Cherry
+        selectedIds: ["apple", "cherry"], // Pre-select Apple and Cherry
         searchable: true,
         showDescription: true,
         showHeader: true,
         headerText: "Selected Fruits",
-        width: 40,
+        width: "auto",
         height: 10,
-        onSelect: Effect.fn(function* (options: SelectOption<string>[]) {
+        onSelect: Effect.fn(function* (options) {
           if (options && Array.isArray(options)) {
-            // console.log(
-            //   "Selected options:",
-            //   options.map((opt) => opt.name),
-            // );
+            console.log(
+              "Selected options:",
+              options.map((opt) => opt.name),
+            );
           }
-          return Effect.succeed(undefined);
         }),
       });
 
