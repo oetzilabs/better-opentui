@@ -1,4 +1,4 @@
-import { BunContext } from "@effect/platform-bun";
+import { BunContext, BunRuntime } from "@effect/platform-bun";
 import { Cause, Console, Effect, Exit, Logger } from "effect";
 import { ClearFromCursor, ShowCursor, SwitchToMainScreen } from "./ansi";
 import * as Errors from "./errors";
@@ -93,4 +93,5 @@ export const run = (options: RunOptions) =>
     Effect.provide([ShutdownLive, LibraryLive, Logger.pretty, createOtelLayer("opentuee")]),
     Effect.provide(BunContext.layer),
     Effect.scoped,
+    BunRuntime.runMain,
   );
