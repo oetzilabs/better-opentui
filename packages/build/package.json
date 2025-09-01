@@ -1,5 +1,5 @@
 {
-  "name": "@opentuee/build",
+  "name": "@better-opentui/build",
   "version": "0.0.0",
   "module": "index.ts",
   "type": "module",

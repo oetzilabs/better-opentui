@@ -90,7 +90,7 @@ export type ParsedMouseEvent = typeof ParsedMouseEvent.Type;
 const sgrRe = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/;
 const basicRe = /^\x1b\[M(.{3})/;
 
-export class MouseParser extends Effect.Service<MouseParser>()("@opentuee/mouse-parser", {
+export class MouseParser extends Effect.Service<MouseParser>()("@better-opentui/mouse-parser", {
   dependencies: [],
   scoped: Effect.gen(function* () {
     // Internal mouse button state

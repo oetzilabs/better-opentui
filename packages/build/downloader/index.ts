@@ -3,7 +3,7 @@ import { BunFileSystem, BunHttpPlatform, BunPath } from "@effect/platform-bun";
 import { Array, Chunk, Console, Effect, Match, Stream } from "effect";
 import { DownloaderError, DownloaderFileNotFound } from "./errors";
 
-export class DownloaderService extends Effect.Service<DownloaderService>()("@opentuee/downloader", {
+export class DownloaderService extends Effect.Service<DownloaderService>()("@better-opentui/downloader", {
   effect: Effect.gen(function* (_) {
     const client = yield* HttpClient.HttpClient;
     const fs = yield* FileSystem.FileSystem;
@@ -11,7 +11,7 @@ export class DownloaderService extends Effect.Service<DownloaderService>()("@ope
 
     const DEFAULT_TARGET_FOLDER_PATH = "/tmp";
 
-    const download = Effect.fn("@opentuee/downloader/download")(function* (
+    const download = Effect.fn("@better-opentui/downloader/download")(function* (
       url: string,
       targetFolderPath = DEFAULT_TARGET_FOLDER_PATH,
       writeType: "buffer" | "stream" = "buffer",

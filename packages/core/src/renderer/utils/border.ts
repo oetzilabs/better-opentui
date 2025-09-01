@@ -1,4 +1,4 @@
-import { Input } from "@opentuee/core/src/colors";
+import { Input } from "@better-opentui/core/src/colors";
 import { Effect, Schema } from "effect";
 
 export const BorderSidesConfig = Schema.Struct({

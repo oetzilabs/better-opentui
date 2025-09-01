@@ -1,5 +1,5 @@
-import { PositionRelative } from "@opentuee/core/src/renderer/utils/position";
-import { run } from "@opentuee/core/src/run";
+import { PositionRelative } from "@better-opentui/core/src/renderer/utils/position";
+import { run } from "@better-opentui/core/src/run";
 import { Effect } from "effect";
 
 if (import.meta.main) {

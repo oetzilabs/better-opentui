@@ -19,7 +19,7 @@
       },
     },
     "packages/3d": {
-      "name": "@opentuee/3d",
+      "name": "@better-opentui/3d",
       "dependencies": {
         "bun-webgpu": "^0.1.0",
         "jimp": "^1.6.0",
@@ -31,10 +31,10 @@
       },
     },
     "packages/animation": {
-      "name": "@opentuee/animation",
+      "name": "@better-opentui/animation",
     },
     "packages/build": {
-      "name": "@opentuee/build",
+      "name": "@better-opentui/build",
       "version": "0.0.0",
       "dependencies": {
         "@effect/cli": "0.69.0",
@@ -42,7 +42,7 @@
       },
     },
     "packages/core": {
-      "name": "@opentuee/core",
+      "name": "@better-opentui/core",
       "dependencies": {
         "@effect/experimental": "^0.54.6",
         "@effect/opentelemetry": "0.56.4",
@@ -83,6 +83,14 @@
     "@babel/traverse": ["@babel/traverse@7.28.0", "", { "dependencies": { "@babel/code-frame": "^7.27.1", "@babel/generator": "^7.28.0", "@babel/helper-globals": "^7.28.0", "@babel/parser": "^7.28.0", "@babel/template": "^7.27.2", "@babel/types": "^7.28.0", "debug": "^4.3.1" } }, "sha512-mGe7UK5wWyh0bKRfupsUchrQGqvDbZDbKJw+kcRGSmdHVYrv+ltd0pnpDTVpiTqnaBru9iEvA8pz8W46v0Amwg=="],
 
     "@babel/types": ["@babel/types@7.28.2", "", { "dependencies": { "@babel/helper-string-parser": "^7.27.1", "@babel/helper-validator-identifier": "^7.27.1" } }, "sha512-ruv7Ae4J5dUYULmeXw1gmb7rYRz57OWCPM57pHojnLq/3Z1CK2lNSLTCVjxVk1F/TZHwOZZrOWi0ur95BbLxNQ=="],
+
+    "@better-opentui/3d": ["@better-opentui/3d@workspace:packages/3d"],
+
+    "@better-opentui/animation": ["@better-opentui/animation@workspace:packages/animation"],
+
+    "@better-opentui/build": ["@better-opentui/build@workspace:packages/build"],
+
+    "@better-opentui/core": ["@better-opentui/core@workspace:packages/core"],
 
     "@dimforge/rapier2d-simd-compat": ["@dimforge/rapier2d-simd-compat@0.17.3", "", {}, "sha512-bijvwWz6NHsNj5e5i1vtd3dU2pDhthSaTUZSh14DUGGKJfw8eMnlWZsxwHBxB/a3AXVNDjL9abuHw1k9FGR+jg=="],
 
@@ -279,14 +287,6 @@
     "@opentelemetry/sdk-trace-web": ["@opentelemetry/sdk-trace-web@2.0.1", "", { "dependencies": { "@opentelemetry/core": "2.0.1", "@opentelemetry/sdk-trace-base": "2.0.1" }, "peerDependencies": { "@opentelemetry/api": ">=1.0.0 <1.10.0" } }, "sha512-R4/i0rISvAujG4Zwk3s6ySyrWG+Db3SerZVM4jZ2lEzjrNylF7nRAy1hVvWe8gTbwIxX+6w6ZvZwdtl2C7UQHQ=="],
 
     "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.36.0", "", {}, "sha512-TtxJSRD8Ohxp6bKkhrm27JRHAxPczQA7idtcTOMYI+wQRRrfgqxHv1cFbCApcSnNjtXkmzFozn6jQtFrOmbjPQ=="],
-
-    "@opentuee/3d": ["@opentuee/3d@workspace:packages/3d"],
-
-    "@opentuee/animation": ["@opentuee/animation@workspace:packages/animation"],
-
-    "@opentuee/build": ["@opentuee/build@workspace:packages/build"],
-
-    "@opentuee/core": ["@opentuee/core@workspace:packages/core"],
 
     "@parcel/watcher": ["@parcel/watcher@2.5.1", "", { "dependencies": { "detect-libc": "^1.0.3", "is-glob": "^4.0.3", "micromatch": "^4.0.5", "node-addon-api": "^7.0.0" }, "optionalDependencies": { "@parcel/watcher-android-arm64": "2.5.1", "@parcel/watcher-darwin-arm64": "2.5.1", "@parcel/watcher-darwin-x64": "2.5.1", "@parcel/watcher-freebsd-x64": "2.5.1", "@parcel/watcher-linux-arm-glibc": "2.5.1", "@parcel/watcher-linux-arm-musl": "2.5.1", "@parcel/watcher-linux-arm64-glibc": "2.5.1", "@parcel/watcher-linux-arm64-musl": "2.5.1", "@parcel/watcher-linux-x64-glibc": "2.5.1", "@parcel/watcher-linux-x64-musl": "2.5.1", "@parcel/watcher-win32-arm64": "2.5.1", "@parcel/watcher-win32-ia32": "2.5.1", "@parcel/watcher-win32-x64": "2.5.1" } }, "sha512-dfUnCxiN9H4ap84DvD2ubjw+3vUNpstxa0TneY/Paat8a3R4uQZDLSvWjmznAY/DoahqTHl9V46HF/Zs3F29pg=="],
 

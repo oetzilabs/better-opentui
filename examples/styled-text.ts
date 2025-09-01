@@ -1,4 +1,4 @@
-import { run } from "@opentuee/core/src/run";
+import { run } from "@better-opentui/core/src/run";
 import { Effect } from "effect";
 
 if (import.meta.main) {

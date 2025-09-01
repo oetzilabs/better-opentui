@@ -1,5 +1,5 @@
 {
-  "name": "@opentuee/core",
+  "name": "@better-opentui/core",
   "module": "index.ts",
   "type": "module",
   "private": true,

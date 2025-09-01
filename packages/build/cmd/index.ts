@@ -1,7 +1,10 @@
 import { Command } from "@effect/platform";
 import { Config, Effect, pipe, Stream } from "effect";
 
-export const cmdExec = Effect.fn("@opentuee/cmd")(function* (com: Command.Command, ignore_logging: boolean = false) {
+export const cmdExec = Effect.fn("@better-opentui/cmd")(function* (
+  com: Command.Command,
+  ignore_logging: boolean = false,
+) {
   const separator = process.platform === "win32" ? ";" : ":";
   const PathConfig = yield* Config.string("PATH").pipe(Config.withDefault(""));
   const PATH = PathConfig.split(separator)

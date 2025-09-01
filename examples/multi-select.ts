@@ -1,6 +1,6 @@
-import type { SelectOption } from "@opentuee/core/src/renderer/elements/multi-select";
-import { PositionRelative } from "@opentuee/core/src/renderer/utils/position";
-import { run } from "@opentuee/core/src/run";
+import type { SelectOption } from "@better-opentui/core/src/renderer/elements/multi-select";
+import { PositionRelative } from "@better-opentui/core/src/renderer/utils/position";
+import { run } from "@better-opentui/core/src/run";
 import { Effect } from "effect";
 
 if (import.meta.main) {

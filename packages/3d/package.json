@@ -1,5 +1,5 @@
 {
-  "name": "@opentuee/3d",
+  "name": "@better-opentui/3d",
   "module": "index.ts",
   "type": "module",
   "private": true,

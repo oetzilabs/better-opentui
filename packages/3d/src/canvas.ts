@@ -1,11 +1,11 @@
-import type { FileSystem } from "@effect/platform";
-import type { PlatformError } from "@effect/platform/Error";
-import { OptimizedBuffer } from "@opentuee/core/src/buffer";
+import { OptimizedBuffer } from "@better-opentui/core/src/buffer";
 import type {
   RendererFailedToDrawPackedBuffer,
   RendererFailedToDrawSuperSampleBuffer,
-} from "@opentuee/core/src/errors";
-import { RGBAClass } from "@opentuee/core/src/types";
+} from "@better-opentui/core/src/errors";
+import { RGBAClass } from "@better-opentui/core/src/types";
+import type { FileSystem } from "@effect/platform";
+import type { PlatformError } from "@effect/platform/Error";
 import { GPUCanvasContextMock } from "bun-webgpu";
 import { toArrayBuffer } from "bun:ffi";
 import { ConfigError, Console, Context, Effect, Match, Ref, Schema } from "effect";

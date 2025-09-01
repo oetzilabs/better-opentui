@@ -1,5 +1,5 @@
 {
-  "name": "@opentuee/animation",
+  "name": "@better-opentui/animation",
   "module": "index.ts",
   "type": "module",
   "private": true,

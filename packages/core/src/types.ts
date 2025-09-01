@@ -195,7 +195,7 @@ export class RGBA {
   }
 }
 
-export class RGBAv2 extends Effect.Service<RGBAv2>()("@opentuee/rgb-v2", {
+export class RGBAv2 extends Effect.Service<RGBAv2>()("@better-opentui/rgb-v2", {
   accessors: true,
   scoped: Effect.fn(function* (buffer: Float32Array) {
     const buf = yield* Ref.make(buffer);
