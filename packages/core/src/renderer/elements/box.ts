@@ -132,20 +132,6 @@ export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = DEFA
     yield* Ref.set(titleAlignment, value);
   });
 
-  b.onUpdate = Effect.fn("box.update")(function* () {
-    const ctx = yield* Ref.get(binds.context);
-    const { x, y } = yield* Ref.get(b.location);
-    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-    yield* ctx.addToHitGrid(x, y, w, h, b.num);
-
-    const f = yield* Ref.get(b.focused);
-    const pt = yield* Ref.get(plainTitle);
-    yield* Effect.annotateCurrentSpan("box.update", { f, pt });
-    if (pt) {
-      yield* setTitle(f ? `${pt} (Focused)` : `${pt} (Not Focused)`);
-    }
-  });
-
   b.render = Effect.fn("box.render")(function* (buffer: OptimizedBuffer, _dt: number) {
     const v = yield* Ref.get(b.visible);
     if (!v) return;

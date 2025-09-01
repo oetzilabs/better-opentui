@@ -105,7 +105,6 @@ export const tabselect = Effect.fn(function* <OptionsType, FBT extends string = 
     options.showUnderline ?? DEFAULTS.showUnderline,
     options.showDescription ?? DEFAULTS.showDescription,
   );
-  console.debug("calculatedHeight", calculatedHeight);
 
   const b = yield* base<"tab-select", TabSelectElement<OptionsType, FBT>>(
     "tab-select",
@@ -221,13 +220,13 @@ export const tabselect = Effect.fn(function* <OptionsType, FBT extends string = 
   });
 
   const onUpdate: TabSelectElement<OptionsType, FBT>["onUpdate"] = Effect.fn(function* (self) {
+    yield* b.onUpdate(self);
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
     const ctx = yield* Ref.get(binds.context);
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
     yield* ctx.addToHitGrid(x, y, w, h, b.num);
-    yield* b.updateFromLayout();
   });
 
   b.onKeyboardEvent = Effect.fn(function* (event) {

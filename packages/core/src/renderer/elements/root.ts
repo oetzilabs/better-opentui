@@ -32,16 +32,6 @@ export const root = Effect.fn(function* (binds: Binds, initial: { width: number;
     // No need to do it here to avoid double-processing
   });
 
-  b.onUpdate = Effect.fn(function* () {
-    if (b.layoutNode.yogaNode.isDirty()) {
-      yield* calculateLayout();
-    }
-    yield* b.updateFromLayout();
-
-    const es = yield* Ref.get(b.renderables);
-    yield* Effect.all(es.map((e) => Effect.suspend(() => e.update()), { concurrency: 10, concurrentFinalizers: true }));
-  });
-
   b.onResize = Effect.fn(function* (width: number, height: number) {
     yield* b.layoutNode.setWidth(width);
     yield* b.layoutNode.setHeight(height);

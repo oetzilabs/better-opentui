@@ -70,13 +70,13 @@ export const text = Effect.fn(function* (
   );
 
   const onUpdate: TextElement["onUpdate"] = Effect.fn(function* (self) {
+    yield* b.onUpdate(self);
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
     const ctx = yield* Ref.get(binds.context);
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
     yield* ctx.addToHitGrid(x, y, w, h, b.num);
-    yield* b.updateFromLayout();
     yield* updateTextInfo();
   });
 

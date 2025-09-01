@@ -1,4 +1,5 @@
 import type { SelectOption } from "@opentuee/core/src/renderer/elements/multi-select";
+import { PositionRelative } from "@opentuee/core/src/renderer/utils/position";
 import { run } from "@opentuee/core/src/run";
 import { Effect } from "effect";
 
@@ -9,6 +10,7 @@ if (import.meta.main) {
       const parentContainer = yield* cli.createElement("group");
 
       const multiSelectElement = yield* parentContainer.create("multi-select", {
+        position: PositionRelative.make(1),
         visible: true,
         focused: true,
         options: [
@@ -22,20 +24,11 @@ if (import.meta.main) {
           { name: "Honeydew", id: "honeydew", value: "honeydew", description: "A large green melon" },
         ],
         selectedIds: ["apple", "cherry"], // Pre-select Apple and Cherry
-        searchable: true,
+        search: { enabled: true, location: "bottom" },
         showDescription: true,
-        showHeader: true,
-        headerText: "Selected Fruits",
-        width: "auto",
+        width: "100%",
         height: 10,
-        onSelect: Effect.fn(function* (options) {
-          if (options && Array.isArray(options)) {
-            console.log(
-              "Selected options:",
-              options.map((opt) => opt.name),
-            );
-          }
-        }),
+        onSelect: (options) => Effect.gen(function* () {}),
       });
 
       yield* parentContainer.add(multiSelectElement);
@@ -44,11 +37,14 @@ if (import.meta.main) {
     }),
     on: {
       start: Effect.fn("multi-select.start")(function* (cli) {
+        // Wait for the update loop to run
+        yield* Effect.sleep(100);
+
         const elements = yield* cli.getElementCount();
         yield* Effect.annotateCurrentSpan("elements", elements);
-        console.log("Multi-select example started.");
-        console.log("Navigation: Arrow keys to move, Space to select/deselect, Enter to confirm");
-        console.log("Search: Tab to focus search input, type to filter, Tab again to return to list");
+
+        // Get the tree info from the parent container
+        const treeInfo = yield* cli.getTreeInfo();
       }),
       resize: Effect.fn(function* (_width, _height) {}),
       exit: Effect.fn(function* (_reason) {}),

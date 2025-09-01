@@ -1,6 +1,6 @@
 import { DevTools } from "@effect/experimental";
+import { FileSystem, Path } from "@effect/platform";
 import { BunSocket } from "@effect/platform-bun";
-import { toRequest } from "@effect/platform-bun/BunHttpServerRequest";
 import { Cause, Context, Duration, Effect, Exit, Fiber, Layer, Mailbox, Ref, Schedule, Schema } from "effect";
 import type { NoSuchElementException } from "effect/Cause";
 import {
@@ -554,6 +554,11 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 return yield* shutdown.run;
               }
               if (isDumpHitGridCommand(parsedKey.raw)) {
+                const treeInfo = yield* root.getTreeInfo();
+                const fs = yield* FileSystem.FileSystem;
+                const path = yield* Path.Path;
+                yield* fs.writeFileString(path.join(process.cwd(), "tree-info.txt"), treeInfo);
+
                 yield* lib.dumpHitGrid(renderer).pipe(
                   Effect.catchAll((cause) =>
                     Effect.gen(function* () {
@@ -1571,7 +1576,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       yield* lib.setTerminalTitle(renderer, title);
     });
 
+    const getTreeInfo = Effect.fn(function* () {
+      return yield* root.getTreeInfo();
+    });
+
     return {
+      getTreeInfo,
       getErrors,
       getSelectionText,
       getElementCount,

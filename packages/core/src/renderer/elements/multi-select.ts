@@ -7,7 +7,7 @@ import type { Collection } from "../../errors";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import { PositionAbsolute } from "../utils/position";
+import { PositionAbsolute, PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { type FrameBufferOptions } from "./framebuffer";
 import { group, type GroupElement } from "./group";
@@ -75,10 +75,9 @@ export type MultiSelectOptions<OptionsType = any, FBT extends string = "multi-se
   onSelect?: (options: SelectOption<OptionsType>[]) => Effect.Effect<void, Collection, Library>;
   description?: string;
   font?: keyof typeof fonts;
-  searchable?: boolean | IFuseOptions<SelectOption<OptionsType>>;
-  showHeader?: boolean;
-  headerText?: string;
+  search?: { enabled: boolean; location?: "top" | "bottom"; config?: IFuseOptions<SelectOption<OptionsType>> };
   maxHeaderItems?: number;
+  parentNode?: BaseElement<any, any> | null;
 };
 
 const DEFAULTS = {
@@ -98,16 +97,14 @@ const DEFAULTS = {
   wrapSelection: false,
   showDescription: true,
   showScrollIndicator: false,
-  showHeader: false,
-  selectedIndices: [],
+  selectedIds: [],
   focusedIndex: 0,
   itemSpacing: 0,
   description: "",
-  searchable: false,
+  search: { enabled: false, location: "top", config: { keys: ["name", "value"] } },
   maxHeaderItems: 3,
-  headerText: "Selected",
   parentNode: null,
-};
+} satisfies MultiSelectOptions<any>;
 
 export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string = "multi-select">(
   binds: Binds,
@@ -117,61 +114,26 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
   const lib = yield* Library;
   if (!parentElement) return yield* Effect.fail(new Error("Parent element is required"));
 
+  const searchOpts = options.search ?? DEFAULTS.search;
+
   const parentDimensions = yield* Ref.get(parentElement.dimensions);
 
-  // Create header text element
-  const headerTextElement = yield* text(
-    binds,
-    `${options.headerText ?? DEFAULTS.headerText}: `,
-    {
-      visible: true,
-      position: PositionAbsolute.make(2),
-      left: 0,
-      top: 0,
-      width: "100%",
-      height: 1,
-      colors: {
-        fg: options.colors?.headerFg ?? DEFAULTS.colors.headerFg,
-        bg: options.colors?.headerBg ?? DEFAULTS.colors.headerBg,
-      },
-    },
-    parentElement,
-  );
-
-  // Add header group to parent if header is enabled
-  if (options.showHeader ?? DEFAULTS.showHeader) {
-    yield* parentElement.add(headerTextElement);
-  }
-
-  const b = yield* base<"multi-select", MultiSelectElement<OptionsType>>(
+  const b = yield* base<"multi-select", MultiSelectElement<OptionsType, FBT>>(
     "multi-select",
     binds,
     {
       ...options,
       position: PositionAbsolute.make(2),
       selectable: true,
-      top:
-        (options.showHeader ?? DEFAULTS.showHeader)
-          ? options.searchable
-            ? 2 // Header + search input
-            : 1 // search input
-          : options.searchable
-            ? 1 // search input
-            : 0, // nothing
+      left: 0,
+      top: searchOpts.enabled && searchOpts.location === "top" ? 1 : 0, // Only account for search input
       height: options.height
         ? options.height === "auto"
           ? Math.min(
               (options.options ?? []).length * 2,
-              parentDimensions.heightValue -
-                ((options.showHeader ?? DEFAULTS.showHeader)
-                  ? options.searchable
-                    ? 3
-                    : 2 // Header + search + 1 for spacing
-                  : options.searchable
-                    ? 2
-                    : 1), // Search + 1 for spacing
+              parentDimensions.heightValue - (searchOpts.enabled ? 3 : 2), // Search + spacing + header
               Infinity,
-            ) + 1
+            )
           : options.height
         : options.height,
       colors: {
@@ -219,16 +181,13 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
   const font = yield* Ref.make(options.font);
   const fontHeight = options.font ? (yield* measureText({ text: "A", font: options.font })).height : 1;
 
-  const searchable = yield* Ref.make(options.searchable ?? DEFAULTS.searchable);
+  const searchable = yield* Ref.make(searchOpts.enabled);
 
   const keys = options.showDescription ? ["name", "value", "description"] : ["name", "value"];
 
-  const fuse =
-    options.searchable !== undefined
-      ? typeof options.searchable === "boolean" && options.searchable
-        ? new Fuse(options.options ?? [], { keys })
-        : new Fuse(options.options ?? [], { keys })
-      : new Fuse(options.options ?? [], options.searchable);
+  const fuse = searchOpts.enabled ? new Fuse(options.options ?? [], searchOpts.config ?? { keys }) : null;
+
+  const listHeight = (yield* Ref.get(b.dimensions)).heightValue;
 
   const searchinput = yield* input(
     binds,
@@ -238,10 +197,10 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
       visible: true,
       colors: options.colors ?? DEFAULTS.colors,
       width: options.width,
-      height: 1,
       position: PositionAbsolute.make(2), // Position relative to parent
+      height: 1,
       left: 0,
-      top: (options.showHeader ?? DEFAULTS.showHeader) ? 1 : 0,
+      top: searchOpts.enabled && searchOpts.location === "bottom" ? listHeight : 0,
       value: "",
       placeholder: "Search options",
       onUpdate: Effect.fn(function* (self) {
@@ -251,15 +210,20 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
         if (value.length === 0) {
           const originalOptions = yield* Ref.get(originalOpts);
           yield* Ref.set(opts, originalOptions);
-          return;
+        } else if (fuse) {
+          const filteredOptions = fuse.search(value).map((o) => o.item);
+          yield* Ref.set(opts, filteredOptions);
+        } else {
+          const originalOptions = yield* Ref.get(originalOpts);
+          yield* Ref.set(opts, originalOptions);
         }
-        const filteredOptions = fuse.search(value).map((o) => o.item);
-        yield* Ref.set(opts, filteredOptions);
         yield* updateScrollOffset();
       }),
     },
     parentElement,
   );
+
+  yield* parentElement.add(searchinput);
 
   // Helper to update scroll offset
   const updateScrollOffset = Effect.fn(function* () {
@@ -276,7 +240,6 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
   const render = Effect.fn(function* (buffer: OptimizedBuffer, _dt: number) {
     const v = yield* Ref.get(b.visible);
     if (!v) return;
-    const sa = yield* Ref.get(searchable);
 
     const loc = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
@@ -373,11 +336,6 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     }
 
     yield* buffer.drawFrameBuffer(loc.x, loc.y, framebuffer_buffer);
-
-    if (sa) {
-      // show the input
-      yield* searchinput.render(buffer, _dt);
-    }
   });
 
   // Setters/getters
@@ -391,7 +349,6 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     const validIds = selIds.filter((id) => optionsArr.some((option, index) => getOptionId(option, index) === id));
     yield* Ref.set(selectedIds, validIds);
     yield* updateScrollOffset();
-    yield* updateHeaderText();
   });
 
   const getOptions = Effect.fn(function* () {
@@ -402,7 +359,6 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     const optionsArr = yield* Ref.get(originalOpts); // Validate against original options
     const validIds = ids.filter((id) => optionsArr.some((option, index) => getOptionId(option, index) === id));
     yield* Ref.set(selectedIds, validIds);
-    yield* updateHeaderText();
   });
 
   const getSelectedIds = Effect.fn(function* () {
@@ -414,33 +370,6 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     const selIds = yield* Ref.get(selectedIds);
     return optionsArr.filter((option) => selIds.includes(getOptionId(option, optionsArr.indexOf(option))));
   });
-
-  // Helper to update header text
-  const updateHeaderText = Effect.fn(function* () {
-    const selectedOpts = yield* getSelectedOptions();
-    const maxItems = options.maxHeaderItems ?? DEFAULTS.maxHeaderItems;
-    const headerTxt = options.headerText ?? DEFAULTS.headerText;
-
-    let displayText = `${headerTxt}: `;
-    if (selectedOpts.length === 0) {
-      displayText += "none";
-    } else if (selectedOpts.length <= maxItems) {
-      displayText += selectedOpts.map((opt) => opt.name).join(", ");
-    } else {
-      const shown = selectedOpts
-        .slice(0, maxItems)
-        .map((opt) => opt.name)
-        .join(", ");
-      displayText += `${shown} (+${selectedOpts.length - maxItems} more)`;
-    }
-
-    yield* headerTextElement.setContent(displayText);
-  });
-
-  // Update header text initially if header is enabled
-  if (options.showHeader ?? DEFAULTS.showHeader) {
-    yield* updateHeaderText();
-  }
 
   const toggleSelection = Effect.fn(function* (index: number) {
     const optionsArr = yield* Ref.get(opts);
@@ -460,7 +389,6 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     } else {
       yield* Ref.set(selectedIds, [...selIds, optionId]);
     }
-    yield* updateHeaderText();
   });
 
   const setFocusedIndex = Effect.fn(function* (index: number) {
@@ -572,24 +500,8 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
 
     // If searchable is enabled, handle focus switching with Tab
     if (sa && keyName === "tab") {
-      const searchFocused = yield* Ref.get(searchinput.focused);
-      if (searchFocused) {
-        // Move focus from search to list
-        yield* searchinput.setFocused(false);
-        return true;
-      } else {
-        // Move focus from list to search
-        yield* searchinput.setFocused(true);
-        return true;
-      }
-    }
-
-    // If searchable and search input is focused, let it handle all keys
-    if (sa) {
-      const searchFocused = yield* Ref.get(searchinput.focused);
-      if (searchFocused) {
-        return yield* searchinput.handleKeyPress(key);
-      }
+      yield* Ref.update(searchinput.focused, (f) => !f);
+      return true;
     }
 
     // Handle navigation and selection keys when list is focused
@@ -611,8 +523,11 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
       Match.when(
         "space",
         Effect.fn(function* () {
-          const focIdx = yield* Ref.get(focusedIndex);
-          yield* toggleSelection(focIdx);
+          const searchFocused = yield* Ref.get(searchinput.focused);
+          if (!searchFocused) {
+            const focIdx = yield* Ref.get(focusedIndex);
+            yield* toggleSelection(focIdx);
+          }
           return true;
         }),
       ),
@@ -628,10 +543,7 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
       Match.orElse(
         Effect.fn(function* () {
           // If searchable, let search input handle other keys when list is focused
-          const f = yield* Ref.get(searchinput.focused);
-          if (sa && f) {
-            return yield* searchinput.handleKeyPress(key);
-          }
+
           return false;
         }),
       ),
@@ -641,16 +553,10 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
   const onUpdate = Effect.fn(function* (self) {
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
-    const sa = yield* Ref.get(searchable);
-    if (sa) {
-      yield* searchinput.update();
-    }
     const ctx = yield* Ref.get(binds.context);
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
     yield* ctx.addToHitGrid(x, y, w, h, b.num);
-    yield* b.updateFromLayout();
-    yield* updateHeaderText();
   });
 
   b.onKeyboardEvent = Effect.fn(function* (event) {
@@ -663,7 +569,6 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
 
   const destroy = Effect.fn(function* () {
     yield* framebuffer_buffer.destroy;
-    yield* headerTextElement.destroy();
     yield* b.destroy();
   });
 

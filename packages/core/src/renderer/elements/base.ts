@@ -1,5 +1,4 @@
 import { Effect, Metric, Ref } from "effect";
-import type { NonNullChain } from "typescript";
 import Yoga, { Display, Edge, PositionType, type Config as YogaConfig } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, Input } from "../../colors";
@@ -118,7 +117,7 @@ export type BaseElement<T extends string, E> = {
     Library
   >;
   onResize: (width: number, height: number) => Effect.Effect<void, Collection | CantParseHexColor, Library>;
-  updateFromLayout: () => Effect.Effect<void, Collection, Library>;
+  updateFromLayout: (self: E) => Effect.Effect<void, Collection, Library>;
   onMouseEvent: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
   onKeyboardEvent: (event: KeyboardEvent) => Effect.Effect<void, Collection, Library>;
   getRenderable: (id: string) => Effect.Effect<BaseElement<any, E> | undefined, Collection, Library>;
@@ -146,6 +145,7 @@ export type BaseElement<T extends string, E> = {
     Library
   >;
   toString: () => Effect.Effect<string, Collection, Library>;
+  getTreeInfo: (self: E) => Effect.Effect<string>;
   setupYogaProperties: (options: ElementOptions<T, E>) => Effect.Effect<void, Collection, Library>;
   createFrameBuffer: () => Effect.Effect<OptimizedBuffer | null, Collection, Library>;
 };
@@ -155,7 +155,7 @@ export const elementCounter = Metric.counter("element_counter", {
   incremental: true,
 });
 
-export const base = Effect.fn(function* <T extends string, E>(
+export const base = Effect.fn(function* <T extends string, E extends BaseElement<any, any>>(
   type: T,
   binds: Binds,
   options: ElementOptions<T, E> = {
@@ -180,8 +180,8 @@ export const base = Effect.fn(function* <T extends string, E>(
   }>({
     _x: options.left ?? 0,
     _y: options.top ?? 0,
-    x: typeof options.left === "number" ? options.left : 0,
-    y: typeof options.top === "number" ? options.top : 0,
+    x: 0,
+    y: 0,
     type: options.position ?? PositionAbsolute.make(2),
   });
   const dimensions = yield* Ref.make<{
@@ -552,7 +552,21 @@ export const base = Effect.fn(function* <T extends string, E>(
   });
   yield* setupYogaProperties(options);
 
-  const updateFromLayout = Effect.fn(function* () {
+  const updateFromLayout = Effect.fn(function* (self: BaseElement<any, E>) {
+    // Find root element
+    let current: BaseElement<any, any> | null = self;
+    while (current) {
+      const p: BaseElement<any, any> | null = yield* Ref.get(current.parent);
+      if (!p) break;
+      current = p;
+    }
+    const root = current!;
+
+    // Calculate layout on root
+    const rootDims = yield* Ref.get(root.dimensions);
+    root.layoutNode.yogaNode.calculateLayout(rootDims.widthValue, rootDims.heightValue, Yoga.DIRECTION_LTR);
+
+    // Get computed layout for this element
     const layout = layoutNode.yogaNode.getComputedLayout();
     const { type } = yield* Ref.get(location);
     const yppu = yield* Ref.get(_yogaPerformancePositionUpdated);
@@ -663,7 +677,7 @@ export const base = Effect.fn(function* <T extends string, E>(
       index = currentRenderables.length;
     }
 
-    // layoutNode.yogaNode.insertChild(container.layoutNode.yogaNode, index);
+    layoutNode.yogaNode.insertChild(container.layoutNode.yogaNode, index);
 
     // Add to renderables
     yield* Ref.update(renderables, (cs) => {
@@ -741,7 +755,7 @@ export const base = Effect.fn(function* <T extends string, E>(
     yield* Ref.set(focused, value);
   });
 
-  const onUpdate: BaseElement<any, E>["onUpdate"] = Effect.fn(function* <T>(self: T) {
+  const onUpdate: BaseElement<any, E>["onUpdate"] = Effect.fn(function* (self: E) {
     const es = yield* Ref.get(renderables);
     if (es.length > 0) {
       yield* Effect.all(
@@ -750,6 +764,7 @@ export const base = Effect.fn(function* <T extends string, E>(
       );
       yield* ensureZIndexSorted();
     }
+    yield* updateFromLayout(self);
   });
 
   const setLocation = Effect.fn(function* (loc: { x: number; y: number }) {
@@ -769,6 +784,24 @@ export const base = Effect.fn(function* <T extends string, E>(
       { concurrency: 10 },
     );
     return texts.join("\n");
+  });
+
+  const getTreeInfoRecursive: (indent: string, element: BaseElement<any, any>) => Effect.Effect<string> = Effect.fn(
+    function* (indent: string, element: BaseElement<any, any>) {
+      const loc = yield* Ref.get(element.location);
+      const dims = yield* Ref.get(element.dimensions);
+      const info = `${indent}${element.type} (${element.id}): x=${loc.x}, y=${loc.y}, w=${dims.widthValue}, h=${dims.heightValue}\n`;
+      const renderables = yield* Ref.get(element.renderables);
+      let childInfo = "";
+      for (const child of renderables) {
+        childInfo += yield* Effect.suspend(() => getTreeInfoRecursive(indent + "  ", child));
+      }
+      return info + childInfo;
+    },
+  );
+
+  const getTreeInfo: BaseElement<any, any>["getTreeInfo"] = Effect.fn(function* (self: E) {
+    return yield* getTreeInfoRecursive("", self as BaseElement<any, any>);
   });
 
   return {
@@ -825,6 +858,9 @@ export const base = Effect.fn(function* <T extends string, E>(
     setSelectionBackgroundColor,
     setSelectionForegroundColor,
     toString,
+    getTreeInfo: function (this) {
+      return getTreeInfo(this as E);
+    },
     setupYogaProperties,
     createFrameBuffer,
   } satisfies BaseElement<T, E>;

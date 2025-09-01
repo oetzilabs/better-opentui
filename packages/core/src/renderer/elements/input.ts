@@ -265,6 +265,8 @@ export const input = Effect.fn(function* (
   });
 
   const handleKeyPress = Effect.fn(function* (key: ParsedKey) {
+    const focused = yield* Ref.get(b.focused);
+    if (!focused) return false;
     const keySequence = typeof key === "string" ? key : key.sequence;
 
     return yield* Match.value(key.name).pipe(
@@ -349,6 +351,7 @@ export const input = Effect.fn(function* (
   });
 
   const onUpdate: InputElement["onUpdate"] = Effect.fn(function* (self) {
+    yield* b.onUpdate(self);
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
     const ctx = yield* Ref.get(binds.context);
@@ -361,14 +364,15 @@ export const input = Effect.fn(function* (
       yield* updateCursorPosition();
     }
 
-    yield* b.updateFromLayout();
     yield* framebuffer_buffer.resize(w, h);
   });
 
   b.onKeyboardEvent = Effect.fn(function* (event) {
     const fn = options.onKeyboardEvent ?? Effect.fn(function* (event) {});
     yield* fn(event);
-    yield* handleKeyPress(event.parsedKey);
+    if (!event.defaultPrevented) {
+      yield* handleKeyPress(event.parsedKey);
+    }
   });
 
   const destroy = Effect.fn(function* () {

@@ -471,7 +471,6 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
     yield* ctx.addToHitGrid(x, y, w, h, b.num);
-    yield* b.updateFromLayout();
     // yield* framebuffer_buffer.resize(w, h);
   });
 
