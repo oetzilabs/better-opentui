@@ -36,16 +36,7 @@ if (import.meta.main) {
       yield* cli.add(parentContainer);
     }),
     on: {
-      start: Effect.fn("multi-select.start")(function* (cli) {
-        // Wait for the update loop to run
-        yield* Effect.sleep(100);
-
-        const elements = yield* cli.getElementCount();
-        yield* Effect.annotateCurrentSpan("elements", elements);
-
-        // Get the tree info from the parent container
-        const treeInfo = yield* cli.getTreeInfo();
-      }),
+      start: Effect.fn("multi-select.start")(function* (cli) {}),
       resize: Effect.fn(function* (_width, _height) {}),
       exit: Effect.fn(function* (_reason) {}),
       panic: Effect.fn(function* (_err) {}),
