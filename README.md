@@ -32,7 +32,7 @@ bun run examples/multi-select.ts
 bun run examples/file-select.ts
 ```
 
----
+# Acknowledgements
 
 A big thanks to [@sst](https://github.com/sst), [@kommander](https://github.com/kommander) and every contributor for their work on OpenTUI and making it available as MIT licensed code for everyone to use.
 
