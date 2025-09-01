@@ -1,3 +1,4 @@
+import type { FileSystem, Path } from "@effect/platform";
 import { Effect, Match, Ref } from "effect";
 import { max } from "effect/Order";
 import { OptimizedBuffer } from "../../buffer/optimized";
@@ -26,7 +27,9 @@ export interface TabSelectElement<T = any, FBT extends string = "tab-select">
   moveRight: () => Effect.Effect<void, Collection, Library>;
   selectCurrent: () => Effect.Effect<void, Collection, Library>;
   handleKeyPress: (key: ParsedKey) => Effect.Effect<boolean, Collection, Library>;
-  onUpdate: (self: TabSelectElement<T, FBT>) => Effect.Effect<void, Collection, Library>;
+  onUpdate: (
+    self: TabSelectElement<T, FBT>,
+  ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   onSelect: (option?: TabSelectOption<T>) => Effect.Effect<void, Collection, Library>;
 }
 

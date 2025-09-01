@@ -1,3 +1,4 @@
+import type { FileSystem, Path } from "@effect/platform";
 import { Effect, Match, Ref } from "effect";
 import Fuse, { type IFuseOptions } from "fuse.js";
 import { fonts, measureText, renderFontToFrameBuffer } from "../../ascii/ascii.font";
@@ -42,7 +43,9 @@ export interface MultiSelectElement<T = any, FBT extends string = "multi-select"
   setShowDescription: (show: boolean) => Effect.Effect<void, Collection, Library>;
   setShowScrollIndicator: (show: boolean) => Effect.Effect<void, Collection, Library>;
   handleKeyPress: (key: ParsedKey) => Effect.Effect<boolean, Collection, Library>;
-  onUpdate: (self: MultiSelectElement<T, FBT>) => Effect.Effect<void, Collection, Library>;
+  onUpdate: (
+    self: MultiSelectElement<T, FBT>,
+  ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   onSelect: (options: SelectOption<T>[]) => Effect.Effect<void, Collection, Library>;
 }
 

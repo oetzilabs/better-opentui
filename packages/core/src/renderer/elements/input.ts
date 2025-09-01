@@ -1,3 +1,4 @@
+import type { FileSystem, Path } from "@effect/platform";
 import { Effect, Match, Ref } from "effect";
 import type { OptimizedBuffer } from "../../buffer/optimized";
 // import { CliRenderer } from "../../cli";
@@ -21,7 +22,7 @@ export interface InputElement extends BaseElement<"input", InputElement> {
   setPlaceholderColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
   setCursorColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
   handleKeyPress: (key: ParsedKey) => Effect.Effect<boolean, Collection, Library>;
-  onUpdate: (self: InputElement) => Effect.Effect<void, Collection, Library>;
+  onUpdate: (self: InputElement) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
 }
 
 export type InputOptions = ElementOptions<"input", InputElement> & {

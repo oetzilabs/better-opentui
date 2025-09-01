@@ -1,3 +1,4 @@
+import type { FileSystem, Path } from "@effect/platform";
 import { Effect, Metric, Ref } from "effect";
 import Yoga, { Display, Edge, PositionType, type Config as YogaConfig } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
@@ -93,8 +94,8 @@ export type BaseElement<T extends string, E> = {
   getElements: () => Effect.Effect<BaseElement<any, E>[]>;
   getElementsCount: () => Effect.Effect<number>;
   setVisible: (value: boolean) => Effect.Effect<void>;
-  update: () => Effect.Effect<void, Collection, Library>;
-  onUpdate: (self: E) => Effect.Effect<void, Collection, Library>;
+  update: () => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
+  onUpdate: (self: E) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   render: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, Collection, Library>;
   add: (container: BaseElement<any, any>, index?: number | undefined) => Effect.Effect<void, Collection, never>;
   setLocation: (loc: { x: number; y: number }) => Effect.Effect<void, never, never>;
@@ -104,8 +105,12 @@ export type BaseElement<T extends string, E> = {
   ) => Effect.Effect<boolean, Collection | CantParseHexColor, Library>;
   getSelection: () => Effect.Effect<{ start: number; end: number } | null>;
   getSelectedText: () => Effect.Effect<string, Collection, Library>;
-  processMouseEvent: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
-  processKeyboardEvent: (event: KeyboardEvent) => Effect.Effect<void, Collection, Library>;
+  processMouseEvent: (
+    event: MouseEvent,
+  ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
+  processKeyboardEvent: (
+    event: KeyboardEvent,
+  ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   destroy: () => Effect.Effect<
     void,
     | RendererFailedToDestroyTextBuffer
@@ -118,8 +123,10 @@ export type BaseElement<T extends string, E> = {
   >;
   onResize: (width: number, height: number) => Effect.Effect<void, Collection | CantParseHexColor, Library>;
   updateFromLayout: (self: E) => Effect.Effect<void, Collection, Library>;
-  onMouseEvent: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
-  onKeyboardEvent: (event: KeyboardEvent) => Effect.Effect<void, Collection, Library>;
+  onMouseEvent: (event: MouseEvent) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
+  onKeyboardEvent: (
+    event: KeyboardEvent,
+  ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   getRenderable: (id: string) => Effect.Effect<BaseElement<any, E> | undefined, Collection, Library>;
   setBackgroundColor: (
     color: ((oldColor: Input) => Input) | Input,

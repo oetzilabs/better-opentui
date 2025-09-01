@@ -16,7 +16,10 @@ export interface FrameBufferOptions<E, T extends string = "framebuffer"> extends
   respectAlpha?: boolean;
 }
 
-export const framebuffer = Effect.fn(function* <E, FrameBufferType extends string = "framebuffer">(
+export const framebuffer = Effect.fn(function* <
+  E extends BaseElement<any, any>,
+  FrameBufferType extends string = "framebuffer",
+>(
   binds: Binds,
   type: FrameBufferType,
   options: FrameBufferOptions<E>,

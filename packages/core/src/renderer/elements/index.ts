@@ -1,3 +1,4 @@
+import type { FileSystem, Path } from "@effect/platform";
 import { Effect, Ref } from "effect";
 import { MissingRenderContext } from "../../errors";
 import type { SelectionState } from "../../types";
@@ -5,6 +6,7 @@ import type { Library } from "../../zig";
 import { asciifont } from "./asciifont";
 import type { BaseElement } from "./base";
 import { box } from "./box";
+import { fileSelect } from "./file-select";
 import { framebuffer } from "./framebuffer";
 import { group } from "./group";
 import { input } from "./input";
@@ -247,6 +249,33 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       return r;
     });
 
+    const _fileSelect = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof fileSelect>>) {
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = fileSelect.bind(fileSelect, {
+        context: context as Ref.Ref<RenderContextInterface>,
+        cachedGlobalSelection,
+      });
+      const r = yield* fn(...args);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
+      const initialLocation = yield* Ref.get(r.location);
+      const initialDimensions = yield* Ref.get(r.dimensions);
+
+      yield* ctx.addToHitGrid(
+        initialLocation.x,
+        initialLocation.y,
+        initialDimensions.widthValue,
+        initialDimensions.heightValue,
+        r.num,
+      );
+      return r;
+    });
+
     const element_functions = {
       root: _root,
       box: _box,
@@ -258,6 +287,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       select: _select,
       "multi-select": _multiSelect,
       tabselect: _tabselect,
+      "file-select": _fileSelect,
     } as const;
 
     const _create_non_parent = Effect.fn(function* <T extends Methods>(
@@ -280,7 +310,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
           create: CreateElementBound;
         },
         TypeError,
-        Library
+        Library | FileSystem.FileSystem | Path.Path
       >;
 
       // With explicit parent (still supported, but not needed)
@@ -293,7 +323,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
           create: CreateElementBound;
         },
         TypeError,
-        Library
+        Library | FileSystem.FileSystem | Path.Path
       >;
     };
 
@@ -306,7 +336,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         create: CreateElementBound;
       },
       TypeError,
-      Library
+      Library | FileSystem.FileSystem | Path.Path
     >;
 
     const _create: CreateElement = <T extends Methods>(

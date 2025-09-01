@@ -1,3 +1,4 @@
+import type { FileSystem, Path } from "@effect/platform";
 import { Effect, Ref } from "effect";
 import { MeasureMode } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
@@ -16,14 +17,14 @@ import type { Binds, ElementOptions } from "./utils";
 export interface TextElement extends BaseElement<"text", TextElement> {
   setContent: (content: string | StyledText) => Effect.Effect<void, Collection, Library>;
   getContent: () => Effect.Effect<StyledText, Collection, Library>;
-  onUpdate: (self: TextElement) => Effect.Effect<void, Collection, Library>;
+  onUpdate: (self: TextElement) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
 }
 
 export type TextOptions = ElementOptions<"text", TextElement> & {
   content?: StyledText | string;
   onMouseEvent?: BaseElement<"text", TextElement>["onMouseEvent"];
   onKeyboardEvent?: BaseElement<"text", TextElement>["onKeyboardEvent"];
-  onUpdate?: (self: TextElement) => Effect.Effect<void, Collection, Library>;
+  onUpdate?: (self: TextElement) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   onResize?: (width: number, height: number) => Effect.Effect<void, Collection, Library>;
 };
 

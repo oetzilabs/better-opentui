@@ -1,3 +1,4 @@
+import type { FileSystem, Path } from "@effect/platform";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
 import { Cause, Console, Effect, Exit, Logger } from "effect";
 import { ClearFromCursor, ShowCursor, SwitchToMainScreen } from "./ansi";
@@ -9,7 +10,7 @@ import { Library, LibraryLive } from "./zig";
 
 export type SetupFunction = (
   cli: CliRenderer,
-) => Effect.Effect<void, Errors.Collection | TypeError, Library | CliRenderer>;
+) => Effect.Effect<void, Errors.Collection | TypeError, Library | CliRenderer | FileSystem.FileSystem | Path.Path>;
 
 export interface RunnerEventMap {
   start: [cli: CliRenderer];
