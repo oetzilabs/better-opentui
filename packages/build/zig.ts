@@ -14,7 +14,7 @@ const production = Options.boolean("production").pipe(Options.withDefault(false)
 const development = Options.boolean("development").pipe(Options.withDefault(true), Options.optional);
 const skipVerification = Options.boolean("skip-verification", { aliases: ["sv", "skipVerification"] }).pipe(
   Options.withDefault(false),
-  Options.optional,
+  Options.optional
 );
 
 const DownloadFolderConfig = Config.string("DOWNLOAD_FOLDER").pipe(Config.withDefault("/tmp/zig-download"));
@@ -28,14 +28,14 @@ const detectPlatform = Effect.fn(function* () {
     Match.when("darwin", () => "macos" as const),
     Match.when("win32", () => "windows" as const),
     Match.when("linux", () => "linux" as const),
-    Match.orElse(() => "unknown" as const),
+    Match.orElse(() => "unknown" as const)
   );
   if (platform === "unknown") return yield* Effect.fail(new UnknownPlattform({ platform: p }));
 
   const arch = Match.value(a).pipe(
     Match.when("x64", () => "x86_64" as const),
     Match.when("arm64", () => "aarch64" as const),
-    Match.orElse(() => "unknown" as const),
+    Match.orElse(() => "unknown" as const)
   );
   if (arch === "unknown") return yield* Effect.fail(new UnknownArchitecture({ platform: p, architecture: a }));
 
@@ -61,7 +61,7 @@ const fetchMirrors = Effect.gen(function* () {
   const mirrorsFile = yield* downloader.download(
     "https://ziglang.org/download/community-mirrors.txt",
     downloadFolder,
-    "buffer",
+    "buffer"
   );
   const fs = yield* FileSystem.FileSystem;
   const text = yield* fs.readFileString(mirrorsFile);
@@ -77,8 +77,9 @@ const shuffle = <T>(arr: T[]) =>
 
 // Verify minisign signature
 const verifySignature = Effect.fn(function* (data: Uint8Array, sig: string) {
-  const zigPublicKeyStr = yield* Config.string("MINISIGN");
-  // minisignVerify.setupLogging("info");
+  const zigPublicKeyStr = yield* Config.string("MINISIGN").pipe(
+    Config.withDefault("RWSGOq2NVecA2UPNdBUZykf1CCb147pkmdtYxgb3Ti+JO/wCYvhbAb/U")
+  ); // obtained from the webpage
   const pub = yield* Effect.try({
     try: () =>
       minisignVerify.PublicKey.decode("untrusted comment: minisign public key 60DF2F3B621B4533\n" + zigPublicKeyStr),
@@ -161,7 +162,7 @@ const unpackZig = Effect.fn(function* (version: string, tarPath: string, zigFold
   const command = Match.value(p.platform).pipe(
     Match.when("windows", () => C.make("tar", "xf", tarPath).pipe(C.workingDirectory(zigFolder))),
     Match.when("linux", () => C.make("tar", "xf", tarPath).pipe(C.workingDirectory(zigFolder))),
-    Match.orElse(() => C.make("echo", "Not implemented yet")),
+    Match.orElse(() => C.make("echo", "Not implemented yet"))
   );
   const p2 = yield* cmdExec(command);
   const exitCode = yield* p2.exitCode;
@@ -207,7 +208,7 @@ const command = Command.make(
         const ext = Match.value(platform).pipe(
           Match.when("windows", () => "zip"),
           Match.when("linux", () => "tar.xz"),
-          Match.orElse(() => "tar.xz"),
+          Match.orElse(() => "tar.xz")
         );
 
         const latestVersion = yield* getLatestZigVersion;
@@ -226,7 +227,7 @@ const command = Command.make(
     const isProd = Option.isSome(production) && production.value;
     const isDev = Option.isSome(development) && development.value;
     yield* build(possibleZigBinary, isProd ? (isDev ? "Debug" : "ReleaseFast") : "ReleaseFast");
-  }),
+  })
 );
 
 // CLI runner
@@ -239,12 +240,12 @@ const AppLayer = Layer.mergeAll(
   BunContext.layer,
   BunPath.layer,
   DownloaderLive,
-  CliConfig.layer({ showBuiltIns: false, showAllNames: true }),
+  CliConfig.layer({ showBuiltIns: false, showAllNames: true })
 );
 
 cli(Bun.argv).pipe(
   Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))),
   Effect.scoped,
   Effect.provide(AppLayer),
-  BunRuntime.runMain,
+  BunRuntime.runMain
 );
