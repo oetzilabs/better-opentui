@@ -16,6 +16,7 @@ if (import.meta.main) {
         height: 10,
         visible: true,
         focused: true,
+        showScrollIndicator: true,
         colors: {
           bg: Colors.Black,
           fg: Colors.White,
@@ -23,6 +24,7 @@ if (import.meta.main) {
           focusedFg: Colors.Yellow,
           selectedBg: Colors.Green,
           selectedFg: Colors.Black,
+          scrollIndicator: Colors.Gray,
         },
         items: [
           { id: "1", display: "Apple" },

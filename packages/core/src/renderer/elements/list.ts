@@ -35,6 +35,7 @@ export interface ListElement<FBT extends string = "list"> extends BaseElement<"l
   getFocusedIndex: () => Effect.Effect<number, Collection, Library>;
   setSelectedIndex: (index: number) => Effect.Effect<void, Collection, Library>;
   getSelectedIndex: () => Effect.Effect<number, Collection, Library>;
+  setShowScrollIndicator: (show: boolean) => Effect.Effect<void, Collection, Library>;
   handleKeyPress: (key: ParsedKey) => Effect.Effect<boolean, Collection, Library | FileSystem.FileSystem | Path.Path>;
   onSelect: (item: ListItem | null) => Effect.Effect<void, Collection, Library>;
   onKeyboardEvent: (
@@ -50,9 +51,11 @@ export type ListOptions<FBT extends string = "list"> = ElementOptions<FBT, ListE
     focusedFg?: Input;
     selectedBg?: Input;
     selectedFg?: Input;
+    scrollIndicator?: Input;
   };
   items?: ListItem[];
   maxVisibleItems?: number;
+  showScrollIndicator?: boolean;
   onSelect?: (item: ListItem | null) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   renderItem?: (
     buffer: OptimizedBuffer,
@@ -69,9 +72,11 @@ const DEFAULTS = {
     focusedFg: Colors.White,
     selectedBg: Colors.Custom("#334455"),
     selectedFg: Colors.Yellow,
+    scrollIndicator: Colors.Gray,
   },
   items: [],
   maxVisibleItems: 10,
+  showScrollIndicator: false,
 } satisfies ListOptions;
 
 export const list = Effect.fn(function* <FBT extends string = "list">(
@@ -87,6 +92,8 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
   const selectedIndex = yield* Ref.make(-1);
   const scrollOffset = yield* Ref.make(0);
   const wrapSelection = yield* Ref.make(true);
+  const showScrollIndicator = yield* Ref.make(options.showScrollIndicator ?? DEFAULTS.showScrollIndicator);
+  const scrollIndicatorColor = yield* Ref.make(options.colors?.scrollIndicator ?? DEFAULTS.colors.scrollIndicator);
 
   const wrapper = yield* group(
     binds,
@@ -201,6 +208,18 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
       }
     }
 
+    const showScroll = yield* Ref.get(showScrollIndicator);
+
+    // Scroll indicator
+    if (showScroll && itemList.length > h) {
+      const scrollPercent = focIdx / Math.max(1, itemList.length - 1);
+      const indicatorY = Math.floor(scrollPercent * h);
+      const indicatorX = w - 1;
+      const sic = yield* Ref.get(scrollIndicatorColor);
+      const parsedSIC = yield* parseColor(sic);
+      yield* framebuffer_buffer.drawText("█", indicatorX, indicatorY, parsedSIC);
+    }
+
     yield* buffer.drawFrameBuffer(loc.x, loc.y, framebuffer_buffer);
   });
 
@@ -248,6 +267,10 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
 
   const getSelectedIndex = Effect.fn(function* () {
     return yield* Ref.get(selectedIndex);
+  });
+
+  const setShowScrollIndicator = Effect.fn(function* (show: boolean) {
+    yield* Ref.set(showScrollIndicator, show);
   });
 
   // Keyboard navigation
@@ -386,6 +409,7 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
     getFocusedIndex,
     setSelectedIndex,
     getSelectedIndex,
+    setShowScrollIndicator,
     handleKeyPress,
     destroy,
   };
