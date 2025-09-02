@@ -26,6 +26,15 @@ export interface RenderItemContext {
   y: number;
   width: number;
   height: number;
+  colors: {
+    bg: Input;
+    fg: Input;
+    focusedBg: Input;
+    focusedFg: Input;
+    selectedBg: Input;
+    selectedFg: Input;
+    scrollIndicator: Input;
+  };
 }
 
 export interface ListElement<FBT extends string = "list"> extends BaseElement<"list", ListElement<FBT>> {
@@ -41,6 +50,11 @@ export interface ListElement<FBT extends string = "list"> extends BaseElement<"l
   onKeyboardEvent: (
     event: KeyboardEvent,
   ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
+  renderItem: (
+    buffer: OptimizedBuffer,
+    framebuffer_buffer: OptimizedBuffer,
+    context: RenderItemContext,
+  ) => Effect.Effect<void, Collection, Library>;
 }
 
 export type ListOptions<FBT extends string = "list"> = ElementOptions<FBT, ListElement<FBT>> & {
@@ -147,6 +161,28 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
     yield* updateScrollOffset();
   });
 
+  const renderItem =
+    options.renderItem ??
+    Effect.fn(function* (buffer: OptimizedBuffer, framebuffer_buffer: OptimizedBuffer, context: RenderItemContext) {
+      const { item, index, isFocused, isSelected, x, y, width, height, colors } = context;
+      const baseFg = yield* parseColor(colors.fg);
+      const focusedBg = yield* parseColor(colors.focusedBg);
+      const focusedFg = yield* parseColor(colors.focusedFg);
+      const selBg = yield* parseColor(options.colors?.selectedBg ?? DEFAULTS.colors.selectedBg);
+      const selFg = yield* parseColor(options.colors?.selectedFg ?? DEFAULTS.colors.selectedFg);
+
+      // Default rendering logic
+      if (isFocused) {
+        yield* framebuffer_buffer.fillRect(0, y, width, 1, focusedBg);
+      }
+      if (isSelected) {
+        yield* framebuffer_buffer.fillRect(0, y, width, 1, selBg);
+      }
+
+      const textColor = isSelected ? selFg : isFocused ? focusedFg : baseFg;
+      yield* framebuffer_buffer.drawText(item.display, 0, y, textColor);
+    });
+
   // Rendering
   listElement.render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
     const v = yield* Ref.get(listElement.visible);
@@ -167,11 +203,6 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
 
     // Render item list
     const visibleItems = itemList.slice(scroll, scroll + h);
-    const baseFg = yield* parseColor(colors.fg);
-    const focusedBg = yield* parseColor(colors.focusedBg);
-    const focusedFg = yield* parseColor(colors.focusedFg);
-    const selBg = yield* parseColor(options.colors?.selectedBg ?? DEFAULTS.colors.selectedBg);
-    const selFg = yield* parseColor(options.colors?.selectedFg ?? DEFAULTS.colors.selectedFg);
 
     for (let i = 0; i < visibleItems.length; i++) {
       const actualIndex = scroll + i;
@@ -182,30 +213,17 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
 
       if (itemY >= h) break;
 
-      // Use custom renderItem function if provided
-      if (options.renderItem) {
-        yield* options.renderItem(buffer, framebuffer_buffer, {
-          item,
-          index: actualIndex,
-          isFocused,
-          isSelected,
-          x: 0,
-          y: itemY,
-          width: w,
-          height: 1,
-        });
-      } else {
-        // Default rendering logic
-        if (isFocused) {
-          yield* framebuffer_buffer.fillRect(0, itemY, w, 1, focusedBg);
-        }
-        if (isSelected) {
-          yield* framebuffer_buffer.fillRect(0, itemY, w, 1, selBg);
-        }
-
-        const textColor = isSelected ? selFg : isFocused ? focusedFg : baseFg;
-        yield* framebuffer_buffer.drawText(item.display, 0, itemY, textColor);
-      }
+      yield* renderItem(buffer, framebuffer_buffer, {
+        item,
+        index: actualIndex,
+        isFocused,
+        isSelected,
+        x: 0,
+        y: itemY,
+        width: w,
+        height: 1,
+        colors: { ...options.colors, ...DEFAULTS.colors },
+      });
     }
 
     const showScroll = yield* Ref.get(showScrollIndicator);
@@ -401,6 +419,7 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
 
   return {
     ...wrapper,
+    renderItem,
     onKeyboardEvent,
     onSelect,
     setItems,
