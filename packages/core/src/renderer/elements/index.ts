@@ -11,6 +11,7 @@ import { fileSelect } from "./file-select";
 import { framebuffer } from "./framebuffer";
 import { group } from "./group";
 import { input } from "./input";
+import { list } from "./list";
 import { multiSelect } from "./multi-select";
 import { root } from "./root";
 import { select } from "./select";
@@ -332,6 +333,33 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       return r;
     });
 
+    const _list = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof list>>) {
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = list.bind(list, {
+        context: context as Ref.Ref<RenderContextInterface>,
+        cachedGlobalSelection,
+      });
+      const r = yield* fn(...args);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
+      const initialLocation = yield* Ref.get(r.location);
+      const initialDimensions = yield* Ref.get(r.dimensions);
+
+      yield* ctx.addToHitGrid(
+        initialLocation.x,
+        initialLocation.y,
+        initialDimensions.widthValue,
+        initialDimensions.heightValue,
+        r.num,
+      );
+      return r;
+    });
+
     const element_functions = {
       root: _root,
       box: _box,
@@ -342,6 +370,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       input: _input,
       select: _select,
       "multi-select": _multiSelect,
+      list: _list,
       tabselect: _tabselect,
       "file-select": _fileSelect,
       button: _button,
@@ -457,6 +486,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       renderables,
       getRenderable,
       destroy,
+      list: _list,
     };
   }),
 }) {}
