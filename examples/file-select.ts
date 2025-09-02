@@ -16,7 +16,7 @@ if (import.meta.main) {
         focused: true,
         lookup_path: ".", // Start in current directory
         search: { enabled: true },
-        statusBar: { enabled: false },
+        statusBar: { enabled: true },
         showScrollIndicator: true,
         onSelect: (files) => Effect.gen(function* () {}),
       });

@@ -106,7 +106,7 @@ export const statusBar = Effect.fn(function* <ST extends string = "status-bar">(
     let leftX = 0;
     for (const element of left) {
       const { widthValue: width } = yield* Ref.get(element.dimensions);
-      yield* Ref.update(element.location, (loc) => ({ ...loc, x: leftX }));
+      yield* Ref.update(element.location, (loc) => ({ ...loc, x: leftX, y: y }));
       leftX += width;
     }
 
@@ -121,7 +121,7 @@ export const statusBar = Effect.fn(function* <ST extends string = "status-bar">(
     let centerX = Math.floor((w - totalCenterWidth) / 2);
     for (const element of center) {
       const elementDims = yield* Ref.get(element.dimensions);
-      yield* Ref.update(element.location, (loc) => ({ ...loc, x: centerX }));
+      yield* Ref.update(element.location, (loc) => ({ ...loc, x: centerX, y: y }));
       centerX += elementDims.widthValue;
     }
 
@@ -129,7 +129,7 @@ export const statusBar = Effect.fn(function* <ST extends string = "status-bar">(
     let rightX = w;
     for (const element of right) {
       const { widthValue: width } = yield* Ref.get(element.dimensions);
-      yield* Ref.update(element.location, (loc) => ({ ...loc, x: rightX - width }));
+      yield* Ref.update(element.location, (loc) => ({ ...loc, x: rightX - width, y: y }));
       rightX -= width;
     }
   });

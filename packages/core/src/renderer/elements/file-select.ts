@@ -184,7 +184,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     {
       position: PositionRelative.make(1),
       width: "100%",
-      height: "auto",
+      height: "100%",
       left: 0,
       top: 0,
       visible: true,
@@ -207,10 +207,10 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
         ? options.height === "auto"
           ? Math.min(
               20, // Default file list height
-              parentDimensions.heightValue - 3 - statusBarHeight, // Space for search + status bar if enabled
+              parentDimensions.heightValue - 2 - statusBarHeight, // Space for search + path + status bar if enabled
             )
           : options.height
-        : Math.min(20, parentDimensions.heightValue - 3 - statusBarHeight),
+        : Math.min(20, parentDimensions.heightValue - 2 - statusBarHeight),
       colors: {
         bg: options.colors?.bg ?? DEFAULTS.colors.bg,
         fg: options.colors?.fg ?? DEFAULTS.colors.fg,
