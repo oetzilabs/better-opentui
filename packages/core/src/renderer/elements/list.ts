@@ -1,5 +1,5 @@
 import type { FileSystem, Path } from "@effect/platform";
-import { Effect, Match, Ref } from "effect";
+import { Array, Effect, Match, Order, pipe, Ref } from "effect";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, Input } from "../../colors";
 import type { Collection } from "../../errors";
@@ -12,13 +12,14 @@ import { base, type BaseElement } from "./base";
 import { group } from "./group";
 import type { Binds, ElementOptions } from "./utils";
 
-export interface ListItem {
-  id: string;
-  display: string;
-}
+type ListItemBase = { id: string };
 
-export interface RenderItemContext {
-  item: ListItem;
+export type ListItem<T extends ListItemBase> = T;
+
+type ElementOf<T> = T extends readonly (infer U)[] ? U : never;
+
+export interface RenderItemContext<T extends ListItemBase> {
+  item: ListItem<T>;
   index: number;
   isFocused: boolean;
   isSelected: boolean;
@@ -37,27 +38,50 @@ export interface RenderItemContext {
   };
 }
 
-export interface ListElement<FBT extends string = "list"> extends BaseElement<"list", ListElement<FBT>> {
-  setItems: (items: ListItem[]) => Effect.Effect<void, Collection, Library>;
-  getItems: () => Effect.Effect<ListItem[], Collection, Library>;
+export interface ListElement<T extends ListItemBase, FBT extends string = "list">
+  extends BaseElement<"list", ListElement<T, FBT>> {
+  setItems: (items: ListItem<T>[]) => Effect.Effect<void, Collection, Library>;
+  getItems: () => Effect.Effect<ListItem<T>[], Collection, Library>;
   setFocusedIndex: (index: number) => Effect.Effect<void, Collection, Library>;
   getFocusedIndex: () => Effect.Effect<number, Collection, Library>;
   setSelectedIndex: (index: number) => Effect.Effect<void, Collection, Library>;
   getSelectedIndex: () => Effect.Effect<number, Collection, Library>;
   setShowScrollIndicator: (show: boolean) => Effect.Effect<void, Collection, Library>;
   handleKeyPress: (key: ParsedKey) => Effect.Effect<boolean, Collection, Library | FileSystem.FileSystem | Path.Path>;
-  onSelect: (item: ListItem | null) => Effect.Effect<void, Collection, Library>;
+  onSelect: (item: ListItem<T> | null) => Effect.Effect<void, Collection, Library>;
   onKeyboardEvent: (
     event: KeyboardEvent,
   ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   renderItem: (
     buffer: OptimizedBuffer,
     framebuffer_buffer: OptimizedBuffer,
-    context: RenderItemContext,
+    context: RenderItemContext<T>,
   ) => Effect.Effect<void, Collection, Library>;
+  onUpdate: (self: ListElement<T, FBT>) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
 }
 
-export type ListOptions<FBT extends string = "list"> = ElementOptions<FBT, ListElement<FBT>> & {
+type OrderFor<T> = T extends string
+  ? Order.Order<string>
+  : T extends number
+    ? Order.Order<number>
+    : T extends boolean
+      ? Order.Order<boolean>
+      : never;
+
+export interface SortCriterion<T extends ListItemBase> {
+  key: string;
+  fn: Order.Order<any>;
+}
+
+// export type SortOptions<T extends readonly ListItemBase[]> = {
+//   direction: "asc" | "desc";
+//   orderBy: { [K in keyof ElementOf<T>]: SortCriterion<ElementOf<T>> }[keyof ElementOf<T>][];
+// };
+
+export type ListOptions<T extends ListItemBase, FBT extends string = "list"> = ElementOptions<
+  FBT,
+  ListElement<T, FBT>
+> & {
   colors?: {
     bg?: Input;
     fg?: Input;
@@ -67,17 +91,30 @@ export type ListOptions<FBT extends string = "list"> = ElementOptions<FBT, ListE
     selectedFg?: Input;
     scrollIndicator?: Input;
   };
-  items?: ListItem[];
+  items?: readonly ListItem<T>[];
   maxVisibleItems?: number;
   showScrollIndicator?: boolean;
-  onSelect?: (item: ListItem | null) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
+  onSelect?: (
+    item: ListItem<any> | null,
+  ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
+  onUpdate?: (
+    self: ListElement<T, FBT>,
+  ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   renderItem?: (
     buffer: OptimizedBuffer,
     framebuffer_buffer: OptimizedBuffer,
-    context: RenderItemContext,
+    context: RenderItemContext<T>,
   ) => Effect.Effect<void, Collection, Library>;
+  sorting: {
+    direction: "asc" | "desc";
+    orderBy: SortCriterion<T>[];
+  };
+  displayKey: string;
 };
 
+// Update DEFAULTS to use `any` or a specific default type if possible,
+// or adjust its structure if it causes conflicts with strong typing.
+// For now, `any` is a practical workaround for defaults that are not directly tied to T.
 const DEFAULTS = {
   colors: {
     bg: Colors.Transparent,
@@ -91,11 +128,13 @@ const DEFAULTS = {
   items: [],
   maxVisibleItems: 10,
   showScrollIndicator: false,
-} satisfies ListOptions;
+  sorting: { direction: "asc", orderBy: [] },
+  displayKey: "id", // Keep 'id' as a sensible default
+} satisfies ListOptions<any>; // Use `any` for DEFAULTS if it's meant to be generic.
 
-export const list = Effect.fn(function* <FBT extends string = "list">(
+export const list = Effect.fn(function* <T extends ListItemBase, FBT extends string = "list">(
   binds: Binds,
-  options: ListOptions<FBT>,
+  options: ListOptions<T, FBT>,
   parentElement: BaseElement<any, any> | null = null,
 ) {
   const lib = yield* Library;
@@ -124,7 +163,7 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
 
   const framebuffer_buffer = yield* wrapper.createFrameBuffer();
 
-  const listElement = yield* base<"list", ListElement<FBT>>(
+  const listElement = yield* base<"list", ListElement<T, FBT>>(
     "list",
     binds,
     {
@@ -161,9 +200,12 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
     yield* updateScrollOffset();
   });
 
+  // displayKey will now correctly infer its type as keyof T
+  const displayKey = options.displayKey;
+
   const renderItem =
     options.renderItem ??
-    Effect.fn(function* (buffer: OptimizedBuffer, framebuffer_buffer: OptimizedBuffer, context: RenderItemContext) {
+    Effect.fn(function* (buffer: OptimizedBuffer, framebuffer_buffer: OptimizedBuffer, context: RenderItemContext<T>) {
       const { item, index, isFocused, isSelected, x, y, width, height, colors } = context;
       const baseFg = yield* parseColor(colors.fg);
       const focusedBg = yield* parseColor(colors.focusedBg);
@@ -180,7 +222,7 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
       }
 
       const textColor = isSelected ? selFg : isFocused ? focusedFg : baseFg;
-      yield* framebuffer_buffer.drawText(item.display, 0, y, textColor);
+      yield* framebuffer_buffer.drawText(String(item[displayKey as keyof ListItem<T>]), 0, y, textColor);
     });
 
   // Rendering
@@ -253,8 +295,21 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
   });
 
   // Setters/getters
-  const setItems = Effect.fn(function* (newItems: ListItem[]) {
-    yield* Ref.set(items, newItems);
+  const setItems = Effect.fn(function* (newItems: ListItem<T>[]) {
+    const { direction, orderBy } = yield* Ref.get(sorting);
+    const sortedItems =
+      orderBy.length > 0
+        ? pipe(
+            newItems,
+            Array.sortBy(
+              ...orderBy.map(({ fn, key }) => {
+                const fn1 = (item: ListItem<T>) => item[key as keyof ListItem<T>];
+                return Order.mapInput<T[keyof T], ListItem<T>>(fn as Order.Order<T[keyof T]>, fn1);
+              }),
+            ),
+          )
+        : newItems;
+    yield* Ref.set(items, sortedItems);
     yield* Ref.set(focusedIndex, 0);
     yield* Ref.set(selectedIndex, -1);
     yield* updateScrollOffset();
@@ -396,7 +451,7 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
     );
   });
 
-  const onKeyboardEvent: ListElement<FBT>["onKeyboardEvent"] = Effect.fn(function* (event) {
+  const onKeyboardEvent: ListElement<T, FBT>["onKeyboardEvent"] = Effect.fn(function* (event) {
     const fn = options.onKeyboardEvent ?? Effect.fn(function* (event) {});
     yield* fn(event);
     if (!event.defaultPrevented) {
@@ -404,8 +459,8 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
     }
   });
 
-  const onSelect = Effect.fn(function* (item: ListItem | null) {
-    const fn = options.onSelect ?? Effect.fn(function* (item: ListItem | null) {});
+  const onSelect = Effect.fn(function* (item: ListItem<T> | null) {
+    const fn = options.onSelect ?? Effect.fn(function* (item: ListItem<T> | null) {});
     yield* fn(item);
   });
 
@@ -414,11 +469,31 @@ export const list = Effect.fn(function* <FBT extends string = "list">(
     yield* listElement.destroy();
   });
 
+  const sorting = yield* Ref.make(options.sorting ?? DEFAULTS.sorting);
+
+  const onUpdate =
+    options.onUpdate ??
+    Effect.fn(function* (self) {
+      const _items = yield* Ref.get(items);
+      const { direction, orderBy } = yield* Ref.get(sorting);
+      const sorted = pipe(
+        _items,
+        Array.sortBy(
+          ...orderBy.map(({ fn, key }) => {
+            const fn1 = (item: ListItem<T>) => item[key as keyof ListItem<T>];
+            return Order.mapInput<T[keyof T], ListItem<T>>(fn as Order.Order<T[keyof T]>, fn1);
+          }),
+        ),
+      );
+      yield* Ref.set(items, sorted);
+    });
+
   // Initialize
   yield* wrapper.add(listElement);
 
   return {
     ...wrapper,
+    onUpdate,
     renderItem,
     onKeyboardEvent,
     onSelect,

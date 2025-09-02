@@ -486,7 +486,6 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       renderables,
       getRenderable,
       destroy,
-      list: _list,
     };
   }),
 }) {}
