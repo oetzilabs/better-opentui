@@ -109,7 +109,7 @@ export type FileSelectOptions<FBT extends string = "file-select"> = ElementOptio
   statusBar?: {
     enabled?: boolean;
   };
-  orderOfElements?: ("search" | "status-bar" | "file-list")[];
+  layout?: ("search" | "status-bar" | "file-list" | "path")[];
 };
 
 const DEFAULTS = {
@@ -133,7 +133,7 @@ const DEFAULTS = {
   lookup_path: ".",
   sort: { direction: "asc", orderBy: ["folder", "alphanumeric"] },
   statusBar: { enabled: true },
-  orderOfElements: ["search", "file-list", "status-bar"],
+  layout: ["search", "path", "file-list", "status-bar"],
 } satisfies FileSelectOptions;
 
 export const fileSelect = Effect.fn(function* <FBT extends string = "file-select">(
@@ -151,6 +151,13 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   const searchOpts = options.search ?? DEFAULTS.search;
 
   const parentDimensions = yield* Ref.get(parentElement.dimensions);
+
+  // Get layout
+  const layout = options.layout ?? DEFAULTS.layout;
+
+  // Calculate fixed heights for layout elements
+  const searchHeight = layout.includes("search") ? 1 : 0;
+  const pathHeight = layout.includes("path") ? 1 : 0;
 
   // Get status bar configuration
   const statusBarConfig = options.statusBar ?? DEFAULTS.statusBar;
@@ -184,7 +191,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     {
       position: PositionRelative.make(1),
       width: "100%",
-      height: "100%",
+      height: "auto",
       left: 0,
       top: 0,
       visible: true,
@@ -207,10 +214,10 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
         ? options.height === "auto"
           ? Math.min(
               20, // Default file list height
-              parentDimensions.heightValue - 2 - statusBarHeight, // Space for search + path + status bar if enabled
+              parentDimensions.heightValue - searchHeight - pathHeight - statusBarHeight, // Space for search + path + status bar if enabled
             )
           : options.height
-        : Math.min(20, parentDimensions.heightValue - 2 - statusBarHeight),
+        : Math.min(20, parentDimensions.heightValue - searchHeight - pathHeight - statusBarHeight),
       colors: {
         bg: options.colors?.bg ?? DEFAULTS.colors.bg,
         fg: options.colors?.fg ?? DEFAULTS.colors.fg,
@@ -765,9 +772,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   // Initialize
   yield* readDirectory(options.lookup_path ?? DEFAULTS.lookup_path);
 
-  const orderOfElements = options.orderOfElements ?? DEFAULTS.orderOfElements;
-
-  for (const element of orderOfElements) {
+  for (const element of layout) {
     yield* Match.value(element).pipe(
       Match.when(
         "search",
@@ -778,8 +783,13 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       Match.when(
         "file-list",
         Effect.fn(function* () {
-          yield* wrapper.add(pathText);
           yield* wrapper.add(fileSelectElement);
+        }),
+      ),
+      Match.when(
+        "path",
+        Effect.fn(function* () {
+          yield* wrapper.add(pathText);
         }),
       ),
       Match.when(

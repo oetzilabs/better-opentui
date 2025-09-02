@@ -18,6 +18,7 @@ if (import.meta.main) {
         search: { enabled: true },
         statusBar: { enabled: true },
         showScrollIndicator: true,
+        layout: ["search", "path", "file-list", "status-bar"],
         onSelect: (files) => Effect.gen(function* () {}),
       });
 
