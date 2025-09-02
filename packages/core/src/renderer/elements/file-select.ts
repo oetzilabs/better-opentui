@@ -8,11 +8,25 @@ import type { KeyboardEvent } from "../../events/keyboard";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import { PositionAbsolute, PositionRelative } from "../utils/position";
+import { PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { type FrameBufferOptions } from "./framebuffer";
 import { input } from "./input";
 import type { Binds, ElementOptions } from "./utils";
+
+// Helper function to format file sizes
+const formatFileSize = (bytes: bigint): string => {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = Number(bytes);
+  let unitIndex = 0;
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex++;
+  }
+
+  return `${size.toFixed(1)}${units[unitIndex]}`;
+};
 
 export interface FileOption {
   name: string;
@@ -62,6 +76,9 @@ export type FileSelectOptions<FBT extends string = "file-select"> = ElementOptio
     pathFg?: Input;
     upButtonBg?: Input;
     upButtonFg?: Input;
+    directoryFg?: Input;
+    fileFg?: Input;
+    metadataFg?: Input;
   };
   showScrollIndicator?: boolean;
   selectedIds?: string[];
@@ -87,6 +104,9 @@ const DEFAULTS = {
     pathFg: Colors.White,
     upButtonBg: Colors.Custom("#444444"),
     upButtonFg: Colors.White,
+    directoryFg: Colors.Custom("#4A90E2"), // Blue for directories
+    fileFg: Colors.Custom("#7ED321"), // Green for files
+    metadataFg: Colors.Custom("#B8B8B8"), // Gray for metadata
   },
   showScrollIndicator: false,
   selectedIds: [],
@@ -102,6 +122,8 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
 ) {
   const lib = yield* Library;
   if (!parentElement) return yield* Effect.fail(new Error("Parent element is required"));
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
 
   const searchOpts = options.search ?? DEFAULTS.search;
 
@@ -115,7 +137,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       position: PositionRelative.make(1),
       selectable: true,
       left: 0,
-      top: 2, // Leave space for path and up button
+      top: 0,
       height: options.height
         ? options.height === "auto"
           ? Math.min(
@@ -136,7 +158,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
 
   const framebuffer_buffer = yield* b.createFrameBuffer();
 
-  const lookupPath = yield* Ref.make(options.lookup_path ?? DEFAULTS.lookup_path);
+  const lookupPath = yield* Ref.make(path.join(process.cwd(), options.lookup_path ?? DEFAULTS.lookup_path));
   const files = yield* Ref.make<FileOption[]>([]);
   const filteredFiles = yield* Ref.make<FileOption[]>([]);
   const selectedIds = yield* Ref.make<string[]>([]);
@@ -144,11 +166,15 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
 
   const selectedBg = yield* Ref.make(options.colors?.selectedBg ?? DEFAULTS.colors.selectedBg);
   const selectedFg = yield* Ref.make(options.colors?.selectedFg ?? DEFAULTS.colors.selectedFg);
+  const showScrollIndicator = yield* Ref.make(options.showScrollIndicator ?? DEFAULTS.showScrollIndicator);
   const scrollIndicatorColor = yield* Ref.make(options.colors?.scrollIndicator ?? DEFAULTS.colors.scrollIndicator);
   const pathBg = yield* Ref.make(options.colors?.pathBg ?? DEFAULTS.colors.pathBg);
   const pathFg = yield* Ref.make(options.colors?.pathFg ?? DEFAULTS.colors.pathFg);
   const upButtonBg = yield* Ref.make(options.colors?.upButtonBg ?? DEFAULTS.colors.upButtonBg);
   const upButtonFg = yield* Ref.make(options.colors?.upButtonFg ?? DEFAULTS.colors.upButtonFg);
+  const directoryFg = yield* Ref.make(options.colors?.directoryFg ?? DEFAULTS.colors.directoryFg);
+  const fileFg = yield* Ref.make(options.colors?.fileFg ?? DEFAULTS.colors.fileFg);
+  const metadataFg = yield* Ref.make(options.colors?.metadataFg ?? DEFAULTS.colors.metadataFg);
 
   const scrollOffset = yield* Ref.make(0);
   const wrapSelection = yield* Ref.make(true);
@@ -158,11 +184,8 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   const fuse = searchOpts.enabled ? new Fuse([], searchOpts.config ?? { keys: ["name"] }) : null;
 
   // Function to read directory
-  const readDirectory = Effect.fn(function* (path: string) {
-    const fs = yield* FileSystem.FileSystem;
-    const p = yield* Path.Path;
-    const fullPath = p.join(path);
-    const files_from_folder = yield* fs.readDirectory(fullPath);
+  const readDirectory = Effect.fn(function* (location: string) {
+    const files_from_folder = yield* fs.readDirectory(location);
     const entries = yield* Effect.all(
       files_from_folder.map(
         Effect.fn(function* (file) {
@@ -170,15 +193,19 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
           return {
             ...stat,
             name: file,
-            path: p.join(fullPath, file),
+            path: path.join(location, file),
           };
         }),
       ),
+      {
+        concurrency: 10,
+        batching: true,
+      },
     );
     const fileOptions: FileOption[] = [];
 
     // Add parent directory option if not root
-    if (path !== "/") {
+    if (location !== "/") {
       fileOptions.push({
         name: "..",
         path: "..",
@@ -188,14 +215,15 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     }
 
     for (const entry of entries) {
-      const filePath = p.join(fullPath, entry.name);
+      const filePath = path.join(location, entry.name);
+      const absolutePath = path.join(process.cwd(), filePath);
       fileOptions.push({
         name: entry.name,
-        path: filePath,
+        path: absolutePath,
         isDirectory: entry.type === "Directory",
         size: entry.size,
         modified: Option.isSome(entry.mtime) ? entry.mtime.value : undefined,
-        id: filePath,
+        id: absolutePath,
       });
     }
 
@@ -256,7 +284,6 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
 
   // Rendering
   const render = Effect.fn(function* (buffer: OptimizedBuffer, _dt: number) {
-    yield* Library; // Ensure Library context
     const v = yield* Ref.get(b.visible);
     if (!v) return;
 
@@ -265,6 +292,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     const focused = yield* Ref.get(b.focused);
     const colors = yield* Ref.get(b.colors);
     const bgColor = yield* parseColor(focused ? colors.focusedBg : colors.bg);
+
     yield* framebuffer_buffer.clear(bgColor);
 
     const fileList = yield* Ref.get(filteredFiles);
@@ -312,15 +340,24 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
         yield* framebuffer_buffer.fillRect(0, itemY, w, 1, selBg);
       }
 
-      const icon = file.isDirectory ? "[DIR]" : "[FILE]";
-      const nameContent = `${icon} ${file.name}`;
-      const nameColor = isFocused ? selFg : baseFg;
+      // Enhanced icons and colors
+      const icon = file.isDirectory ? "📁" : "📄";
+      const sizeInfo = file.size ? ` (${formatFileSize(file.size)})` : "";
+      const dateInfo = file.modified ? ` ${file.modified.toLocaleDateString()}` : "";
+      const nameContent = `${icon} ${file.name}${sizeInfo}${dateInfo}`;
+
+      // Use different colors for directories vs files
+      const dirFgColor = yield* parseColor(yield* Ref.get(directoryFg));
+      const fileFgColor = yield* parseColor(yield* Ref.get(fileFg));
+
+      const nameColor = isFocused ? selFg : file.isDirectory ? dirFgColor : fileFgColor;
 
       yield* framebuffer_buffer.drawText(nameContent, 0, itemY, nameColor);
     }
 
+    const showScroll = yield* Ref.get(showScrollIndicator);
+
     // Scroll indicator
-    const showScroll = options.showScrollIndicator ?? DEFAULTS.showScrollIndicator;
     if (showScroll && fileList.length > h) {
       const scrollPercent = focIdx / Math.max(1, fileList.length - 1);
       const indicatorY = 1 + Math.floor(scrollPercent * h);
@@ -432,7 +469,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   });
 
   const setShowScrollIndicator = Effect.fn(function* (show: boolean) {
-    // This is a no-op since we use options.showScrollIndicator
+    yield* Ref.set(showScrollIndicator, show);
   });
 
   // Keyboard navigation
