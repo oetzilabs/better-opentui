@@ -27,7 +27,7 @@ if (import.meta.main) {
         search: { enabled: true, location: "bottom" },
         showDescription: true,
         width: "100%",
-        height: 10,
+        height: "auto",
         onSelect: (options) => Effect.gen(function* () {}),
       });
 

@@ -187,8 +187,8 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
   }>({
     _x: options.left ?? 0,
     _y: options.top ?? 0,
-    x: 0,
-    y: 0,
+    x: typeof options.left === "number" ? options.left : 0,
+    y: typeof options.top === "number" ? options.top : 0,
     type: options.position ?? PositionAbsolute.make(2),
   });
   const dimensions = yield* Ref.make<{
@@ -318,27 +318,19 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
           node.setPosition(Edge.Left, left);
         }
       }
+      const p = yield* Ref.get(parent);
+      if (p) {
+        const pL = yield* Ref.get(p.location);
+        yield* Ref.update(location, (l) => ({ ...l, y: pL.y + l.y, x: pL.x + l.x }));
+      }
       yield* requestLayout();
     } else {
       if (typeof top === "number" && isPositionAbsolute(type)) {
         yield* Ref.update(location, (l) => ({ ...l, y: top }));
-      } else {
-        const p = yield* Ref.get(parent);
-        if (p && isPositionRelative(type)) {
-          const pL = yield* Ref.get(p.location);
-          yield* Ref.update(location, (l) => ({ ...l, y: pL.y + l.y }));
-        }
       }
       if (typeof left === "number" && isPositionAbsolute(type)) {
         yield* Ref.update(location, (l) => ({ ...l, x: left }));
-      } else {
-        const p = yield* Ref.get(parent);
-        if (p && isPositionRelative(type)) {
-          const pL = yield* Ref.get(p.location);
-          yield* Ref.update(location, (l) => ({ ...l, x: pL.x + l.x }));
-        }
       }
-
       yield* Ref.set(_yogaPerformancePositionUpdated, false);
     }
   });

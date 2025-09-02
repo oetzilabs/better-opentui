@@ -8,7 +8,7 @@ import type { KeyboardEvent } from "../../events/keyboard";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import { PositionAbsolute } from "../utils/position";
+import { PositionAbsolute, PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { type FrameBufferOptions } from "./framebuffer";
 import { input } from "./input";
@@ -112,7 +112,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     binds,
     {
       ...options,
-      position: PositionAbsolute.make(2),
+      position: PositionRelative.make(1),
       selectable: true,
       left: 0,
       top: 2, // Leave space for path and up button
@@ -209,6 +209,8 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   // Initialize
   yield* readDirectory(options.lookup_path ?? DEFAULTS.lookup_path);
 
+  const listDimensions = yield* Ref.get(b.dimensions);
+  const listPosition = yield* Ref.get(b.location);
   // Search input
   const searchInput = yield* input(
     binds,
@@ -218,10 +220,10 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       visible: true,
       colors: options.colors ?? DEFAULTS.colors,
       width: options.width,
-      position: PositionAbsolute.make(2),
+      position: PositionRelative.make(1),
       height: 1,
       left: 0,
-      top: parentDimensions.heightValue - 1, // Bottom
+      top: listPosition.y + listDimensions.heightValue,
       value: "",
       placeholder: "Search files",
       onUpdate: Effect.fn(function* (self) {

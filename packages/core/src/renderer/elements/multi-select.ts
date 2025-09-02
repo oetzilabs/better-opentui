@@ -119,24 +119,17 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
 
   const searchOpts = options.search ?? DEFAULTS.search;
 
-  const parentDimensions = yield* Ref.get(parentElement.dimensions);
-
   const b = yield* base<"multi-select", MultiSelectElement<OptionsType, FBT>>(
     "multi-select",
     binds,
     {
       ...options,
-      position: PositionAbsolute.make(2),
-      selectable: true,
+      position: PositionRelative.make(1),
       left: 0,
-      top: searchOpts.enabled && searchOpts.location === "top" ? 1 : 0, // Only account for search input
+      top: searchOpts.enabled && searchOpts.location === "top" ? 1 : -1, // weird that I have to do -1 here...
       height: options.height
         ? options.height === "auto"
-          ? Math.min(
-              (options.options ?? []).length * 2,
-              parentDimensions.heightValue - (searchOpts.enabled ? 3 : 2), // Search + spacing + header
-              Infinity,
-            )
+          ? (options.options ?? []).length * 2
           : options.height
         : options.height,
       colors: {
@@ -190,7 +183,9 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
 
   const fuse = searchOpts.enabled ? new Fuse(options.options ?? [], searchOpts.config ?? { keys }) : null;
 
-  const listHeight = (yield* Ref.get(b.dimensions)).heightValue;
+  const listDimensions = yield* Ref.get(b.dimensions);
+
+  const listHeight = listDimensions.heightValue;
 
   const searchinput = yield* input(
     binds,
@@ -200,10 +195,10 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
       visible: true,
       colors: options.colors ?? DEFAULTS.colors,
       width: options.width,
-      position: PositionAbsolute.make(2), // Position relative to parent
+      position: PositionRelative.make(1),
       height: 1,
       left: 0,
-      top: searchOpts.enabled && searchOpts.location === "bottom" ? listHeight : 0,
+      top: searchOpts.enabled && searchOpts.location === "top" ? 0 : listHeight,
       value: "",
       placeholder: "Search options",
       onUpdate: Effect.fn(function* (self) {
@@ -553,14 +548,14 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     );
   });
 
-  const onUpdate = Effect.fn(function* (self) {
-    const fn = options.onUpdate ?? Effect.fn(function* (self) {});
-    yield* fn(self);
-    const ctx = yield* Ref.get(binds.context);
-    const { x, y } = yield* Ref.get(b.location);
-    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-    yield* ctx.addToHitGrid(x, y, w, h, b.num);
-  });
+  // const onUpdate = Effect.fn(function* (self) {
+  //   const fn = options.onUpdate ?? Effect.fn(function* (self) {});
+  //   yield* fn(self);
+  //   const ctx = yield* Ref.get(binds.context);
+  //   const { x, y } = yield* Ref.get(b.location);
+  //   const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
+  //   yield* ctx.addToHitGrid(x, y, w, h, b.num);
+  // });
 
   b.onKeyboardEvent = Effect.fn(function* (event) {
     const fn = options.onKeyboardEvent ?? Effect.fn(function* (event) {});
@@ -584,7 +579,7 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
 
   return {
     ...b,
-    onUpdate,
+    // onUpdate,
     onSelect,
     render,
     setOptions,
