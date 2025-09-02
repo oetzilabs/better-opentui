@@ -10,20 +10,15 @@ if (import.meta.main) {
 
       const fileSelectElement = yield* parentContainer.create("file-select", {
         position: PositionRelative.make(1),
+        width: "100%",
+        height: 15,
         visible: true,
         focused: true,
         lookup_path: ".", // Start in current directory
         search: { enabled: true },
+        statusBar: { enabled: false },
         showScrollIndicator: true,
-        width: "100%",
-        height: 15,
-        onSelect: (files) =>
-          Effect.gen(function* () {
-            console.log(
-              "Selected files:",
-              files.map((f) => f.path),
-            );
-          }),
+        onSelect: (files) => Effect.gen(function* () {}),
       });
 
       yield* parentContainer.add(fileSelectElement);

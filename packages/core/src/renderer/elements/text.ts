@@ -8,7 +8,7 @@ import type { Collection } from "../../errors";
 import type { SelectionState } from "../../types";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
-import { isPositionAbsolute, PositionAbsolute, PositionRelative } from "../utils/position";
+import { isPositionAbsolute, PositionRelative } from "../utils/position";
 import { TextSelectionHelper } from "../utils/selection";
 import { StyledText } from "../utils/styled-text";
 import { base, type BaseElement } from "./base";
@@ -37,9 +37,8 @@ const DEFAULTS = {
   },
   width: "auto",
   height: "auto",
-  left: 0,
-  top: 0,
   position: PositionRelative.make(1),
+  content: "",
 } satisfies TextOptions;
 
 export const text = Effect.fn(function* (
@@ -49,16 +48,21 @@ export const text = Effect.fn(function* (
   parentElement: BaseElement<any, any> | null = null,
 ) {
   const lib = yield* Library;
+
+  const contentWidth = options.content
+    ? options.content instanceof StyledText
+      ? options.content.toString().length
+      : options.content.length
+    : 0;
+
   const b = yield* base(
     "text",
     binds,
     {
       ...options,
       position: options.position ?? DEFAULTS.position,
-      width: options.width ?? DEFAULTS.width,
+      width: (options.width ?? DEFAULTS.width) === "auto" ? contentWidth : options.width,
       height: options.height ?? DEFAULTS.height,
-      left: options.left ?? DEFAULTS.left,
-      top: options.top ?? DEFAULTS.top,
       colors: {
         ...options.colors,
         bg: options.colors?.bg ?? DEFAULTS.colors.bg,
@@ -71,7 +75,7 @@ export const text = Effect.fn(function* (
   );
 
   const onUpdate: TextElement["onUpdate"] = Effect.fn(function* (self) {
-    yield* b.onUpdate(self);
+    // yield* b.onUpdate(self);
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
     const ctx = yield* Ref.get(binds.context);

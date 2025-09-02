@@ -98,6 +98,7 @@ export type BaseElement<T extends string, E> = {
   onUpdate: (self: E) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   render: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, Collection, Library>;
   add: (container: BaseElement<any, any>, index?: number | undefined) => Effect.Effect<void, Collection, never>;
+  remove: (container: BaseElement<any, any>) => Effect.Effect<void, Collection, never>;
   setLocation: (loc: { x: number; y: number }) => Effect.Effect<void, never, never>;
   shouldStartSelection: (x: number, y: number) => Effect.Effect<boolean>;
   onSelectionChanged: (
@@ -689,6 +690,16 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
     });
   });
 
+  const remove = Effect.fn(function* (container: BaseElement<any, any>) {
+    const elements = yield* Ref.get(renderables);
+    const id = container.id;
+    const index = elements.findIndex((e) => e.id === id);
+    if (index >= 0) {
+      elements.splice(index, 1);
+      yield* Ref.update(renderables, (cs) => cs.filter((e) => e.id !== id));
+    }
+  });
+
   const shouldStartSelection = Effect.fn(function* (x: number, y: number) {
     const p = yield* Ref.get(location);
     const { widthValue: width, heightValue: height } = yield* Ref.get(dimensions);
@@ -824,6 +835,7 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
     setVisible,
     render,
     add,
+    remove,
     setLocation,
     getSelection,
     getSelectedText,

@@ -83,15 +83,8 @@ export const run = (options: RunOptions) =>
     // return yield* Effect.never;
   }).pipe(
     Effect.provide([CliRendererLive]),
-    Effect.catchAllCause((cause) => {
-      // process.stdin.write(SwitchToMainScreen.make("\u001B[?1049l"));
-      // process.stdin.write(ShowCursor.make("\u001B[?25h"));
-      // process.stdin.write(ClearFromCursor.make("\u001B[J"));
-
-      // process.stdin.setRawMode(false);
-      return Console.log(Cause.pretty(cause));
-    }),
-    Effect.provide([ShutdownLive, LibraryLive, Logger.pretty, createOtelLayer("opentuee")]),
+    Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))),
+    Effect.provide([ShutdownLive, LibraryLive, Logger.pretty, createOtelLayer("better-opentui")]),
     Effect.provide(BunContext.layer),
     Effect.scoped,
     BunRuntime.runMain,

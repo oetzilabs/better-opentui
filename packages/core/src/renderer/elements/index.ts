@@ -6,6 +6,7 @@ import type { Library } from "../../zig";
 import { asciifont } from "./asciifont";
 import type { BaseElement } from "./base";
 import { box } from "./box";
+import { button } from "./button";
 import { fileSelect } from "./file-select";
 import { framebuffer } from "./framebuffer";
 import { group } from "./group";
@@ -13,6 +14,7 @@ import { input } from "./input";
 import { multiSelect } from "./multi-select";
 import { root } from "./root";
 import { select } from "./select";
+import { statusBar } from "./status-bar";
 import { tabselect } from "./tabselect";
 import { text } from "./text";
 import { type RemoveBindsFromArgs, type RenderContextInterface } from "./utils";
@@ -276,6 +278,60 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       return r;
     });
 
+    const _button = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof button>>) {
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = button.bind(button, {
+        context: context as Ref.Ref<RenderContextInterface>,
+        cachedGlobalSelection,
+      });
+      const r = yield* fn(...args);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
+      const initialLocation = yield* Ref.get(r.location);
+      const initialDimensions = yield* Ref.get(r.dimensions);
+
+      yield* ctx.addToHitGrid(
+        initialLocation.x,
+        initialLocation.y,
+        initialDimensions.widthValue,
+        initialDimensions.heightValue,
+        r.num,
+      );
+      return r;
+    });
+
+    const _statusBar = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof statusBar>>) {
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = statusBar.bind(statusBar, {
+        context: context as Ref.Ref<RenderContextInterface>,
+        cachedGlobalSelection,
+      });
+      const r = yield* fn(...args);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
+      const initialLocation = yield* Ref.get(r.location);
+      const initialDimensions = yield* Ref.get(r.dimensions);
+
+      yield* ctx.addToHitGrid(
+        initialLocation.x,
+        initialLocation.y,
+        initialDimensions.widthValue,
+        initialDimensions.heightValue,
+        r.num,
+      );
+      return r;
+    });
+
     const element_functions = {
       root: _root,
       box: _box,
@@ -288,6 +344,8 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       "multi-select": _multiSelect,
       tabselect: _tabselect,
       "file-select": _fileSelect,
+      button: _button,
+      "status-bar": _statusBar,
     } as const;
 
     const _create_non_parent = Effect.fn(function* <T extends Methods>(
