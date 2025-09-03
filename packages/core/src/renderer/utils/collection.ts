@@ -1,4 +1,4 @@
-import { Array, Effect, Order, pipe, Ref } from "effect";
+import { Array as Arr, Effect, Order, pipe, Ref } from "effect";
 
 export interface GenericCollection<T> {
   getItems: () => Effect.Effect<T[], never, never>;
@@ -10,6 +10,7 @@ export interface GenericCollection<T> {
   removeSort: (...args: Sorting<T>[]) => Effect.Effect<void, never, never>;
   onUpdate: () => Effect.Effect<void, never, never>;
   updateSortDirection: (id: string, direction: "asc" | "desc") => Effect.Effect<void, never, never>;
+  getDisplayKey: () => Effect.Effect<keyof T | undefined, never, never>;
 }
 
 type OrderFor<T> = T extends string
@@ -27,8 +28,18 @@ export interface Sorting<T> {
   fn: OrderFor<T[this["key"]]>;
 }
 
-export const collection = Effect.fn(function* <T = any>(items: T[]) {
+const getFirstKey = Effect.fn(function* <T extends object>(items: T[]) {
+  if (items.length === 0)
+    return yield* Effect.fail(
+      new Error("Collection is empty, cannot infer displayKey. Please provide at least one item"),
+    );
+  return Object.keys(items[0])[0] as keyof T;
+});
+
+export const collection = Effect.fn(function* <T extends object = any>(items: T[], displayKey?: keyof T) {
   const _items = yield* Ref.make(items);
+  const _dk = yield* getFirstKey(items);
+  const dk = yield* Ref.make<keyof T | undefined>(displayKey ?? _dk);
 
   const sorting = yield* Ref.make<Sorting<T>[]>([]);
 
@@ -103,7 +114,7 @@ export const collection = Effect.fn(function* <T = any>(items: T[]) {
 
     const sorted = pipe(
       items,
-      Array.sortBy(
+      Arr.sortBy(
         ...sortings.map(({ fn, key, direction }) => {
           const fn1 = (item: T) => item[key];
           const directionFn =
@@ -119,6 +130,10 @@ export const collection = Effect.fn(function* <T = any>(items: T[]) {
     yield* Ref.set(hasSorted, true);
   });
 
+  const getDisplayKey = Effect.fn(function* () {
+    return yield* Ref.get(dk);
+  });
+
   return {
     getItems,
     setItems,
@@ -129,5 +144,6 @@ export const collection = Effect.fn(function* <T = any>(items: T[]) {
     removeSort,
     onUpdate,
     updateSortDirection,
+    getDisplayKey,
   } as GenericCollection<T>;
 });
