@@ -37,7 +37,7 @@ if (import.meta.main) {
           fn: Order.number,
         },
         {
-          direction: "asc",
+          direction: "desc",
           key: "display",
           fn: Order.string,
         },
