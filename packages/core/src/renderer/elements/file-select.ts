@@ -202,6 +202,15 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     },
     parentElement,
   );
+  const cols = yield* Ref.get(internalColors);
+  const directoryFg = yield* parseColor(cols.directoryFg);
+  const fileFg = yield* parseColor(cols.fileFg);
+  const selFg = yield* parseColor(cols.selectedFg);
+  const directoryBg = yield* parseColor(cols.directoryBg);
+  const fileBg = yield* parseColor(cols.fileBg);
+  const selBg = yield* parseColor(cols.selectedBg);
+  const focusedBg = yield* parseColor(cols.focusedBg);
+  const focusedFg = yield* parseColor(cols.focusedFg);
 
   const listElement = yield* list(
     binds,
@@ -231,13 +240,6 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       showScrollIndicator: options.showScrollIndicator ?? DEFAULTS.showScrollIndicator,
       renderItem: Effect.fn(function* (buffer, framebuffer_buffer, context: RenderItemContext<FileOption>) {
         const { item: file, index, isFocused, isSelected, x, y, width, height, colors } = context;
-        const cols = yield* Ref.get(internalColors);
-        const directoryFg = yield* parseColor(cols.directoryFg);
-        const fileFg = yield* parseColor(cols.fileFg);
-        const selFg = yield* parseColor(cols.selectedFg);
-        const directoryBg = yield* parseColor(cols.directoryBg);
-        const fileBg = yield* parseColor(cols.fileBg);
-        const selBg = yield* parseColor(cols.selectedBg);
 
         // Enhanced icons and colors
         const icon = file.isDirectory ? "📁" : "📄";
@@ -245,12 +247,27 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
         const dateInfo = file.modified ? ` ${file.modified.toLocaleDateString()}` : "";
         const nameContent = `${icon} ${file.name}${sizeInfo}${dateInfo}`;
 
-        const nameColor = isFocused ? selFg : file.isDirectory ? directoryFg : fileFg;
-        // background
-        const bgColor = isFocused ? selBg : file.isDirectory ? directoryBg : fileBg;
-        yield* framebuffer_buffer.fillRect(0, y, width, height, bgColor);
+        let fg = file.isDirectory ? directoryFg : fileFg;
+        if (isSelected) {
+          fg = selFg;
+        }
+        if (isFocused) {
+          fg = focusedFg;
+        }
+        let bg = file.isDirectory ? directoryBg : fileBg;
+        if (isSelected) {
+          bg = selBg;
+        }
+        if (isFocused) {
+          bg = focusedBg;
+        }
 
-        yield* framebuffer_buffer.drawText(nameContent, 0, y, nameColor);
+        yield* Effect.all(
+          [framebuffer_buffer.fillRect(0, y, width, height, bg), framebuffer_buffer.drawText(nameContent, 0, y, fg)],
+          {
+            concurrency: "unbounded",
+          },
+        );
       }),
     },
     wrapper,
