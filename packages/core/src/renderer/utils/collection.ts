@@ -6,7 +6,8 @@ export interface GenericCollection<T> {
   addItem: (item: T) => Effect.Effect<void, never, never>;
   removeItem: (item: T) => Effect.Effect<void, never, never>;
   clearItems: () => Effect.Effect<void, never, never>;
-  sort: (...args: Sorting<T>[]) => Effect.Effect<void, never, never>;
+  addSort: (...args: Sorting<T>[]) => Effect.Effect<void, never, never>;
+  removeSort: (...args: Sorting<T>[]) => Effect.Effect<void, never, never>;
   onUpdate: () => Effect.Effect<void, never, never>;
 }
 
@@ -62,11 +63,23 @@ export const collection = Effect.fn(function* <T = any>(items: T[]) {
     yield* Ref.set(hasSorted, false);
   });
 
-  const sort = Effect.fn(function* (...sorters: Sorting<T>[]) {
+  const addSort = Effect.fn(function* (...sorters: Sorting<T>[]) {
     yield* Ref.update(sorting, (sortings) => {
       sortings.push(...sorters);
       return sortings;
     });
+    yield* Ref.set(hasSorted, false);
+  });
+
+  const removeSort = Effect.fn(function* (...sorters: Sorting<T>[]) {
+    yield* Ref.update(sorting, (sortings) => {
+      for (const sorter of sorters) {
+        const index = sortings.findIndex((s) => s.key === sorter.key && s.fn === sorter.fn);
+        if (index >= 0) sortings.splice(index, 1);
+      }
+      return sortings;
+    });
+    yield* Ref.set(hasSorted, false);
   });
 
   const onUpdate = Effect.fn(function* () {
@@ -99,7 +112,8 @@ export const collection = Effect.fn(function* <T = any>(items: T[]) {
     addItem,
     removeItem,
     clearItems,
-    sort,
+    addSort,
+    removeSort,
     onUpdate,
   } as GenericCollection<T>;
 });

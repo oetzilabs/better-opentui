@@ -30,7 +30,7 @@ if (import.meta.main) {
         { id: "11", display: "Mango (11)", value: 11 },
       ]);
 
-      yield* item_collection.sort(
+      yield* item_collection.addSort(
         {
           direction: "asc",
           key: "value",
