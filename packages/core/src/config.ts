@@ -5,8 +5,8 @@ import { DebugBottomRight, DebugOverlayCorner } from "./types";
 export class OpenTuiConfig extends Effect.Service<OpenTuiConfig>()("OpenTuiConfig", {
   effect: Effect.gen(function* () {
     const defaultConfig = {
-      width: 80,
-      height: 24,
+      width: process.stdout.columns,
+      height: process.stdout.rows,
       targetFps: yield* Config.number("OPENTUI_TARGET_FPS").pipe(Config.withDefault(60)),
       exitOnCtrlC: yield* Config.boolean("OPENTUI_EXIT_ON_CTRL_C").pipe(Config.withDefault(true)),
       useThread: yield* Config.boolean("OPENTUI_USE_THREAD").pipe(Config.withDefault(process.platform !== "linux")),
