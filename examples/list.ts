@@ -32,11 +32,13 @@ if (import.meta.main) {
 
       yield* item_collection.addSort(
         {
+          id: "value",
           direction: "asc",
           key: "value",
           fn: Order.number,
         },
         {
+          id: "display",
           direction: "desc",
           key: "display",
           fn: Order.string,

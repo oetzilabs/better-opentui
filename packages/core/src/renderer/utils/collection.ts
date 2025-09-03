@@ -9,6 +9,7 @@ export interface GenericCollection<T> {
   addSort: (...args: Sorting<T>[]) => Effect.Effect<void, never, never>;
   removeSort: (...args: Sorting<T>[]) => Effect.Effect<void, never, never>;
   onUpdate: () => Effect.Effect<void, never, never>;
+  updateSortDirection: (id: string, direction: "asc" | "desc") => Effect.Effect<void, never, never>;
 }
 
 type OrderFor<T> = T extends string
@@ -20,6 +21,7 @@ type OrderFor<T> = T extends string
       : never;
 
 export interface Sorting<T> {
+  id: string;
   key: keyof T;
   direction: "asc" | "desc";
   fn: OrderFor<T[this["key"]]>;
@@ -82,6 +84,17 @@ export const collection = Effect.fn(function* <T = any>(items: T[]) {
     yield* Ref.set(hasSorted, false);
   });
 
+  const updateSortDirection = Effect.fn(function* (id: string, direction: "asc" | "desc") {
+    yield* Ref.update(sorting, (sortings) => {
+      const index = sortings.findIndex((s) => s.id === id);
+      if (index >= 0) {
+        sortings[index].direction = direction;
+      }
+      return sortings;
+    });
+    yield* Ref.set(hasSorted, false);
+  });
+
   const onUpdate = Effect.fn(function* () {
     const hs = yield* Ref.get(hasSorted);
     if (hs) return;
@@ -115,5 +128,6 @@ export const collection = Effect.fn(function* <T = any>(items: T[]) {
     addSort,
     removeSort,
     onUpdate,
+    updateSortDirection,
   } as GenericCollection<T>;
 });
