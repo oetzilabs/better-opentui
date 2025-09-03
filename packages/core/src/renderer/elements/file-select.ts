@@ -388,7 +388,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       onChange: Effect.fn(function* (value: string) {
         if (value.length === 0) {
           const lup = yield* getLookupPath();
-          yield* Effect.suspend(() => readDirectory(lup));
+          yield* Effect.suspend(() => readDirectory(options.lookup_path ?? DEFAULTS.lookup_path));
         } else if (fuse) {
           const allFiles = yield* fileCollection.getItems();
           fuse.setCollection(allFiles);

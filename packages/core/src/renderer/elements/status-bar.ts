@@ -51,6 +51,7 @@ export const statusBar = Effect.fn(function* <ST extends string = "status-bar">(
       width: "100%",
       height: 1,
       left: 0,
+      top: 0,
       selectable: false,
       colors: {
         bg: options.colors?.bg ?? DEFAULTS.colors.bg,
