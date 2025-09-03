@@ -1,10 +1,8 @@
 import { collection } from "@better-opentui/core/src/renderer/utils/collection";
 import { Effect, Order } from "effect";
 import { Colors } from "../packages/core/src/colors";
-import type { ListItem, ListOptions } from "../packages/core/src/renderer/elements/list";
 import { PositionRelative } from "../packages/core/src/renderer/utils/position";
 import { run } from "../packages/core/src/run";
-import { parseColor } from "../packages/core/src/utils";
 
 if (import.meta.main) {
   run({
@@ -12,7 +10,7 @@ if (import.meta.main) {
     setup: Effect.fn("run.setup")(function* (cli) {
       const parentContainer = yield* cli.createElement("group");
 
-      const items = [
+      const item_collection = yield* collection([
         { id: "1", display: "Apple (1)", value: 1 },
         { id: "2", display: "Banana (2)", value: 2 },
         { id: "3", display: "Cherry (3)", value: 3 },
@@ -30,9 +28,8 @@ if (import.meta.main) {
         { id: "9", display: "Kiwi (9)", value: 9 },
         { id: "10", display: "Lemon (10)", value: 10 },
         { id: "11", display: "Mango (11)", value: 11 },
-      ];
+      ]);
 
-      const item_collection = yield* collection(items);
       yield* item_collection.sort(
         {
           direction: "asc",
@@ -40,7 +37,7 @@ if (import.meta.main) {
           fn: Order.number,
         },
         {
-          direction: "desc",
+          direction: "asc",
           key: "display",
           fn: Order.string,
         },
