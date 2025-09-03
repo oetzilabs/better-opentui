@@ -11,10 +11,10 @@ if (import.meta.main) {
       const fileSelectElement = yield* parentContainer.create("file-select", {
         position: PositionRelative.make(1),
         width: "100%",
-        height: 15,
+        height: "auto",
         visible: true,
         focused: true,
-        lookup_path: ".", // Start in current directory
+        lookup_path: process.cwd(), // Start in current directory
         search: { enabled: true },
         statusBar: { enabled: true },
         showScrollIndicator: true,

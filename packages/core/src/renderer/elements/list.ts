@@ -44,7 +44,7 @@ export interface ListElement<T, FBT extends string = "list"> extends BaseElement
   getSelectedIndex: () => Effect.Effect<number, Collection, Library>;
   setShowScrollIndicator: (show: boolean) => Effect.Effect<void, Collection, Library>;
   handleKeyPress: (key: ParsedKey) => Effect.Effect<boolean, Collection, Library | FileSystem.FileSystem | Path.Path>;
-  onSelect: (item: ListItem<T> | null) => Effect.Effect<void, Collection, Library>;
+  onSelect: (item: ListItem<T> | null) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   onKeyboardEvent: (
     event: KeyboardEvent,
   ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
@@ -143,8 +143,8 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
       ...options,
       position: PositionRelative.make(1),
       selectable: true,
-      left: 0,
-      top: 0,
+      left: options.left ?? 0,
+      top: options.top ?? 0,
       focused: options.focused ?? true,
       height: options.height
         ? options.height === "auto"
@@ -347,7 +347,7 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
       ),
       Match.whenOr(
         "up",
-        "j",
+        "k",
         Effect.fn(function* () {
           yield* moveUp();
           return true;
@@ -355,7 +355,7 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
       ),
       Match.whenOr(
         "down",
-        "k",
+        "j",
         Effect.fn(function* () {
           yield* moveDown();
           return true;
@@ -416,7 +416,7 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
     }
   });
 
-  const onSelect = Effect.fn(function* (item: T | null) {
+  let onSelect = Effect.fn(function* (item: T | null) {
     const fn = options.onSelect ?? Effect.fn(function* (item: T | null) {});
     yield* fn(item);
   });
@@ -435,12 +435,17 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
   // Initialize
   yield* wrapper.add(listElement);
 
+  const setOnSelect = Effect.fn(function* (fn: ListElement<T, FBT>["onSelect"]) {
+    onSelect = fn;
+  });
+
   return {
     ...wrapper,
     onUpdate,
     renderItem,
     onKeyboardEvent,
     onSelect,
+    setOnSelect,
     setItems,
     getItems,
     setFocusedIndex,

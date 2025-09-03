@@ -1,19 +1,20 @@
 import { FileSystem, Path } from "@effect/platform";
-import { Effect, Match, Option, Ref, Schema } from "effect";
+import { Effect, Match, Option, Order, Ref, Schema } from "effect";
 import Fuse, { type IFuseOptions } from "fuse.js";
-import { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, Input } from "../../colors";
 import type { Collection } from "../../errors";
 import type { KeyboardEvent } from "../../events/keyboard";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
+import { collection, type Sorting } from "../utils/collection";
 import { PositionRelative } from "../utils/position";
-import { base, type BaseElement } from "./base";
+import { type BaseElement } from "./base";
 import { button } from "./button";
 import { type FrameBufferOptions } from "./framebuffer";
 import { group } from "./group";
 import { input } from "./input";
+import { list, type RenderItemContext } from "./list";
 import { statusBar } from "./status-bar";
 import { text } from "./text";
 import type { Binds, ElementOptions } from "./utils";
@@ -27,10 +28,12 @@ const SortCriterion = Schema.Union(
   Schema.Literal("size"),
 );
 
-const SortOptions = Schema.Struct({
-  direction: Schema.Union(Schema.Literal("asc"), Schema.Literal("desc")),
-  orderBy: Schema.Array(SortCriterion),
-});
+const SortOptions = Schema.Array(
+  Schema.Struct({
+    type: SortCriterion,
+    direction: Schema.Union(Schema.Literal("asc"), Schema.Literal("desc")),
+  }),
+);
 
 // Helper function to format file sizes
 const formatFileSize = (bytes: bigint): string => {
@@ -53,6 +56,7 @@ export interface FileOption {
   size?: bigint;
   modified?: Date;
   id: string;
+  display: string;
 }
 
 export interface FileSelectElement<FBT extends string = "file-select">
@@ -60,15 +64,9 @@ export interface FileSelectElement<FBT extends string = "file-select">
   setLookupPath: (path: string) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   getLookupPath: () => Effect.Effect<string, Collection, Library>;
   goUp: () => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
-  getSelectedFiles: () => Effect.Effect<FileOption[], Collection, Library>;
-  toggleSelection: (index: number) => Effect.Effect<void, Collection, Library>;
-  setFocusedIndex: (index: number) => Effect.Effect<void, Collection, Library>;
-  getFocusedIndex: () => Effect.Effect<number, Collection, Library>;
+  getSelectedFile: () => Effect.Effect<FileOption | null, Collection, Library>;
+  setSelectedIndex: (index: number) => Effect.Effect<void, Collection, Library>;
   setTextColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
-  setSelectedTextColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
-  setSelectedBgColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
-  setFocusedBgColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
-  setFocusedTextColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
   setWrapSelection: (wrap: boolean) => Effect.Effect<void, Collection, Library>;
   setShowScrollIndicator: (show: boolean) => Effect.Effect<void, Collection, Library>;
   setSort: (sort: typeof SortOptions.Type) => Effect.Effect<void, Collection, Library>;
@@ -94,10 +92,12 @@ export type FileSelectOptions<FBT extends string = "file-select"> = ElementOptio
     pathBg?: Input;
     pathFg?: Input;
     directoryFg?: Input;
+    directoryBg?: Input;
+    fileBg?: Input;
     fileFg?: Input;
   };
   showScrollIndicator?: boolean;
-  selectedIds?: string[];
+  selectedIndex?: number;
   onUpdate?: (
     self: FileSelectElement<FBT>,
   ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
@@ -121,17 +121,22 @@ const DEFAULTS = {
     focusedBg: Colors.Custom("#1a1a1a"),
     focusedFg: Colors.White,
     scrollIndicator: Colors.Custom("#666666"),
+    directoryBg: Colors.Custom("#2a2a2a"),
     directoryFg: Colors.Custom("#4A90E2"), // Blue for directories
+    fileBg: Colors.Transparent,
     fileFg: Colors.Custom("#7ED321"), // Green for files
     pathBg: Colors.Custom("#2a2a2a"),
     pathFg: Colors.White,
   },
   showScrollIndicator: false,
-  selectedIds: [],
+  selectedIndex: -1,
   search: { enabled: false, config: { keys: ["name"] } },
   parentNode: null,
   lookup_path: ".",
-  sort: { direction: "asc", orderBy: ["folder", "alphanumeric"] },
+  sort: [
+    { type: "folder", direction: "desc" },
+    { type: "alphanumeric", direction: "asc" },
+  ],
   statusBar: { enabled: true },
   layout: ["search", "path", "file-list", "status-bar"],
 } satisfies FileSelectOptions;
@@ -141,7 +146,6 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   options: FileSelectOptions<FBT>,
   parentElement: BaseElement<any, any> | null = null,
 ) {
-  const lib = yield* Library;
   if (!parentElement) return yield* Effect.fail(new Error("Parent element is required"));
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -149,6 +153,11 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   const lookupPath = yield* Ref.make(path.join(process.cwd(), options.lookup_path ?? DEFAULTS.lookup_path));
 
   const searchOpts = options.search ?? DEFAULTS.search;
+
+  const internalColors = yield* Ref.make({
+    ...options.colors,
+    ...DEFAULTS.colors,
+  });
 
   const parentDimensions = yield* Ref.get(parentElement.dimensions);
 
@@ -164,23 +173,18 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   const statusBarEnabled = statusBarConfig.enabled ?? DEFAULTS.statusBar.enabled;
   const statusBarHeight = statusBarEnabled ? 1 : 0;
 
-  const files = yield* Ref.make<FileOption[]>([]);
-  const filteredFiles = yield* Ref.make<FileOption[]>([]);
-  const selectedIds = yield* Ref.make<string[]>([]);
-  const focusedIndex = yield* Ref.make(0);
-
-  const selectedBg = yield* Ref.make(options.colors?.selectedBg ?? DEFAULTS.colors.selectedBg);
-  const selectedFg = yield* Ref.make(options.colors?.selectedFg ?? DEFAULTS.colors.selectedFg);
-  const showScrollIndicator = yield* Ref.make(options.showScrollIndicator ?? DEFAULTS.showScrollIndicator);
-  const scrollIndicatorColor = yield* Ref.make(options.colors?.scrollIndicator ?? DEFAULTS.colors.scrollIndicator);
-
-  const directoryFg = yield* Ref.make(options.colors?.directoryFg ?? DEFAULTS.colors.directoryFg);
-  const fileFg = yield* Ref.make(options.colors?.fileFg ?? DEFAULTS.colors.fileFg);
-
-  const scrollOffset = yield* Ref.make(0);
-  const wrapSelection = yield* Ref.make(true);
-
-  const searchable = yield* Ref.make(searchOpts.enabled);
+  const fileCollection = yield* collection<FileOption>(
+    [
+      {
+        name: "..",
+        path: "..",
+        isDirectory: true,
+        id: "..",
+        display: "📁 ..",
+      },
+    ],
+    "name",
+  );
 
   const sortConfig = yield* Ref.make(options.sort ?? DEFAULTS.sort);
 
@@ -199,17 +203,14 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     parentElement,
   );
 
-  const framebuffer_buffer = yield* wrapper.createFrameBuffer();
-
-  const fileSelectElement = yield* base<"file-select", FileSelectElement<FBT>>(
-    "file-select",
+  const listElement = yield* list(
     binds,
+    fileCollection,
     {
-      ...options,
       position: PositionRelative.make(1),
-      selectable: true,
+      width: "100%",
       left: 0,
-      top: 0,
+      top: 2,
       height: options.height
         ? options.height === "auto"
           ? Math.min(
@@ -223,89 +224,56 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
         fg: options.colors?.fg ?? DEFAULTS.colors.fg,
         focusedBg: options.colors?.focusedBg ?? DEFAULTS.colors.focusedBg,
         focusedFg: options.colors?.focusedFg ?? DEFAULTS.colors.focusedFg,
+        selectedBg: options.colors?.selectedBg ?? DEFAULTS.colors.selectedBg,
+        selectedFg: options.colors?.selectedFg ?? DEFAULTS.colors.selectedFg,
+        scrollIndicator: options.colors?.scrollIndicator ?? DEFAULTS.colors.scrollIndicator,
       },
+      showScrollIndicator: options.showScrollIndicator ?? DEFAULTS.showScrollIndicator,
+      renderItem: Effect.fn(function* (buffer, framebuffer_buffer, context: RenderItemContext<FileOption>) {
+        const { item: file, index, isFocused, isSelected, x, y, width, height, colors } = context;
+        const cols = yield* Ref.get(internalColors);
+        const directoryFg = yield* parseColor(cols.directoryFg);
+        const fileFg = yield* parseColor(cols.fileFg);
+        const selFg = yield* parseColor(cols.selectedFg);
+        const directoryBg = yield* parseColor(cols.directoryBg);
+        const fileBg = yield* parseColor(cols.fileBg);
+        const selBg = yield* parseColor(cols.selectedBg);
+
+        // Enhanced icons and colors
+        const icon = file.isDirectory ? "📁" : "📄";
+        const sizeInfo = file.size ? ` (${formatFileSize(file.size)})` : "";
+        const dateInfo = file.modified ? ` ${file.modified.toLocaleDateString()}` : "";
+        const nameContent = `${icon} ${file.name}${sizeInfo}${dateInfo}`;
+
+        const nameColor = isFocused ? selFg : file.isDirectory ? directoryFg : fileFg;
+        // background
+        const bgColor = isFocused ? selBg : file.isDirectory ? directoryBg : fileBg;
+        yield* framebuffer_buffer.fillRect(0, y, width, height, bgColor);
+
+        yield* framebuffer_buffer.drawText(nameContent, 0, y, nameColor);
+      }),
     },
     wrapper,
   );
 
-  fileSelectElement.onResize = Effect.fn(function* (width: number, height: number) {
-    yield* Ref.update(fileSelectElement.dimensions, (d) => ({ ...d, widthValue: width, heightValue: height }));
-    yield* framebuffer_buffer.resize(width, height);
-    yield* updateScrollOffset();
-  });
-
-  // Rendering
-  fileSelectElement.render = Effect.fn(function* (buffer: OptimizedBuffer, _dt: number) {
-    const v = yield* Ref.get(fileSelectElement.visible);
-    if (!v) return;
-
-    const loc = yield* Ref.get(fileSelectElement.location);
-    const { widthValue: w, heightValue: h } = yield* Ref.get(fileSelectElement.dimensions);
-    const focused = yield* Ref.get(fileSelectElement.focused);
-    const colors = yield* Ref.get(fileSelectElement.colors);
-    const bgColor = yield* parseColor(focused ? colors.focusedBg : colors.bg);
-
-    yield* framebuffer_buffer.clear(bgColor);
-
-    const fileList = yield* Ref.get(filteredFiles);
-    const selIds = yield* Ref.get(selectedIds);
-    const focIdx = yield* Ref.get(focusedIndex);
-    const scroll = yield* Ref.get(scrollOffset);
-
-    // Render file list
-    const visibleFiles = fileList.slice(scroll, scroll + h);
-    const baseFg = yield* parseColor(focused ? colors.focusedFg : colors.fg);
-    const baseBg = yield* parseColor(focused ? colors.focusedBg : colors.bg);
-    const selBgVal = yield* Ref.get(selectedBg);
-    const selFgVal = yield* Ref.get(selectedFg);
-    const selBg = yield* parseColor(selBgVal);
-    const selFg = yield* parseColor(selFgVal);
-
-    for (let i = 0; i < visibleFiles.length; i++) {
-      const actualIndex = scroll + i;
-      const file = visibleFiles[i];
-      const isSelected = selIds.includes(file.id);
-      const isFocused = actualIndex === focIdx;
-      const itemY = i;
-
-      if (itemY >= h) break;
-
-      if (isFocused) {
-        yield* framebuffer_buffer.fillRect(0, itemY, w, 1, baseBg);
+  yield* listElement.setOnSelect(
+    Effect.fn(function* (item) {
+      const it = item as FileOption | null;
+      if (it) {
+        if (it.isDirectory) {
+          if (it.name === "..") {
+            yield* goUp();
+          } else {
+            yield* setLookupPath(it.path);
+          }
+        } else {
+          // Select file
+          yield* onSelect([it]);
+        }
       }
-      if (isSelected) {
-        yield* framebuffer_buffer.fillRect(0, itemY, w, 1, selBg);
-      }
-
-      // Enhanced icons and colors
-      const icon = file.isDirectory ? "📁" : "📄";
-      const sizeInfo = file.size ? ` (${formatFileSize(file.size)})` : "";
-      const dateInfo = file.modified ? ` ${file.modified.toLocaleDateString()}` : "";
-      const nameContent = `${icon} ${file.name}${sizeInfo}${dateInfo}`;
-
-      // Use different colors for directories vs files
-      const dirFgColor = yield* parseColor(yield* Ref.get(directoryFg));
-      const fileFgColor = yield* parseColor(yield* Ref.get(fileFg));
-
-      const nameColor = isFocused ? selFg : file.isDirectory ? dirFgColor : fileFgColor;
-
-      yield* framebuffer_buffer.drawText(nameContent, 0, itemY, nameColor);
-    }
-
-    const showScroll = yield* Ref.get(showScrollIndicator);
-
-    // Scroll indicator
-    if (showScroll && fileList.length > h) {
-      const scrollPercent = focIdx / Math.max(1, fileList.length - 1);
-      const indicatorY = Math.floor(scrollPercent * h);
-      const indicatorX = w - 1;
-      const sic = yield* Ref.get(scrollIndicatorColor);
-      const parsedSIC = yield* parseColor(sic);
-      yield* framebuffer_buffer.drawText("█", indicatorX, indicatorY, parsedSIC);
-    }
-
-    yield* buffer.drawFrameBuffer(loc.x, loc.y, framebuffer_buffer);
-  });
+      return;
+    }),
+  );
 
   // Create path text component
   const pathText = yield* text(
@@ -339,7 +307,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       right: 0,
       top: 0,
       colors: options.colors,
-      text: options.sort ? (options.sort.direction === "asc" ? "▲" : "▼") : "Ready",
+      text: options.sort && options.sort.length > 0 ? (options.sort[0].direction === "asc" ? "▲" : "▼") : "Ready",
     },
     statusBarElement,
   );
@@ -356,13 +324,18 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       colors: options.colors,
       onClick: Effect.fn(function* () {
         const currentSort = yield* Ref.get(sortConfig);
-        const hasDateSort = currentSort.orderBy.some((criterion: string) => criterion === "date");
-        const newOrderBy = hasDateSort ? (["folder", "alphanumeric"] as const) : (["date", "alphanumeric"] as const);
-        yield* setSort({
-          direction: currentSort.direction,
-          orderBy: newOrderBy,
-        });
-        const sortText = newOrderBy.some((criterion: string) => criterion === "date") ? "Date" : "Name";
+        const hasDateSort = currentSort.some((criterion) => criterion.type === "date");
+        const newSort = hasDateSort
+          ? [
+              { type: "folder" as const, direction: "asc" as const },
+              { type: "alphanumeric" as const, direction: "asc" as const },
+            ]
+          : [
+              { type: "date" as const, direction: "asc" as const },
+              { type: "alphanumeric" as const, direction: "asc" as const },
+            ];
+        yield* setSort(newSort);
+        const sortText = newSort.some((criterion) => criterion.type === "date") ? "Date" : "Name";
         yield* statusBarRightText.setText(`Sort: ${sortText}`);
       }),
     },
@@ -380,7 +353,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     binds,
     {
       ...options,
-      focused: false,
+      focused: true,
       visible: searchOpts.enabled,
       colors: options.colors ?? DEFAULTS.colors,
       width: "100%",
@@ -391,38 +364,31 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       value: "",
       placeholder: "Search files",
       onUpdate: Effect.fn(function* (self) {
-        const value = yield* self.getValue();
+        // ! Keep this empty to avoid LSP issues.
+        // TODO: Figure out why this is needed.
+      }),
+      onChange: Effect.fn(function* (value: string) {
         if (value.length === 0) {
-          const allFiles = yield* Ref.get(files);
-          yield* Ref.set(filteredFiles, allFiles);
+          const lup = yield* getLookupPath();
+          yield* Effect.suspend(() => readDirectory(lup));
         } else if (fuse) {
+          const allFiles = yield* fileCollection.getItems();
+          fuse.setCollection(allFiles);
           const filtered = fuse.search(value).map((o) => o.item);
-          yield* Ref.set(filteredFiles, filtered);
+          yield* fileCollection.setItems(filtered);
         }
-        yield* updateScrollOffset();
+        yield* listElement.setFocusedIndex(0);
       }),
     },
     wrapper,
   );
-
-  // Helper to update scroll offset
-  const updateScrollOffset = Effect.fn(function* () {
-    const idx = yield* Ref.get(focusedIndex);
-    const fileList = yield* Ref.get(filteredFiles);
-    const { heightValue: height } = yield* Ref.get(fileSelectElement.dimensions);
-    const maxVisibleItems = Math.max(1, height);
-    const halfVisible = Math.floor(maxVisibleItems / 2);
-    const newScrollOffset = Math.max(0, Math.min(idx - halfVisible, fileList.length - maxVisibleItems));
-    yield* Ref.set(scrollOffset, newScrollOffset);
-  });
 
   // Setters/getters
   const setLookupPath = Effect.fn(function* (path: string) {
     yield* Ref.set(lookupPath, path);
     yield* pathText.setContent(`Path: ${path}`);
     yield* readDirectory(path);
-    yield* Ref.set(focusedIndex, 0);
-    yield* updateScrollOffset();
+    yield* listElement.setFocusedIndex(0);
   });
 
   const getLookupPath = Effect.fn(function* () {
@@ -435,137 +401,68 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     yield* setLookupPath(parentPath);
   });
 
-  const getSelectedFiles = Effect.fn(function* () {
-    const fileList = yield* Ref.get(files);
-    const selIds = yield* Ref.get(selectedIds);
-    return fileList.filter((file) => selIds.includes(file.id));
-  });
-
-  const toggleSelection = Effect.fn(function* (index: number) {
-    const fileList = yield* Ref.get(filteredFiles);
-    if (index < 0 || index >= fileList.length) return;
-
-    const file = fileList[index];
-    const selIds = yield* Ref.get(selectedIds);
-    const isSelected = selIds.includes(file.id);
-
-    if (isSelected) {
-      yield* Ref.set(
-        selectedIds,
-        selIds.filter((id) => id !== file.id),
-      );
-    } else {
-      yield* Ref.set(selectedIds, [...selIds, file.id]);
-    }
-  });
-
-  const setFocusedIndex = Effect.fn(function* (index: number) {
-    const fileList = yield* Ref.get(filteredFiles);
-    if (index >= 0 && index < fileList.length) {
-      yield* Ref.set(focusedIndex, index);
-      yield* updateScrollOffset();
-    }
-  });
-
-  const getFocusedIndex = Effect.fn(function* () {
-    return yield* Ref.get(focusedIndex);
-  });
-
-  const setTextColor = fileSelectElement.setForegroundColor;
-
-  const setSelectedTextColor = Effect.fn(function* (color) {
-    if (typeof color === "function") {
-      yield* Ref.update(selectedFg, (c) => color(c));
-    } else {
-      yield* Ref.set(selectedFg, color);
-    }
-  });
-
-  const setSelectedBgColor = Effect.fn(function* (color) {
-    if (typeof color === "function") {
-      yield* Ref.update(selectedBg, (c) => color(c));
-    } else {
-      yield* Ref.set(selectedBg, color);
-    }
-  });
-
-  const setFocusedBgColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
-    if (typeof color === "function") {
-      yield* Ref.update(fileSelectElement.colors, (c) => ({
-        ...c,
-        focusedBg: color(c.focusedBg),
-      }));
-    } else {
-      yield* Ref.update(fileSelectElement.colors, (c) => ({ ...c, focusedBg: color }));
-    }
-  });
-
-  const setFocusedTextColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
-    if (typeof color === "function") {
-      yield* Ref.update(fileSelectElement.colors, (c) => ({
-        ...c,
-        focusedFg: color(c.focusedFg),
-      }));
-    } else {
-      yield* Ref.update(fileSelectElement.colors, (c) => ({ ...c, focusedFg: color }));
-    }
-  });
-
-  const setWrapSelection = Effect.fn(function* (wrap: boolean) {
-    yield* Ref.set(wrapSelection, wrap);
-  });
+  const setTextColor = listElement.setForegroundColor;
 
   const setShowScrollIndicator = Effect.fn(function* (show: boolean) {
-    yield* Ref.set(showScrollIndicator, show);
+    yield* listElement.setShowScrollIndicator(show);
   });
 
   const setSort = Effect.fn(function* (sort: typeof SortOptions.Type) {
     yield* Ref.set(sortConfig, sort);
-    const currentFiles = yield* Ref.get(files);
-    const sortedFiles = yield* sortFiles(currentFiles, sort);
-    yield* Ref.set(files, sortedFiles);
-    yield* Ref.set(filteredFiles, sortedFiles);
+    // Create new sorts
+    const newSortings: Sorting<FileOption>[] = [];
+    for (const criterion of sort) {
+      const sorting = Match.value(criterion.type).pipe(
+        Match.when("folder", () => ({
+          id: "folder",
+          key: "isDirectory" as keyof FileOption,
+          direction: criterion.direction,
+          fn: Order.boolean,
+        })),
+        Match.when("files", () => ({
+          id: "files",
+          key: "isDirectory" as keyof FileOption,
+          direction: criterion.direction,
+          fn: Order.boolean,
+        })),
+        Match.when("alphanumeric", () => ({
+          id: "alphanumeric",
+          key: "name" as keyof FileOption,
+          direction: criterion.direction,
+          fn: Order.string,
+        })),
+        Match.when("date", () => ({
+          id: "date",
+          key: "modified" as keyof FileOption,
+          direction: criterion.direction,
+          fn: Order.bigint,
+        })),
+        Match.when("size", () => ({
+          id: "size",
+          key: "size" as keyof FileOption,
+          direction: criterion.direction,
+          fn: Order.number,
+        })),
+        Match.orElse(() => ({
+          id: "default",
+          key: "name" as keyof FileOption,
+          direction: criterion.direction,
+          fn: Order.string,
+        })),
+      );
+      // @ts-ignore
+      newSortings.push(sorting);
+    }
+    yield* fileCollection.resetSort(...newSortings);
+    yield* fileCollection.onUpdate();
+    const sortedFiles = yield* fileCollection.getItems();
     if (fuse) {
       fuse.setCollection(sortedFiles);
     }
   });
 
-  // Keyboard navigation
-  const moveUp = Effect.fn(function* (steps: number = 1) {
-    const idx = yield* Ref.get(focusedIndex);
-    const fileList = yield* Ref.get(filteredFiles);
-    const wrap = yield* Ref.get(wrapSelection);
-    let newIndex = idx - steps;
-    if (newIndex >= 0) {
-      yield* Ref.set(focusedIndex, newIndex);
-    } else if (wrap && fileList.length > 0) {
-      yield* Ref.set(focusedIndex, fileList.length - 1);
-    } else {
-      yield* Ref.set(focusedIndex, 0);
-    }
-    yield* updateScrollOffset();
-  });
-
-  const moveDown = Effect.fn(function* (steps: number = 1) {
-    const idx = yield* Ref.get(focusedIndex);
-    const fileList = yield* Ref.get(filteredFiles);
-    const wrap = yield* Ref.get(wrapSelection);
-    let newIndex = idx + steps;
-    if (newIndex < fileList.length) {
-      yield* Ref.set(focusedIndex, newIndex);
-    } else if (wrap && fileList.length > 0) {
-      yield* Ref.set(focusedIndex, 0);
-    } else {
-      yield* Ref.set(focusedIndex, fileList.length - 1);
-    }
-    yield* updateScrollOffset();
-  });
-
   const handleKeyPress = Effect.fn(function* (key: ParsedKey) {
-    const focused = yield* Ref.get(fileSelectElement.focused);
-    if (!focused) return false;
-
-    const sa = yield* Ref.get(searchable);
+    const sa = searchOpts.enabled;
     const keyName = key.name;
     const isShift = key.shift;
 
@@ -575,70 +472,13 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       return true;
     }
 
-    // Handle up button
-    if (keyName === "u" && key.ctrl) {
-      yield* goUp();
-      return true;
-    }
+    // // Handle up button
+    // if (keyName === "u" && key.ctrl) {
+    //   yield* goUp();
+    //   return true;
+    // }
 
-    // Handle enter on directory
-    if (keyName === "return" || keyName === "enter") {
-      const focIdx = yield* Ref.get(focusedIndex);
-      const fileList = yield* Ref.get(filteredFiles);
-      if (focIdx >= 0 && focIdx < fileList.length) {
-        const file = fileList[focIdx];
-        if (file.isDirectory) {
-          if (file.name === "..") {
-            yield* goUp();
-          } else {
-            yield* setLookupPath(file.path);
-          }
-          return true;
-        } else {
-          const selectedFiles = yield* getSelectedFiles();
-          yield* onSelect(selectedFiles);
-          return true;
-        }
-      }
-    }
-
-    // Navigation
-    return yield* Match.value(keyName).pipe(
-      Match.when(
-        "up",
-        Effect.fn(function* () {
-          yield* moveUp(isShift ? 5 : 1);
-          return true;
-        }),
-      ),
-      Match.when(
-        "down",
-        Effect.fn(function* () {
-          yield* moveDown(isShift ? 5 : 1);
-          return true;
-        }),
-      ),
-      Match.when(
-        "space",
-        Effect.fn(function* () {
-          const focIdx = yield* Ref.get(focusedIndex);
-          const fileList = yield* Ref.get(filteredFiles);
-          if (focIdx >= 0 && focIdx < fileList.length) {
-            const file = fileList[focIdx];
-            if (!file.isDirectory) {
-              // Only toggle selection for files, not directories
-              yield* toggleSelection(focIdx);
-            }
-          }
-          return true;
-        }),
-      ),
-      Match.orElse(
-        Effect.fn(function* () {
-          return false;
-        }),
-      ),
-    );
+    return false;
   });
 
   wrapper.onUpdate = Effect.fn(function* (self) {
@@ -654,7 +494,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     const elements = yield* Ref.get(wrapper.renderables);
     for (const element of elements) {
       const { heightValue: height } = yield* Ref.get(element.dimensions);
-      yield* Ref.update(element.location, (loc) => ({ ...loc, y: topY }));
+      const loc = yield* Ref.updateAndGet(element.location, (loc) => ({ ...loc, y: topY, x: loc.x }));
       yield* element.update();
       topY += height;
     }
@@ -669,8 +509,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   });
 
   const destroy = Effect.fn(function* () {
-    yield* framebuffer_buffer.destroy;
-    yield* fileSelectElement.destroy();
+    yield* listElement.destroy();
   });
 
   const onSelect = Effect.fn(function* (selectedFiles: FileOption[]) {
@@ -678,51 +517,17 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     yield* fn(selectedFiles);
   });
 
-  // Function to sort files
-  const sortFiles = Effect.fn(function* (fileOptions: FileOption[], sort: typeof SortOptions.Type) {
-    return [...fileOptions].sort((a, b) => {
-      for (const criterion of sort.orderBy) {
-        const cmp = Match.value(criterion).pipe(
-          Match.when("folder", () => (a.isDirectory ? 0 : 1) - (b.isDirectory ? 0 : 1)),
-          Match.when("files", () => (a.isDirectory ? 1 : 0) - (b.isDirectory ? 1 : 0)),
-          Match.when("alphanumeric", () => a.name.localeCompare(b.name)),
-          Match.when("date", () => {
-            if (a.modified && b.modified) {
-              return a.modified.getTime() - b.modified.getTime();
-            } else if (a.modified) {
-              return -1;
-            } else if (b.modified) {
-              return 1;
-            }
-            return 0;
-          }),
-          Match.when("size", () => {
-            if (a.size !== undefined && b.size !== undefined) {
-              return Number(a.size - b.size);
-            } else if (a.size !== undefined) {
-              return -1;
-            } else if (b.size !== undefined) {
-              return 1;
-            }
-            return 0;
-          }),
-          Match.orElse(() => 0),
-        );
-        if (cmp !== 0) {
-          return sort.direction === "asc" ? cmp : -cmp;
-        }
-      }
-      return 0;
-    });
-  });
-
   // Function to read directory
   const readDirectory = Effect.fn(function* (location: string) {
+    if (location === "/") return;
+    const path_exists = yield* fs.exists(location);
+    if (!path_exists) return;
     const files_from_folder = yield* fs.readDirectory(location);
     const entries = yield* Effect.all(
       files_from_folder.map(
         Effect.fn(function* (file) {
-          const stat = yield* fs.stat(file);
+          const fullpath = path.join(location, file);
+          const stat = yield* fs.stat(fullpath);
           return {
             ...stat,
             name: file,
@@ -744,28 +549,34 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
         path: "..",
         isDirectory: true,
         id: "..",
+        display: "📁 ..",
       });
     }
 
     for (const entry of entries) {
       const filePath = path.join(location, entry.name);
-      const absolutePath = path.join(process.cwd(), filePath);
+      const icon = entry.type === "Directory" ? "📁" : "📄";
+      const sizeInfo = entry.size ? ` (${formatFileSize(entry.size)})` : "";
+      const dateInfo = Option.isSome(entry.mtime) ? ` ${entry.mtime.value.toLocaleDateString()}` : "";
+      const display = `${icon} ${entry.name}${sizeInfo}${dateInfo}`;
       fileOptions.push({
         name: entry.name,
-        path: absolutePath,
+        path: filePath,
         isDirectory: entry.type === "Directory",
         size: entry.size,
         modified: Option.isSome(entry.mtime) ? entry.mtime.value : undefined,
-        id: absolutePath,
+        id: filePath,
+        display,
       });
     }
 
+    yield* fileCollection.setItems(fileOptions);
     const currentSort = yield* Ref.get(sortConfig);
-    const sortedFileOptions = yield* sortFiles(fileOptions, currentSort);
-    yield* Ref.set(files, sortedFileOptions);
-    yield* Ref.set(filteredFiles, sortedFileOptions);
+    yield* setSort(currentSort);
+    yield* fileCollection.onUpdate();
+
     if (fuse) {
-      fuse.setCollection(sortedFileOptions);
+      fuse.setCollection(fileOptions);
     }
   });
 
@@ -783,7 +594,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       Match.when(
         "file-list",
         Effect.fn(function* () {
-          yield* wrapper.add(fileSelectElement);
+          yield* wrapper.add(listElement);
         }),
       ),
       Match.when(
@@ -805,21 +616,11 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   return {
     ...wrapper,
     onKeyboardEvent,
-    // onUpdate,
     onSelect,
     setLookupPath,
     getLookupPath,
     goUp,
-    getSelectedFiles,
-    toggleSelection,
-    setFocusedIndex,
-    getFocusedIndex,
     setTextColor,
-    setSelectedTextColor,
-    setSelectedBgColor,
-    setFocusedBgColor,
-    setFocusedTextColor,
-    setWrapSelection,
     setShowScrollIndicator,
     setSort,
     handleKeyPress,

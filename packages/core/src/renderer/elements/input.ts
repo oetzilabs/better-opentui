@@ -23,6 +23,7 @@ export interface InputElement extends BaseElement<"input", InputElement> {
   setCursorColor: (color: ((oldColor: Input) => Input) | Input) => Effect.Effect<void, Collection, Library>;
   handleKeyPress: (key: ParsedKey) => Effect.Effect<boolean, Collection, Library>;
   onUpdate: (self: InputElement) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
+  onChange: (text: string) => Effect.Effect<void, Collection, Library>;
 }
 
 export type InputOptions = ElementOptions<"input", InputElement> & {
@@ -37,6 +38,7 @@ export type InputOptions = ElementOptions<"input", InputElement> & {
   maxLength?: number;
   value?: string;
   onUpdate?: (self: InputElement) => Effect.Effect<void, Collection, Library>;
+  onChange?: (text: string) => Effect.Effect<void, Collection, Library>;
   validate?: (value: string) => boolean;
 };
 
@@ -63,6 +65,9 @@ export const input = Effect.fn(function* (
 ) {
   const lib = yield* Library;
   const { cli } = yield* Ref.get(binds.context);
+
+  const lastValue = yield* Ref.make(options.value ?? DEFAULTS.value);
+
   const b = yield* base<"input", InputElement>(
     "input",
     binds,
@@ -299,6 +304,7 @@ export const input = Effect.fn(function* (
         Effect.fn(function* () {
           const v = yield* Ref.get(value);
           yield* setCursorPosition(v.length);
+
           return true;
         }),
       ),
@@ -306,6 +312,9 @@ export const input = Effect.fn(function* (
         "backspace",
         Effect.fn(function* () {
           yield* deleteCharacter("backward");
+
+          const v = yield* Ref.get(value);
+          yield* onChange(v);
           return true;
         }),
       ),
@@ -313,6 +322,9 @@ export const input = Effect.fn(function* (
         "delete",
         Effect.fn(function* () {
           yield* deleteCharacter("forward");
+
+          const v = yield* Ref.get(value);
+          yield* onChange(v);
           return true;
         }),
       ),
@@ -324,7 +336,7 @@ export const input = Effect.fn(function* (
           const last = yield* Ref.get(lastCommittedValue);
           if (v !== last) {
             yield* Ref.set(lastCommittedValue, v);
-            // emit change event here if needed
+            yield* onChange(v);
           }
           // emit enter event here if needed
           return true;
@@ -339,6 +351,8 @@ export const input = Effect.fn(function* (
             keySequence.charCodeAt(0) <= 126
           ) {
             yield* insertText(keySequence);
+            const v = yield* Ref.get(value);
+            yield* onChange(v);
             return true;
           }
           return false;
@@ -368,6 +382,12 @@ export const input = Effect.fn(function* (
     yield* framebuffer_buffer.resize(w, h);
   });
 
+  const onChange: InputElement["onChange"] = Effect.fn(function* (text: string) {
+    const fn = options.onChange ?? Effect.fn(function* (text: string) {});
+    yield* fn(text);
+    yield* Ref.set(lastValue, text);
+  });
+
   b.onKeyboardEvent = Effect.fn(function* (event) {
     const fn = options.onKeyboardEvent ?? Effect.fn(function* (event) {});
     yield* fn(event);
@@ -388,6 +408,7 @@ export const input = Effect.fn(function* (
   return {
     ...b,
     onUpdate,
+    onChange,
     render,
     setValue,
     getValue,
@@ -399,5 +420,5 @@ export const input = Effect.fn(function* (
     setCursorColor,
     handleKeyPress,
     destroy,
-  } satisfies InputElement;
+  };
 });
