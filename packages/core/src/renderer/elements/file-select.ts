@@ -283,6 +283,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
           } else {
             yield* setLookupPath(it.path);
           }
+          yield* searchInput.setValue("");
         } else {
           // Select file
           yield* onSelect([it]);
