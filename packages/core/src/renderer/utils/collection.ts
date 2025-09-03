@@ -37,6 +37,7 @@ export const collection = Effect.fn(function* <T = any>(items: T[]) {
 
   const setItems = Effect.fn(function* (newItems: T[]) {
     yield* Ref.set(_items, newItems);
+    yield* Ref.set(hasSorted, false);
   });
 
   const addItem = Effect.fn(function* (item: T) {
