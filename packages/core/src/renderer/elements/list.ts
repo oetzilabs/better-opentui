@@ -7,19 +7,18 @@ import type { KeyboardEvent } from "../../events/keyboard";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { parseColor } from "../../utils";
 import { Library } from "../../zig";
+import { collection, type GenericCollection } from "../utils/collection";
 import { PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { group } from "./group";
 import type { Binds, ElementOptions } from "./utils";
 
-type ListItemBase = { id: string };
-
-export type ListItem<T extends ListItemBase> = T;
+export type ListItem<T> = T;
 
 type ElementOf<T> = T extends readonly (infer U)[] ? U : never;
 
-export interface RenderItemContext<T extends ListItemBase> {
-  item: ListItem<T>;
+export interface RenderItemContext<T> {
+  item: T;
   index: number;
   isFocused: boolean;
   isSelected: boolean;
@@ -38,8 +37,7 @@ export interface RenderItemContext<T extends ListItemBase> {
   };
 }
 
-export interface ListElement<T extends ListItemBase, FBT extends string = "list">
-  extends BaseElement<"list", ListElement<T, FBT>> {
+export interface ListElement<T, FBT extends string = "list"> extends BaseElement<"list", ListElement<T, FBT>> {
   setItems: (items: ListItem<T>[]) => Effect.Effect<void, Collection, Library>;
   getItems: () => Effect.Effect<ListItem<T>[], Collection, Library>;
   setFocusedIndex: (index: number) => Effect.Effect<void, Collection, Library>;
@@ -60,28 +58,7 @@ export interface ListElement<T extends ListItemBase, FBT extends string = "list"
   onUpdate: (self: ListElement<T, FBT>) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
 }
 
-type OrderFor<T> = T extends string
-  ? Order.Order<string>
-  : T extends number
-    ? Order.Order<number>
-    : T extends boolean
-      ? Order.Order<boolean>
-      : never;
-
-export interface SortCriterion<T extends ListItemBase> {
-  key: string;
-  fn: Order.Order<any>;
-}
-
-// export type SortOptions<T extends readonly ListItemBase[]> = {
-//   direction: "asc" | "desc";
-//   orderBy: { [K in keyof ElementOf<T>]: SortCriterion<ElementOf<T>> }[keyof ElementOf<T>][];
-// };
-
-export type ListOptions<T extends ListItemBase, FBT extends string = "list"> = ElementOptions<
-  FBT,
-  ListElement<T, FBT>
-> & {
+export type ListOptions<T, FBT extends string = "list"> = ElementOptions<FBT, ListElement<T, FBT>> & {
   colors?: {
     bg?: Input;
     fg?: Input;
@@ -91,7 +68,6 @@ export type ListOptions<T extends ListItemBase, FBT extends string = "list"> = E
     selectedFg?: Input;
     scrollIndicator?: Input;
   };
-  items?: readonly ListItem<T>[];
   maxVisibleItems?: number;
   showScrollIndicator?: boolean;
   onSelect?: (
@@ -105,11 +81,7 @@ export type ListOptions<T extends ListItemBase, FBT extends string = "list"> = E
     framebuffer_buffer: OptimizedBuffer,
     context: RenderItemContext<T>,
   ) => Effect.Effect<void, Collection, Library>;
-  sorting: {
-    direction: "asc" | "desc";
-    orderBy: SortCriterion<T>[];
-  };
-  displayKey: string;
+  displayKey: keyof T;
 };
 
 // Update DEFAULTS to use `any` or a specific default type if possible,
@@ -125,22 +97,28 @@ const DEFAULTS = {
     selectedFg: Colors.Yellow,
     scrollIndicator: Colors.Gray,
   },
-  items: [],
   maxVisibleItems: 10,
   showScrollIndicator: false,
-  sorting: { direction: "asc", orderBy: [] },
-  displayKey: "id", // Keep 'id' as a sensible default
+  displayKey: "id",
 } satisfies ListOptions<any>; // Use `any` for DEFAULTS if it's meant to be generic.
 
-export const list = Effect.fn(function* <T extends ListItemBase, FBT extends string = "list">(
+export const list = Effect.fn(function* <T extends any, FBT extends string = "list">(
   binds: Binds,
-  options: ListOptions<T, FBT>,
+  items: GenericCollection<any>,
+  options: ListOptions<any, FBT>,
   parentElement: BaseElement<any, any> | null = null,
 ) {
   const lib = yield* Library;
   if (!parentElement) return yield* Effect.fail(new Error("Parent element is required"));
+  if (!options.displayKey) return yield* Effect.fail(new Error("displayKey is required"));
 
-  const items = yield* Ref.make(options.items ?? DEFAULTS.items);
+  const coll = items ?? (yield* collection<T>([]));
+
+  // check if the collection has the displayKey
+  const hasDisplayKey = coll.getItems().pipe(Effect.map((items) => items.some((item) => item[options.displayKey])));
+  const hdk = yield* hasDisplayKey;
+  if (!hdk) return yield* Effect.fail(new Error("displayKey is not present in the collection"));
+
   const focusedIndex = yield* Ref.make(0);
   const selectedIndex = yield* Ref.make(-1);
   const scrollOffset = yield* Ref.make(0);
@@ -200,7 +178,6 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
     yield* updateScrollOffset();
   });
 
-  // displayKey will now correctly infer its type as keyof T
   const displayKey = options.displayKey;
 
   const renderItem =
@@ -222,7 +199,7 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
       }
 
       const textColor = isSelected ? selFg : isFocused ? focusedFg : baseFg;
-      yield* framebuffer_buffer.drawText(String(item[displayKey as keyof ListItem<T>]), 0, y, textColor);
+      yield* framebuffer_buffer.drawText(String(item[displayKey as unknown as keyof T]), 0, y, textColor);
     });
 
   // Rendering
@@ -238,7 +215,7 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
 
     yield* framebuffer_buffer.clear(bgColor);
 
-    const itemList = yield* Ref.get(items);
+    const itemList = yield* coll.getItems();
     const focIdx = yield* Ref.get(focusedIndex);
     const selIdx = yield* Ref.get(selectedIndex);
     const scroll = yield* Ref.get(scrollOffset);
@@ -256,7 +233,7 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
       if (itemY >= h) break;
 
       yield* renderItem(buffer, framebuffer_buffer, {
-        item,
+        item: item as T,
         index: actualIndex,
         isFocused,
         isSelected,
@@ -286,7 +263,7 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
   // Helper to update scroll offset
   const updateScrollOffset = Effect.fn(function* () {
     const idx = yield* Ref.get(focusedIndex);
-    const itemList = yield* Ref.get(items);
+    const itemList = yield* coll.getItems();
     const { heightValue: height } = yield* Ref.get(listElement.dimensions);
     const maxVisibleItems = Math.max(1, height);
     const halfVisible = Math.floor(maxVisibleItems / 2);
@@ -296,31 +273,18 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
 
   // Setters/getters
   const setItems = Effect.fn(function* (newItems: ListItem<T>[]) {
-    const { direction, orderBy } = yield* Ref.get(sorting);
-    const sortedItems =
-      orderBy.length > 0
-        ? pipe(
-            newItems,
-            Array.sortBy(
-              ...orderBy.map(({ fn, key }) => {
-                const fn1 = (item: ListItem<T>) => item[key as keyof ListItem<T>];
-                return Order.mapInput<T[keyof T], ListItem<T>>(fn as Order.Order<T[keyof T]>, fn1);
-              }),
-            ),
-          )
-        : newItems;
-    yield* Ref.set(items, sortedItems);
+    yield* coll.setItems(newItems);
     yield* Ref.set(focusedIndex, 0);
     yield* Ref.set(selectedIndex, -1);
     yield* updateScrollOffset();
   });
 
   const getItems = Effect.fn(function* () {
-    return yield* Ref.get(items);
+    return yield* coll.getItems();
   });
 
   const setFocusedIndex = Effect.fn(function* (index: number) {
-    const itemList = yield* Ref.get(items);
+    const itemList = yield* coll.getItems();
     if (index >= 0 && index < itemList.length) {
       yield* Ref.set(focusedIndex, index);
       yield* updateScrollOffset();
@@ -332,7 +296,7 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
   });
 
   const setSelectedIndex = Effect.fn(function* (index: number) {
-    const itemList = yield* Ref.get(items);
+    const itemList = yield* coll.getItems();
     if (index >= -1 && index < itemList.length) {
       yield* Ref.set(selectedIndex, index);
     }
@@ -349,7 +313,7 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
   // Keyboard navigation
   const moveUp = Effect.fn(function* (steps: number = 1) {
     const idx = yield* Ref.get(focusedIndex);
-    const fileList = yield* Ref.get(items);
+    const fileList = yield* coll.getItems();
     const wrap = yield* Ref.get(wrapSelection);
     let newIndex = idx - steps;
     if (newIndex >= 0) {
@@ -364,7 +328,7 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
 
   const moveDown = Effect.fn(function* (steps: number = 1) {
     const idx = yield* Ref.get(focusedIndex);
-    const fileList = yield* Ref.get(items);
+    const fileList = yield* coll.getItems();
     const wrap = yield* Ref.get(wrapSelection);
     let newIndex = idx + steps;
     if (newIndex < fileList.length) {
@@ -408,7 +372,7 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
         "return",
         Effect.fn(function* () {
           const focIdx = yield* Ref.get(focusedIndex);
-          const itemList = yield* Ref.get(items);
+          const itemList = yield* coll.getItems();
           if (focIdx >= 0 && focIdx < itemList.length) {
             const item = itemList[focIdx];
             yield* Ref.set(selectedIndex, focIdx);
@@ -421,7 +385,7 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
         "enter",
         Effect.fn(function* () {
           const focIdx = yield* Ref.get(focusedIndex);
-          const itemList = yield* Ref.get(items);
+          const itemList = yield* coll.getItems();
           if (focIdx >= 0 && focIdx < itemList.length) {
             const item = itemList[focIdx];
             yield* Ref.set(selectedIndex, focIdx);
@@ -434,7 +398,7 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
         "space",
         Effect.fn(function* () {
           const focIdx = yield* Ref.get(focusedIndex);
-          const itemList = yield* Ref.get(items);
+          const itemList = yield* coll.getItems();
           if (focIdx >= 0 && focIdx < itemList.length) {
             const item = itemList[focIdx];
             yield* Ref.set(selectedIndex, focIdx);
@@ -459,8 +423,8 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
     }
   });
 
-  const onSelect = Effect.fn(function* (item: ListItem<T> | null) {
-    const fn = options.onSelect ?? Effect.fn(function* (item: ListItem<T> | null) {});
+  const onSelect = Effect.fn(function* (item: T | null) {
+    const fn = options.onSelect ?? Effect.fn(function* (item: T | null) {});
     yield* fn(item);
   });
 
@@ -469,23 +433,10 @@ export const list = Effect.fn(function* <T extends ListItemBase, FBT extends str
     yield* listElement.destroy();
   });
 
-  const sorting = yield* Ref.make(options.sorting ?? DEFAULTS.sorting);
-
   const onUpdate =
     options.onUpdate ??
     Effect.fn(function* (self) {
-      const _items = yield* Ref.get(items);
-      const { direction, orderBy } = yield* Ref.get(sorting);
-      const sorted = pipe(
-        _items,
-        Array.sortBy(
-          ...orderBy.map(({ fn, key }) => {
-            const fn1 = (item: ListItem<T>) => item[key as keyof ListItem<T>];
-            return Order.mapInput<T[keyof T], ListItem<T>>(fn as Order.Order<T[keyof T]>, fn1);
-          }),
-        ),
-      );
-      yield* Ref.set(items, sorted);
+      yield* coll.onUpdate();
     });
 
   // Initialize

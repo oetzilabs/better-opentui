@@ -1,3 +1,4 @@
+import { collection } from "@better-opentui/core/src/renderer/utils/collection";
 import { Effect, Order } from "effect";
 import { Colors } from "../packages/core/src/colors";
 import type { ListItem, ListOptions } from "../packages/core/src/renderer/elements/list";
@@ -15,10 +16,15 @@ if (import.meta.main) {
         { id: "1", display: "Apple (1)", value: 1 },
         { id: "2", display: "Banana (2)", value: 2 },
         { id: "3", display: "Cherry (3)", value: 3 },
-        { id: "12", display: "Orange (12)", value: 12 }, // intentionally placed, to show that sorting works
+        // intentionally placed, to show that sorting works
+        { id: "12", display: "Orange (12)", value: 12 },
         { id: "4", display: "Date (4)", value: 4 },
         { id: "5", display: "Elderberry (5)", value: 5 },
+        // same value different display, to show that sorting for the same value works as expected
         { id: "6", display: "Fig (6)", value: 6 },
+        { id: "6", display: "Fig (6) 2", value: 6 },
+        { id: "6", display: "Fig (6) 3", value: 6 },
+        { id: "6", display: "Fig (6) 4", value: 6 },
         { id: "7", display: "Grape (7)", value: 7 },
         { id: "8", display: "Honeydew (8)", value: 8 },
         { id: "9", display: "Kiwi (9)", value: 9 },
@@ -26,11 +32,21 @@ if (import.meta.main) {
         { id: "11", display: "Mango (11)", value: 11 },
       ];
 
-      // TODO!: I need to be able to infer the type of the list items.
-      // For now I use `string` as `displayKey`
-      // `onSelect` and `sorting` are not typed fully.
+      const item_collection = yield* collection(items);
+      yield* item_collection.sort(
+        {
+          direction: "asc",
+          key: "value",
+          fn: Order.number,
+        },
+        {
+          direction: "desc",
+          key: "display",
+          fn: Order.string,
+        },
+      );
 
-      const listElement = yield* parentContainer.create("list", {
+      const listElement = yield* parentContainer.create("list", item_collection, {
         position: PositionRelative.make(1),
         width: "100%",
         height: 10,
@@ -46,22 +62,13 @@ if (import.meta.main) {
           selectedFg: Colors.Black,
           scrollIndicator: Colors.Gray,
         },
-        items,
         displayKey: "display",
         onSelect: (item) =>
           Effect.gen(function* () {
             if (item) console.log(`Selected: ${item.display}`);
           }),
-        sorting: {
-          direction: "asc",
-          orderBy: [
-            {
-              key: "value",
-              fn: Order.number,
-            },
-          ],
-        },
-      } satisfies ListOptions<(typeof items)[number]>);
+      });
+
       yield* parentContainer.add(listElement);
 
       yield* cli.add(parentContainer);
