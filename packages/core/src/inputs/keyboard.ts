@@ -26,8 +26,8 @@ export const End = Schema.Literal("[F", "OF", "[4~", "[8~", "[8$", "[8^").pipe(S
 export const Home = Schema.Literal("[H", "OH", "[1~", "[7~", "[7$", "[7^").pipe(Schema.brand("home"));
 export const Insert = Schema.Literal("[2~", "[2$", "[2^").pipe(Schema.brand("insert"));
 export const Delete = Schema.Literal("[3~", "[3$", "[3^", "\x1b[3~").pipe(Schema.brand("delete"));
-export const PageUp = Schema.Literal("[5~", "[[5~", "[5$", "[5^").pipe(Schema.brand("pageup"));
-export const PageDown = Schema.Literal("[6~", "[[6~", "[6$", "[6^").pipe(Schema.brand("pagedown")); // putty
+export const PageUp = Schema.Literal("[5~", "[[5~", "[5$", "[5^", "[5;2~", "[5;5~").pipe(Schema.brand("pageup"));
+export const PageDown = Schema.Literal("[6~", "[[6~", "[6$", "[6^", "[6;2~", "[6;5~").pipe(Schema.brand("pagedown")); // putty
 export const Tab = Schema.Literal("[Z").pipe(Schema.brand("tab"));
 export const Shift = Schema.Literal("[a", "[b", "[c", "[d", "[e", "[2$", "[3$", "[5$", "[6$", "[7$", "[8$", "[Z").pipe(
   Schema.brand("shift"),

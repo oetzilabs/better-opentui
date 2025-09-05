@@ -1,4 +1,5 @@
 import { Array as Arr, Effect, Order, pipe, Ref } from "effect";
+import Fuse, { type FuseOptionKey, type IFuseOptions } from "fuse.js";
 
 export interface GenericCollection<T> {
   getItems: () => Effect.Effect<T[], never, never>;
@@ -12,6 +13,8 @@ export interface GenericCollection<T> {
   onUpdate: () => Effect.Effect<void, never, never>;
   updateSortDirection: (id: string, direction: "asc" | "desc") => Effect.Effect<void, never, never>;
   getDisplayKey: () => Effect.Effect<keyof T | undefined, never, never>;
+  setFilterKeys: (keys: FuseOptionKey<T>[]) => Effect.Effect<void, never, never>;
+  filter: (search: string) => Effect.Effect<T[], never, never>;
 }
 
 type OrderFor<T> = T extends string
@@ -45,7 +48,14 @@ export const collection = Effect.fn(function* <T extends object = any>(items: T[
   if (!_dk) {
     _dk = yield* getFirstKey(items);
   }
-  const dk = yield* Ref.make<keyof T | undefined>(displayKey ?? _dk);
+  const _displayKey = displayKey ?? _dk;
+
+  const dk = yield* Ref.make<keyof T | undefined>(_displayKey);
+  const options: IFuseOptions<T> = { keys: [_displayKey as FuseOptionKey<T>], distance: 2 };
+
+  const preIndex = Fuse.createIndex(options.keys!, items);
+
+  const fuse = yield* Ref.make(new Fuse(items, options, preIndex));
 
   const sorting = yield* Ref.make<Sorting<T>[]>([]);
 
@@ -58,6 +68,20 @@ export const collection = Effect.fn(function* <T extends object = any>(items: T[
   const setItems = Effect.fn(function* (newItems: T[]) {
     yield* Ref.set(_items, newItems);
     yield* Ref.set(hasSorted, false);
+  });
+
+  const setFilterKeys = Effect.fn(function* (keys: FuseOptionKey<T>[]) {
+    const _fuse = new Fuse(items, { keys });
+    yield* Ref.set(fuse, _fuse);
+  });
+
+  const filter = Effect.fn(function* (search: string) {
+    const allFiles = yield* Ref.get(_items);
+    const searcher = yield* Ref.get(fuse);
+    searcher.setCollection(allFiles);
+    const filtered = searcher.search(search).map((o) => o.item);
+    yield* setItems(filtered);
+    return filtered;
   });
 
   const addItem = Effect.fn(function* (item: T) {
@@ -157,5 +181,7 @@ export const collection = Effect.fn(function* <T extends object = any>(items: T[
     onUpdate,
     updateSortDirection,
     getDisplayKey,
+    filter,
+    setFilterKeys,
   } as GenericCollection<T>;
 });
