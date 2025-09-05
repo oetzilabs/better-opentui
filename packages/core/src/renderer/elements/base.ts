@@ -176,7 +176,7 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
   const id = Math.random().toString(36).slice(2);
   yield* elementCounter(Effect.succeed(1));
   const counter = yield* Metric.value(elementCounter);
-  const num = counter.count;
+  const num = Math.max(1, counter.count);
   const visible = yield* Ref.make(options.visible ?? true);
   yield* validateOptions(id, options);
   const location = yield* Ref.make<{

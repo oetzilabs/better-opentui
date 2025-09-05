@@ -49,26 +49,29 @@ export const DEFAULTS = {
   },
 } as const;
 
-export const box = Effect.fn(function* (binds: Binds, options: BoxOptions = DEFAULTS) {
+export const box = Effect.fn(function* (
+  binds: Binds,
+  options: BoxOptions = DEFAULTS,
+  parentElement: BaseElement<any, any> | null = null,
+) {
+  if (!parentElement) return yield* Effect.fail(new Error("Parent element is required"));
   // const lib = yield* Library;
-  const b = yield* base<"box", BoxElement>("box", binds, {
-    ...options,
-    colors: {
-      ...DEFAULTS.colors,
-      ...options.colors,
+  const b = yield* base<"box", BoxElement>(
+    "box",
+    binds,
+    {
+      ...options,
+      colors: {
+        ...DEFAULTS.colors,
+        ...options.colors,
+      },
     },
-  });
+    parentElement,
+  );
 
   b.onMouseEvent = Effect.fn("box.onMouseEvent")(function* (event) {
     const fn = options.onMouseEvent ?? Effect.fn(function* (event) {});
     yield* fn(event);
-    // if (event.target) {
-    //   if (event.target.id === b.id) {
-    //     yield* b.setFocused(true);
-    //   } else {
-    //     yield* b.setFocused(false);
-    //   }
-    // }
   });
 
   const border = yield* Ref.make<boolean | BorderSides[]>(options.border ?? DEFAULTS.border);

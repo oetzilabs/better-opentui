@@ -27,8 +27,8 @@ export const group = Effect.fn(function* (
     binds,
     {
       ...options,
-      width: "auto",
-      height: "auto",
+      width: options.width ?? "auto",
+      height: options.height ?? "auto",
       visible: true,
       selectable: false,
       position: PositionRelative.make(1),

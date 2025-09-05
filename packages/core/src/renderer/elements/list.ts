@@ -81,9 +81,6 @@ export type ListOptions<T, FBT extends string = "list"> = ElementOptions<FBT, Li
   ) => Effect.Effect<void, Collection, Library>;
 };
 
-// Update DEFAULTS to use `any` or a specific default type if possible,
-// or adjust its structure if it causes conflicts with strong typing.
-// For now, `any` is a practical workaround for defaults that are not directly tied to T.
 const DEFAULTS = {
   colors: {
     bg: Colors.Transparent,
@@ -96,7 +93,7 @@ const DEFAULTS = {
   },
   maxVisibleItems: 10,
   showScrollIndicator: false,
-} satisfies ListOptions<any>; // Use `any` for DEFAULTS if it's meant to be generic.
+} satisfies ListOptions<any>;
 
 export const list = Effect.fn(function* <T extends any, FBT extends string = "list">(
   binds: Binds,
@@ -424,6 +421,7 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
   const destroy = Effect.fn(function* () {
     yield* framebuffer_buffer.destroy;
     yield* listElement.destroy();
+    yield* wrapper.destroy();
   });
 
   const onUpdate =

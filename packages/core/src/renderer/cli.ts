@@ -227,10 +227,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           return yield* Ref.get(_height);
         }),
         addToHitGrid: Effect.fn(function* (x: number, y: number, width: number, height: number, id: number) {
-          const cr = yield* Ref.get(capturedRenderable);
-          if (id !== cr?.num) {
-            yield* lib.addToHitGrid(renderer, x, y, width, height, id);
-          }
+          yield* lib.addToHitGrid(renderer, x, y, width, height, id);
         }),
         widthMethod: capabilities.unicode === "unicode" ? "unicode" : "wcwidth",
       },
@@ -721,7 +718,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
         const maybeRenderableId = yield* lib.checkHit(renderer, mouseEvent.x, mouseEvent.y);
         const maybeRenderable = yield* elements.getRenderable(maybeRenderableId);
-
         if (isMouseScroll(mouseEvent.type)) {
           yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseScroll", mouseEvent);
           // yield* debugBox.setContent(`MScroll (${maybeRenderableId}`);
