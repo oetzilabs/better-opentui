@@ -168,6 +168,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const debug = yield* Ref.make(config.debugOverlay.enabled);
 
     const capturedRenderable = yield* Ref.make<BaseElement<any, any> | null>(null);
+    const lastMousePosition = yield* Ref.make<{ x: number; y: number }>({ x: 0, y: 0 });
 
     const rendering = yield* Ref.make(false);
     const renderStats = yield* Ref.make({
@@ -556,9 +557,13 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
               }
               if (isDumpHitGridCommand(parsedKey.raw)) {
                 const treeInfo = yield* root.getTreeInfo();
+                const lastMousePos = yield* Ref.get(lastMousePosition);
+                const mouseInfo = `mouse (${lastMousePos.x}, ${lastMousePos.y})`;
+                const treeInfoWithMouse = `${mouseInfo}\n${treeInfo}`;
                 const fs = yield* FileSystem.FileSystem;
                 const path = yield* Path.Path;
-                yield* fs.writeFileString(path.join(process.cwd(), "tree-info.txt"), treeInfo);
+
+                yield* fs.writeFileString(path.join(process.cwd(), "tree-info.txt"), treeInfoWithMouse);
 
                 yield* Ref.set(pendingHitGridDump, true);
                 return true;
@@ -599,7 +604,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 const hm = yield* handleMouseData(data).pipe(
                   Effect.catchAll((cause) =>
                     Effect.gen(function* () {
-                      yield* Ref.update(errors, (errors) => errors.add(cause));
+                      yield* Ref.update(errors, (errs) => errs.add(cause));
                       return yield* Effect.succeed(false);
                     }),
                   ),
@@ -697,6 +702,66 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       }
     });
 
+    const recursiveMouseEvent: (
+      element: BaseElement<any, any>,
+      mouseEventData: MouseEvent,
+      x: number,
+      y: number,
+    ) => Effect.Effect<BaseElement<any, any>[], Collection, Library | FileSystem.FileSystem | Path.Path> = Effect.fn(
+      "cli.recursiveMouseEvent",
+    )(function* (element: BaseElement<any, any>, mouseEventData: any, x: number, y: number) {
+      const matchingElements: BaseElement<any, any>[] = [];
+
+      // Get element's renderables (tree order provides natural layering)
+      const renderables = yield* Ref.get(element.renderables);
+
+      // Check each child in tree order (natural layering through parent-child relationships)
+      for (const child of renderables) {
+        const visible = yield* Ref.get(child.visible);
+        if (!visible) continue;
+
+        const location = yield* Ref.get(child.location);
+        const dimensions = yield* Ref.get(child.dimensions);
+
+        // Check if mouse coordinates are within child's boundaries
+        if (
+          x >= location.x &&
+          x < location.x + dimensions.widthValue &&
+          y >= location.y &&
+          y < location.y + dimensions.heightValue
+        ) {
+          // Recursively collect child's descendants first (depth-first traversal)
+          const childMatches = yield* Effect.suspend(() => recursiveMouseEvent(child, mouseEventData, x, y));
+
+          // Add child and all its descendants to the collection
+          if (!matchingElements.includes(child)) {
+            matchingElements.push(child);
+            if (childMatches.length > 0) {
+              for (const childMatch of childMatches) {
+                if (!matchingElements.includes(childMatch)) {
+                  matchingElements.push(childMatch);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Check if current element contains coordinates
+      const elementLocation = yield* Ref.get(element.location);
+      const elementDimensions = yield* Ref.get(element.dimensions);
+      if (
+        x >= elementLocation.x &&
+        x < elementLocation.x + elementDimensions.widthValue &&
+        y >= elementLocation.y &&
+        y < elementLocation.y + elementDimensions.heightValue
+      ) {
+        matchingElements.push(element);
+      }
+
+      return matchingElements;
+    });
+
     const handleMouseData = Effect.fn("cli.handleMouseData")(function* (data: Buffer) {
       const mouseEvent = yield* mouseParser.parse(data);
 
@@ -711,114 +776,131 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           mouseEvent.y -= ro;
         }
 
-        yield* debugBox.setLocation({ x: mouseEvent.x, y: mouseEvent.y });
+        // yield* debugBox.setLocation({ x: mouseEvent.x, y: mouseEvent.y });
 
-        const maybeRenderableId = yield* lib.checkHit(renderer, mouseEvent.x, mouseEvent.y);
-        const maybeRenderable = yield* elements.getRenderable(maybeRenderableId);
-        if (isMouseScroll(mouseEvent.type)) {
-          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseScroll", mouseEvent);
-          // yield* debugBox.setContent(`MScroll (${maybeRenderableId}`);
-
-          if (maybeRenderable) {
-            const event = new MouseEvent(maybeRenderable, mouseEvent);
-            yield* maybeRenderable.processMouseEvent(event);
-          }
-          return true;
+        const event = new MouseEvent(root, mouseEvent);
+        const matchingElements = yield* recursiveMouseEvent(root, event, event.x, event.y);
+        yield* Ref.set(lastMousePosition, { x: event.x, y: event.y });
+        if (matchingElements.length === 0) {
+          return false;
         }
 
-        const lrn = yield* Ref.get(lastOverRenderableNum);
-        const sameElement = maybeRenderableId === lrn;
-        yield* Ref.set(lastOverRenderableNum, maybeRenderableId);
-        if (isMouseDown(mouseEvent.type) && isLeftMouseButton(mouseEvent.button)) {
-          // yield* debugBox.setForegroundColor(Colors.White);
-          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDown", mouseEvent);
-          if (maybeRenderable) {
-            // yield* debugBox.setContent(`MDo (${maybeRenderableId})`);
-            const sel = yield* Ref.get(maybeRenderable.selectable);
+        // Get the topmost element (last in array due to depth-first collection)
+        const topElement = matchingElements[matchingElements.length - 1];
+        const topElementId = topElement.num;
+
+        // Event bubbling: process from deepest to shallowest element
+        for (let i = matchingElements.length - 1; i >= 0; i--) {
+          const element = matchingElements[i];
+
+          yield* element.processMouseEvent(event);
+
+          // Stop bubbling if event was prevented
+          if (event.defaultPrevented) {
+            break;
+          }
+
+          const lrn = yield* Ref.get(lastOverRenderableNum);
+          const sameElement = topElementId === lrn;
+
+          yield* Ref.set(lastOverRenderableNum, topElementId);
+
+          if (isMouseDown(mouseEvent.type) && isLeftMouseButton(mouseEvent.button)) {
+            // yield* debugBox.setForegroundColor(Colors.White);
+            yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDown", mouseEvent);
+            // yield* debugBox.setContent(`MDo (${topElementId})`);
+            const sel = yield* Ref.get(element.selectable);
             if (sel) {
-              const sss = yield* maybeRenderable.shouldStartSelection(mouseEvent.x, mouseEvent.y);
+              const sss = yield* element.shouldStartSelection(mouseEvent.x, mouseEvent.y);
               if (sss) {
-                yield* startSelection(maybeRenderable, mouseEvent.x, mouseEvent.y);
+                yield* startSelection(element, mouseEvent.x, mouseEvent.y);
                 return true;
               }
             }
           }
-        }
-        const cs = yield* Ref.get(selectionState);
-        if (isMouseDrag(mouseEvent.type) && cs?.isSelecting && maybeRenderable) {
-          yield* updateSelection(maybeRenderable, mouseEvent.x, mouseEvent.y);
-          return true;
-        }
-
-        if (isMouseUp(mouseEvent.type) && cs?.isSelecting) {
-          yield* Effect.annotateCurrentSpan("mouseUp", mouseEvent);
-          yield* finishSelection();
-          return true;
-        }
-
-        if (isMouseDown(mouseEvent.type) && isLeftMouseButton(mouseEvent.button) && cs) {
-          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDown", mouseEvent);
-          yield* clearSelection();
-        }
-
-        if (!sameElement && (isMouseDrag(mouseEvent.type) || isMouseMove(mouseEvent.type))) {
-          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDrag|cli.handleMouseData.mouseMove", mouseEvent);
-          const lor = yield* Ref.get(lastOverRenderable);
-          const cr = yield* Ref.get(capturedRenderable);
-          if (lor && lor !== cr) {
-            const event = new MouseEvent(lor, { ...mouseEvent, type: MouseOut.make("out") });
-            yield* lor.processMouseEvent(event);
+          const cs = yield* Ref.get(selectionState);
+          if (isMouseDrag(mouseEvent.type) && cs?.isSelecting) {
+            yield* updateSelection(element, mouseEvent.x, mouseEvent.y);
+            return true;
           }
-          yield* Ref.set(lastOverRenderable, maybeRenderable);
-          if (maybeRenderable) {
-            const event = new MouseEvent(maybeRenderable, {
+
+          if (isMouseUp(mouseEvent.type) && cs?.isSelecting) {
+            yield* Effect.annotateCurrentSpan("mouseUp", mouseEvent);
+            yield* finishSelection();
+            return true;
+          }
+
+          if (isMouseDown(mouseEvent.type) && isLeftMouseButton(mouseEvent.button) && cs) {
+            yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseDown", mouseEvent);
+            yield* clearSelection();
+          }
+
+          if (!sameElement && (isMouseDrag(mouseEvent.type) || isMouseMove(mouseEvent.type))) {
+            yield* Effect.annotateCurrentSpan(
+              "cli.handleMouseData.mouseDrag|cli.handleMouseData.mouseMove",
+              mouseEvent,
+            );
+            const lor = yield* Ref.get(lastOverRenderable);
+            const cr = yield* Ref.get(capturedRenderable);
+            if (lor && lor !== cr) {
+              const event = new MouseEvent(lor, { ...mouseEvent, type: MouseOut.make("out") });
+              yield* lor.processMouseEvent(event);
+            }
+            yield* Ref.set(lastOverRenderable, element);
+            const event = new MouseEvent(element, {
               ...mouseEvent,
               type: MouseOver.make("over"),
               source: cr,
             });
-            yield* maybeRenderable.processMouseEvent(event);
+            yield* element.processMouseEvent(event);
           }
-        }
 
-        let cr = yield* Ref.get(capturedRenderable);
-        if (cr && !isMouseUp(mouseEvent.type)) {
-          yield* Effect.annotateCurrentSpan("cli.handleMouseData.not.mouseUp", mouseEvent);
-          const event = new MouseEvent(cr, mouseEvent);
-          yield* cr.processMouseEvent(event);
-          return true;
-        }
-
-        if (cr && isMouseUp(mouseEvent.type)) {
-          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseUp", mouseEvent);
-          const event = new MouseEvent(cr, { ...mouseEvent, type: MouseDragEnd.make("drag-end") });
-          yield* cr.processMouseEvent(event);
-          yield* cr.processMouseEvent(new MouseEvent(cr, mouseEvent));
-          if (maybeRenderable) {
-            const event = new MouseEvent(maybeRenderable, {
-              ...mouseEvent,
-              type: MouseDrop.make("drop"),
-              source: cr,
-            });
-            yield* maybeRenderable.processMouseEvent(event);
+          let cr = yield* Ref.get(capturedRenderable);
+          if (cr && !isMouseUp(mouseEvent.type)) {
+            yield* Effect.annotateCurrentSpan("cli.handleMouseData.not.mouseUp", mouseEvent);
+            const event = new MouseEvent(cr, mouseEvent);
+            yield* cr.processMouseEvent(event);
+            return true;
           }
-          yield* Ref.set(lastOverRenderable, cr);
-          yield* Ref.set(lastOverRenderableNum, cr.num);
-          yield* Ref.set(capturedRenderable, null);
-        }
 
-        if (maybeRenderable) {
+          if (cr && isMouseUp(mouseEvent.type)) {
+            yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseUp", mouseEvent);
+            const event = new MouseEvent(cr, { ...mouseEvent, type: MouseDragEnd.make("drag-end") });
+            yield* cr.processMouseEvent(event);
+            yield* cr.processMouseEvent(new MouseEvent(cr, mouseEvent));
+            if (element) {
+              const event = new MouseEvent(element, {
+                ...mouseEvent,
+                type: MouseDrop.make("drop"),
+                source: cr,
+              });
+              yield* element.processMouseEvent(event);
+            }
+            yield* Ref.set(lastOverRenderable, cr);
+            yield* Ref.set(lastOverRenderableNum, cr.num);
+            yield* Ref.set(capturedRenderable, null);
+          }
+
           if (isMouseDrag(mouseEvent.type) && isLeftMouseButton(mouseEvent.button)) {
-            yield* Ref.set(capturedRenderable, maybeRenderable);
+            yield* Ref.set(capturedRenderable, element);
           } else {
             yield* Ref.set(capturedRenderable, null);
           }
-          const event = new MouseEvent(maybeRenderable, mouseEvent);
-          yield* maybeRenderable.processMouseEvent(event);
-          return true;
+
+          yield* Ref.set(capturedRenderable, null);
+          yield* Ref.set(lastOverRenderable, undefined);
         }
 
-        yield* Ref.set(capturedRenderable, null);
-        yield* Ref.set(lastOverRenderable, undefined);
+        // if (isMouseScroll(mouseEvent.type)) {
+        //   yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseScroll", mouseEvent);
+        //   // yield* debugBox.setContent(`MScroll (${topElementId}`);
+
+        //   // Scroll events go to topmost element
+        //   const scrollEvent = new MouseEvent(topElement, mouseEvent);
+        //   yield* topElement.processMouseEvent(scrollEvent);
+        //   return true;
+        // }
+
         return true;
       }
 
@@ -1229,15 +1311,15 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       const pendingHitGridPrintout = yield* Ref.get(pendingHitGridDump);
       if (pendingHitGridPrintout) {
         yield* Ref.set(pendingHitGridDump, false);
-        yield* lib.dumpHitGrid(renderer).pipe(
-          Effect.catchAll((cause) =>
-            Effect.gen(function* () {
-              yield* Ref.update(errors, (errors) => errors.add(cause));
-              console.error(cause);
-              return yield* Effect.void;
-            }),
-          ),
-        );
+        // yield* lib.dumpHitGrid(renderer).pipe(
+        //   Effect.catchAll((cause) =>
+        //     Effect.gen(function* () {
+        //       yield* Ref.update(errors, (errors) => errors.add(cause));
+        //       console.error(cause);
+        //       return yield* Effect.void;
+        //     }),
+        //   ),
+        // );
       }
 
       return yield* Effect.void;

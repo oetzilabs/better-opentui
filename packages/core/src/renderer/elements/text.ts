@@ -43,17 +43,13 @@ const DEFAULTS = {
 
 export const text = Effect.fn(function* (
   binds: Binds,
-  content: string,
+  content: string | StyledText,
   options: TextOptions,
   parentElement: BaseElement<any, any> | null = null,
 ) {
   const lib = yield* Library;
 
-  const contentWidth = options.content
-    ? options.content instanceof StyledText
-      ? options.content.toString().length
-      : options.content.length
-    : 0;
+  const contentWidth = content instanceof StyledText ? content.toString().length : content.length;
 
   const b = yield* base(
     "text",
@@ -84,15 +80,18 @@ export const text = Effect.fn(function* (
     yield* ctx.addToHitGrid(x, y, w, h, b.num);
     yield* updateTextInfo();
   });
-
+  let st: StyledText;
   const textEncoder = new TextEncoder();
-
-  const chunk = TextChunkSchema.make({
-    __isChunk: true as const,
-    text: textEncoder.encode(content),
-    plainText: content,
-  });
-  const st = new StyledText([chunk]);
+  if (typeof content === "string") {
+    const chunk = TextChunkSchema.make({
+      __isChunk: true as const,
+      text: textEncoder.encode(content),
+      plainText: content,
+    });
+    st = new StyledText([chunk]);
+  } else {
+    st = content;
+  }
   const _content = yield* Ref.make(st);
   const contentLength = st.toString().length;
 

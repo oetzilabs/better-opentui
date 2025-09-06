@@ -109,6 +109,11 @@ export const verticalScrollbar = Effect.fn(function* (
 
     const localY = event.y - loc.y;
 
+    // check if mouse is within bounds x,y,w,h
+    if (event.x < loc.x || event.x > loc.x + dims.widthValue || event.y < loc.y || event.y > loc.y + dims.heightValue) {
+      return false;
+    }
+
     return yield* Match.value(event.type).pipe(
       Match.when(
         "down",
