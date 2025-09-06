@@ -15,8 +15,8 @@ if (import.meta.main) {
 
       const content = yield* parentContainer.create("group", {
         position: PositionRelative.make(1),
-        width: 400,
-        height: 300,
+        width: 120,
+        height: 80,
         visible: true,
       });
 
