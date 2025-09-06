@@ -184,6 +184,12 @@ export const asciifont = Effect.fn(function* (
     return t.slice(selection.start, selection.end);
   });
 
+  b.onUpdate = Effect.fn(function* (self) {
+    const ctx = yield* Ref.get(binds.context);
+    const [loc, dims] = yield* Effect.all([Ref.get(self.location), Ref.get(self.dimensions)]);
+    yield* ctx.addToHitGrid(loc.x, loc.y, dims.widthValue, dims.heightValue, self.num);
+  });
+
   // Initial dimension update
   yield* updateDimensions();
 
