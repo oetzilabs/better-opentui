@@ -11,6 +11,7 @@ import type { Binds, ElementOptions } from "../utils";
 
 export interface ContentAreaElement extends BaseElement<"content-area", ContentAreaElement> {
   setScrollOffset: (verticalOffset: number, horizontalOffset: number) => Effect.Effect<void, Collection, Library>;
+  getScrollOffset: (axis: "vertical" | "horizontal") => Effect.Effect<number, Collection, Library>;
 }
 
 export type ContentAreaOptions = ElementOptions<"content-area", ContentAreaElement> & {
@@ -66,7 +67,9 @@ export const contentArea = Effect.fn(function* <T extends any>(
     yield* Ref.update(contentAreaElement.location, (loc) => ({ ...loc, x: -hOffset, y: -vOffset }));
   });
 
-  const onMouseEvent = Effect.fn(function* (event: MouseEvent) {});
+  const onMouseEvent = Effect.fn(function* (event: MouseEvent) {
+    // if event is scroll, scroll content area
+  });
 
   const onResize = Effect.fn(function* (width: number, height: number) {
     yield* Ref.update(contentAreaElement.dimensions, (dims) => ({
@@ -109,10 +112,20 @@ export const contentArea = Effect.fn(function* <T extends any>(
     );
   });
 
+  const getScrollOffset = Effect.fn(function* (axis: "vertical" | "horizontal") {
+    if (axis === "vertical") {
+      return yield* Ref.get(verticalOffset);
+    } else if (axis === "horizontal") {
+      return yield* Ref.get(horizontalOffset);
+    }
+    return 0;
+  });
+
   return {
     ...contentAreaElement,
     render,
     setScrollOffset,
+    getScrollOffset,
     onMouseEvent,
     onResize,
   };

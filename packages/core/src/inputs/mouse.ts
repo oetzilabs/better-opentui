@@ -50,6 +50,16 @@ export interface ScrollInfo {
   delta: number;
 }
 
+export const ScrollInfoSchema = Schema.Struct({
+  direction: Schema.Union(
+    Schema.Literal("up"),
+    Schema.Literal("down"),
+    Schema.Literal("left"),
+    Schema.Literal("right"),
+  ),
+  delta: Schema.Number,
+});
+
 export type RawMouseEvent = {
   type: MouseEventType;
   button: number;
@@ -83,6 +93,7 @@ export const ParsedMouseEvent = Schema.Struct({
     alt: Schema.Boolean,
     ctrl: Schema.Boolean,
   }),
+  scroll: Schema.optional(ScrollInfoSchema),
   raw: Schema.String,
 }).pipe(Schema.mutable);
 export type ParsedMouseEvent = typeof ParsedMouseEvent.Type;
@@ -111,37 +122,54 @@ export class MouseParser extends Effect.Service<MouseParser>()("@better-opentui/
       if (sgrMatch) {
         const [, buttonCode, x, y, pressRelease] = sgrMatch;
         const rawButtonCode = parseInt(buttonCode, 10);
-        const button = rawButtonCode & 3;
-        const isMotion = (rawButtonCode & 32) !== 0;
         const modifiers = {
           shift: (rawButtonCode & 4) !== 0,
           alt: (rawButtonCode & 8) !== 0,
           ctrl: (rawButtonCode & 16) !== 0,
         };
 
-        let type: MouseEventType;
-        if (isMotion) {
-          const mp = yield* Ref.get(mouseButtonsPressed);
-          const isDragging = mp.size > 0;
-          if (button === 3) {
-            type = MouseMove.make("move");
-          } else if (isDragging) {
-            type = MouseDrag.make("drag");
-          } else {
-            type = MouseMove.make("move");
-          }
+        const isScroll = rawButtonCode >= 64;
+        let scroll: ScrollInfo | undefined;
+        if (isScroll) {
+          const direction = rawButtonCode === 64 ? "up" : rawButtonCode === 65 ? "down" : "up";
+          scroll = { direction, delta: 1 };
+        }
+        let button: number;
+        if (isScroll) {
+          button = 0;
         } else {
-          type = pressRelease === "M" ? MouseDown.make("down") : MouseUp.make("up");
-          if (type === "down" && button !== 3) {
-            yield* Ref.update(mouseButtonsPressed, (set) => {
-              set.add(button);
-              return set;
-            });
-          } else if (type === "up") {
-            yield* Ref.update(mouseButtonsPressed, (set) => {
-              set.clear();
-              return set;
-            });
+          button = rawButtonCode & 3;
+        }
+
+        let type: MouseEventType;
+        if (isScroll) {
+          type = MouseScroll.make("scroll");
+          button = 0;
+        } else {
+          const isMotion = (rawButtonCode & 32) !== 0;
+          if (isMotion) {
+            const mp = yield* Ref.get(mouseButtonsPressed);
+            const isDragging = mp.size > 0;
+            if (button === 3) {
+              type = MouseMove.make("move");
+            } else if (isDragging) {
+              type = MouseDrag.make("drag");
+            } else {
+              type = MouseMove.make("move");
+            }
+          } else {
+            type = pressRelease === "M" ? MouseDown.make("down") : MouseUp.make("up");
+            if (type === "down" && button !== 3) {
+              yield* Ref.update(mouseButtonsPressed, (set) => {
+                set.add(button);
+                return set;
+              });
+            } else if (type === "up") {
+              yield* Ref.update(mouseButtonsPressed, (set) => {
+                set.clear();
+                return set;
+              });
+            }
           }
         }
 
@@ -151,6 +179,7 @@ export class MouseParser extends Effect.Service<MouseParser>()("@better-opentui/
           x: parseInt(x, 10) - 1,
           y: parseInt(y, 10) - 1,
           modifiers,
+          scroll,
           raw: str,
         } satisfies ParsedMouseEvent;
       }
@@ -160,13 +189,25 @@ export class MouseParser extends Effect.Service<MouseParser>()("@better-opentui/
         const buttonByte = str.charCodeAt(3) - 32;
         const x = str.charCodeAt(4) - 33;
         const y = str.charCodeAt(5) - 33;
-        const button = buttonByte & 3;
+        const isScroll = buttonByte >= 64;
+        let scroll: ScrollInfo | undefined;
+        if (isScroll) {
+          const direction = buttonByte === 64 ? "up" : buttonByte === 65 ? "down" : "up";
+          scroll = { direction, delta: 1 };
+        }
+        const button = isScroll ? 0 : buttonByte & 3;
         const modifiers = {
           shift: (buttonByte & 4) !== 0,
           alt: (buttonByte & 8) !== 0,
           ctrl: (buttonByte & 16) !== 0,
         };
-        const type = button === 3 ? MouseUp.make("up") : MouseDown.make("down");
+        const type = isScroll
+          ? MouseScroll.make("scroll")
+          : buttonByte & 32
+            ? MouseMove.make("move")
+            : button === 3
+              ? MouseUp.make("up")
+              : MouseDown.make("down");
         const actualButton = button === 3 ? 0 : button;
 
         if (type === "down" && actualButton !== 0) {
@@ -187,6 +228,7 @@ export class MouseParser extends Effect.Service<MouseParser>()("@better-opentui/
           x,
           y,
           modifiers,
+          scroll,
           raw: str,
         } satisfies ParsedMouseEvent;
       }

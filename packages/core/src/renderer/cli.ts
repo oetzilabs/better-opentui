@@ -786,11 +786,15 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         }
 
         // Get the topmost element (last in array due to depth-first collection)
-        const topElement = matchingElements[matchingElements.length - 1];
+        let topElement = matchingElements[matchingElements.length - 1];
+        // For scroll, exclude root if there are other elements
+        if (topElement === root && matchingElements.length > 1) {
+          topElement = matchingElements[matchingElements.length - 2];
+        }
         const topElementId = topElement.num;
 
-        // Event bubbling: process from deepest to shallowest element
-        for (let i = matchingElements.length - 1; i >= 0; i--) {
+        // Event bubbling: process from deepest to shallowest element, skipping topElement since already processed
+        for (let i = matchingElements.length - 2; i >= 0; i--) {
           const element = matchingElements[i];
 
           yield* element.processMouseEvent(event);
@@ -891,15 +895,15 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
           yield* Ref.set(lastOverRenderable, undefined);
         }
 
-        // if (isMouseScroll(mouseEvent.type)) {
-        //   yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseScroll", mouseEvent);
-        //   // yield* debugBox.setContent(`MScroll (${topElementId}`);
+        if (isMouseScroll(mouseEvent.type)) {
+          yield* Effect.annotateCurrentSpan("cli.handleMouseData.mouseScroll", mouseEvent);
+          // yield* debugBox.setContent(`MScroll (${topElementId}`);
 
-        //   // Scroll events go to topmost element
-        //   const scrollEvent = new MouseEvent(topElement, mouseEvent);
-        //   yield* topElement.processMouseEvent(scrollEvent);
-        //   return true;
-        // }
+          // Scroll events go to topmost element, no bubbling
+          const scrollEvent = new MouseEvent(topElement, mouseEvent);
+          yield* topElement.processMouseEvent(scrollEvent);
+          return true;
+        }
 
         return true;
       }

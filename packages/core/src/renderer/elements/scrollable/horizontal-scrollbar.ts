@@ -33,6 +33,7 @@ export type HorizontalScrollbarOptions = ElementOptions<"horizontal-scrollbar", 
     track?: string;
     indicator?: string;
   };
+  onChange: (offset: number) => Effect.Effect<void, Collection, Library>;
 };
 
 const DEFAULTS = {
@@ -48,6 +49,7 @@ const DEFAULTS = {
     track: "█",
     indicator: "█",
   },
+  onChange: Effect.fn(function* (offset) {}),
 } satisfies HorizontalScrollbarOptions;
 
 export const horizontalScrollbar = Effect.fn(function* (
@@ -107,6 +109,7 @@ export const horizontalScrollbar = Effect.fn(function* (
     const [cWidth, vWidth] = yield* Effect.all([Ref.get(contentWidth), Ref.get(visibleWidth)]);
     const clampedOffset = Math.max(0, Math.min(offset, Math.max(0, cWidth - vWidth)));
     yield* Ref.set(scrollOffset, clampedOffset);
+    yield* options.onChange(clampedOffset);
   });
 
   const onMouseEvent = Effect.fn(function* (event: MouseEvent) {

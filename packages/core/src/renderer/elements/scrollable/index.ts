@@ -150,6 +150,10 @@ export const scrollable = Effect.fn(function* <T extends any, FBT extends string
       height: scrollbarHeight,
       left: containerDims.widthValue - 1,
       top: 0,
+      onChange: Effect.fn(function* (offset) {
+        const hOffset = yield* contentAreaElement.getScrollOffset("horizontal");
+        yield* contentAreaElement.setScrollOffset(offset, hOffset);
+      }),
     },
     scrollableContainer,
   );
@@ -168,6 +172,10 @@ export const scrollable = Effect.fn(function* <T extends any, FBT extends string
       width: scrollbarWidth,
       left: 0,
       top: containerDims.heightValue - 1,
+      onChange: Effect.fn(function* (offset) {
+        const vOffset = yield* contentAreaElement.getScrollOffset("vertical");
+        yield* contentAreaElement.setScrollOffset(vOffset, offset);
+      }),
     },
     scrollableContainer,
   );
@@ -245,8 +253,28 @@ export const scrollable = Effect.fn(function* <T extends any, FBT extends string
     yield* contentAreaElement.setScrollOffset(vOffset, hOffset);
   });
 
-  const onMouseEvent = Effect.fn(function* (event) {
+  const onMouseEvent: ScrollableElement<T, FBT>["onMouseEvent"] = Effect.fn(function* (event) {
     // Mouse events are handled by individual scrollbar elements
+    if (event.type === "scroll" && event.scroll) {
+      const { direction, delta } = event.scroll;
+      const amount = Math.abs(delta) > 100 ? 3 : 1;
+      const vOffset = yield* getScrollOffset("vertical");
+      const hOffset = yield* getScrollOffset("horizontal");
+      if (direction === "up") {
+        yield* contentAreaElement.setScrollOffset(vOffset - amount, hOffset);
+        yield* setScrollOffset("vertical", vOffset - amount);
+      } else if (direction === "down") {
+        yield* contentAreaElement.setScrollOffset(vOffset + amount, hOffset);
+        yield* setScrollOffset("vertical", vOffset + amount);
+      } else if (direction === "left") {
+        yield* contentAreaElement.setScrollOffset(vOffset, hOffset - amount);
+        yield* setScrollOffset("horizontal", hOffset - amount);
+      } else if (direction === "right") {
+        yield* contentAreaElement.setScrollOffset(vOffset, hOffset + amount);
+        yield* setScrollOffset("horizontal", hOffset + amount);
+      }
+      event.preventDefault();
+    }
   });
 
   scrollableContainer.onResize = Effect.fn(function* (width: number, height: number) {
@@ -304,15 +332,6 @@ export const scrollable = Effect.fn(function* <T extends any, FBT extends string
   // Update method
   scrollableContainer.onUpdate = Effect.fn(function* (self) {
     yield* updateScrollbars();
-
-    // Update content area scroll offset
-    const vOffset = yield* getScrollOffset("vertical");
-    const hOffset = yield* getScrollOffset("horizontal");
-    yield* contentAreaElement.setScrollOffset(vOffset, hOffset);
-
-    // const ctx = yield* Ref.get(binds.context);
-    // const [loc, dims] = yield* Effect.all([Ref.get(self.location), Ref.get(self.dimensions)]);
-    // yield* ctx.addToHitGrid(loc.x, loc.y, dims.widthValue, dims.heightValue, self.num);
 
     const children = yield* Ref.get(scrollableContainer.renderables);
     yield* Effect.all(

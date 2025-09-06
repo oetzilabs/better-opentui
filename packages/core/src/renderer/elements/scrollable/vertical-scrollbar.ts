@@ -34,6 +34,7 @@ export type VerticalScrollbarOptions = ElementOptions<"vertical-scrollbar", Vert
     track?: string;
     indicator?: string;
   };
+  onChange: (offset: number) => Effect.Effect<void, Collection, Library>;
 };
 
 const DEFAULTS = {
@@ -49,6 +50,7 @@ const DEFAULTS = {
     track: "█",
     indicator: "█",
   },
+  onChange: Effect.fn(function* (offset) {}),
 } satisfies VerticalScrollbarOptions;
 
 export const verticalScrollbar = Effect.fn(function* (
@@ -96,6 +98,7 @@ export const verticalScrollbar = Effect.fn(function* (
     const [cHeight, vHeight] = yield* Effect.all([Ref.get(contentHeight), Ref.get(visibleHeight)]);
     const clampedOffset = Math.max(0, Math.min(offset, Math.max(0, cHeight - vHeight)));
     yield* Ref.set(scrollOffset, clampedOffset);
+    yield* options.onChange(clampedOffset);
   });
 
   const onMouseEvent = Effect.fn(function* (event: MouseEvent) {
