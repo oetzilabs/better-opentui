@@ -112,6 +112,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     const config = yield* cfg.get();
 
     const outputCache = yield* Ref.make<CapturedOutput[]>([]);
+    const pendingHitGridDump = yield* Ref.make(false);
 
     const _isRunning = yield* Ref.make(false);
     const _isShuttingDown = yield* Ref.make(false);
@@ -238,12 +239,15 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       selectable: false,
       visible: false,
       position: PositionAbsolute.make(2),
-      width: "auto",
-      height: "auto",
+      width: 1,
+      height: 1,
+      top: 0,
+      left: 0,
       colors: {
         fg: Colors.Red,
         bg: Colors.Transparent,
       },
+      zIndex: Number.MAX_SAFE_INTEGER - 100,
     });
 
     const errorBox = yield* root.create("box", {
@@ -556,14 +560,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 const path = yield* Path.Path;
                 yield* fs.writeFileString(path.join(process.cwd(), "tree-info.txt"), treeInfo);
 
-                yield* lib.dumpHitGrid(renderer).pipe(
-                  Effect.catchAll((cause) =>
-                    Effect.gen(function* () {
-                      yield* Ref.update(errors, (errors) => errors.add(cause));
-                      return yield* Effect.void;
-                    }),
-                  ),
-                );
+                yield* Ref.set(pendingHitGridDump, true);
                 return true;
               }
               if (isDumpBuffersCommand(parsedKey.raw)) {
@@ -1228,6 +1225,21 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       }
 
       yield* root.update();
+
+      const pendingHitGridPrintout = yield* Ref.get(pendingHitGridDump);
+      if (pendingHitGridPrintout) {
+        yield* Ref.set(pendingHitGridDump, false);
+        yield* lib.dumpHitGrid(renderer).pipe(
+          Effect.catchAll((cause) =>
+            Effect.gen(function* () {
+              yield* Ref.update(errors, (errors) => errors.add(cause));
+              console.error(cause);
+              return yield* Effect.void;
+            }),
+          ),
+        );
+      }
+
       return yield* Effect.void;
     });
 
@@ -1291,9 +1303,9 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         return yield* Effect.fail(new NextBufferNotAvailable());
       }
       yield* root.render(nextBuffer, deltaTime);
-      if (config.debugOverlay?.enabled) {
-        yield* debugBox.render(nextBuffer, deltaTime);
-      }
+      // if (config.debugOverlay?.enabled) {
+      // yield* debugBox.render(nextBuffer, deltaTime);
+      // }
       const visibleErrors = yield* Ref.get(errorBox.visible);
       if (visibleErrors) {
         yield* errorBox.render(nextBuffer, deltaTime);

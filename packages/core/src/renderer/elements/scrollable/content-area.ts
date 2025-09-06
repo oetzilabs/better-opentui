@@ -68,6 +68,16 @@ export const contentArea = Effect.fn(function* <T extends any>(
 
   const onMouseEvent = Effect.fn(function* (event: MouseEvent) {});
 
+  const onResize = Effect.fn(function* (width: number, height: number) {
+    yield* Ref.update(contentAreaElement.dimensions, (dims) => ({
+      ...dims,
+      width: width - 1,
+      height: height - 1,
+      widthValue: width - 1,
+      heightValue: height - 1,
+    }));
+  });
+
   const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
     const visible = yield* Ref.get(contentAreaElement.visible);
     if (!visible) return;
@@ -87,10 +97,23 @@ export const contentArea = Effect.fn(function* <T extends any>(
     yield* buffer.drawFrameBuffer(loc.x, loc.y, frameBuffer);
   });
 
+  contentAreaElement.onUpdate = Effect.fn(function* (self: ContentAreaElement) {
+    // const ctx = yield* Ref.get(binds.context);
+    // const [loc, dims] = yield* Effect.all([Ref.get(self.location), Ref.get(self.dimensions)]);
+    // yield* ctx.addToHitGrid(loc.x, loc.y, dims.widthValue, dims.heightValue, self.num);
+
+    const children = yield* Ref.get(contentAreaElement.renderables);
+    yield* Effect.all(
+      children.map((child) => Effect.suspend(() => child.update())),
+      { concurrency: 10 },
+    );
+  });
+
   return {
     ...contentAreaElement,
     render,
     setScrollOffset,
     onMouseEvent,
+    onResize,
   };
 });

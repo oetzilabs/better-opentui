@@ -800,7 +800,7 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
     function* (indent: string, element: BaseElement<any, any>) {
       const loc = yield* Ref.get(element.location);
       const dims = yield* Ref.get(element.dimensions);
-      const info = `${indent}${element.type} (${element.id}): x=${loc.x}, y=${loc.y}, w=${dims.widthValue}, h=${dims.heightValue}\n`;
+      const info = `${indent}${element.type} (${element.id}:${element.num}): x=${loc.x}, y=${loc.y}, w=${dims.widthValue}, h=${dims.heightValue}\n`;
       const renderables = yield* Ref.get(element.renderables);
       let childInfo = "";
       for (const child of renderables) {

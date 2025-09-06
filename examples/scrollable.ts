@@ -15,7 +15,7 @@ if (import.meta.main) {
 
       const content = yield* parentContainer.create("group", {
         position: PositionRelative.make(1),
-        width: "100%",
+        width: 400,
         height: 300,
         visible: true,
       });
@@ -27,15 +27,7 @@ if (import.meta.main) {
         text: "Hello World!",
       });
 
-      const asciitext2 = yield* content.create("asciifont", {
-        position: PositionRelative.make(1),
-        visible: true,
-        font: "tiny",
-        text: "Hello World2!",
-      });
-
       yield* content.add(asciitext);
-      yield* content.add(asciitext2);
 
       const scrollable = yield* parentContainer.create("scrollable", content, {
         position: PositionRelative.make(1),

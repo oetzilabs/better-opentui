@@ -54,6 +54,26 @@ export const group = Effect.fn(function* (
     }
   });
 
+  b.onResize = Effect.fn(function* (width: number, height: number) {
+    const children = yield* Ref.get(b.renderables);
+    yield* Effect.all(
+      children.map((child) => Effect.suspend(() => child.onResize(width, height))),
+      { concurrency: 10 },
+    );
+  });
+
+  b.onUpdate = Effect.fn(function* (self) {
+    // const ctx = yield* Ref.get(binds.context);
+    // const [loc, dims] = yield* Effect.all([Ref.get(self.location), Ref.get(self.dimensions)]);
+    // yield* ctx.addToHitGrid(loc.x, loc.y, dims.widthValue, dims.heightValue, self.num);
+
+    const children = yield* Ref.get(b.renderables);
+    yield* Effect.all(
+      children.map((child) => Effect.suspend(() => child.onUpdate(child))),
+      { concurrency: 10 },
+    );
+  });
+
   const shouldStartSelection = Effect.fn(function* (x: number, y: number) {
     return false;
   });

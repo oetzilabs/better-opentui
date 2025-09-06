@@ -8,6 +8,7 @@ import { parseColor } from "../../../utils";
 import { Library } from "../../../zig";
 import { base, type BaseElement } from "../base";
 import type { Binds, ElementOptions } from "../utils";
+import type { VerticalScrollbarElement } from "./vertical-scrollbar";
 
 export interface HorizontalScrollbarElement extends BaseElement<"horizontal-scrollbar", HorizontalScrollbarElement> {
   setScrollInfo: (
@@ -49,11 +50,12 @@ const DEFAULTS = {
   },
 } satisfies HorizontalScrollbarOptions;
 
-export const horizontalScrollbar = Effect.fn(function* <T extends any>(
+export const horizontalScrollbar = Effect.fn(function* (
   binds: Binds,
   options: HorizontalScrollbarOptions,
   parentElement: BaseElement<any, any> | null = null,
 ) {
+  const lib = yield* Library;
   if (!parentElement) return yield* Effect.fail(new Error("Parent element is required"));
 
   // State
@@ -79,6 +81,17 @@ export const horizontalScrollbar = Effect.fn(function* <T extends any>(
     },
     parentElement,
   );
+
+  scrollbarElement.onUpdate = Effect.fn(function* (self: HorizontalScrollbarElement) {
+    const [cWidth, vWidth] = yield* Effect.all([Ref.get(contentWidth), Ref.get(visibleWidth)]);
+    const offset = yield* Ref.get(scrollOffset);
+    yield* setScrollInfo(cWidth, vWidth, offset);
+
+    //add to hit grid
+    const [loc, dims] = yield* Effect.all([Ref.get(self.location), Ref.get(self.dimensions)]);
+    const ctx = yield* Ref.get(binds.context);
+    yield* ctx.addToHitGrid(loc.x, loc.y, dims.widthValue, dims.heightValue, self.num);
+  });
 
   const setScrollInfo = Effect.fn(function* (cWidth: number, vWidth: number, offset: number) {
     yield* Ref.set(contentWidth, cWidth);
@@ -263,10 +276,24 @@ export const horizontalScrollbar = Effect.fn(function* <T extends any>(
 
     // Render indicator
     if (dims.widthValue >= 3 && cWidth > vWidth) {
+      const trackWidth = dims.widthValue - 2;
+      const thumbWidth = Math.max(1, Math.floor((vWidth / cWidth) * trackWidth));
       const scrollRatio = currentOffset / Math.max(1, cWidth - vWidth);
-      const indicatorX = loc.x + 1 + Math.floor(scrollRatio * Math.max(0, dims.widthValue - 3));
-      yield* buffer.drawText(DEFAULTS.icons.indicator, indicatorX, loc.y, indicatorColor);
+      const thumbStart = loc.x + 1 + Math.floor(scrollRatio * Math.max(0, trackWidth - thumbWidth));
+      for (let i = 0; i < thumbWidth; i++) {
+        yield* buffer.drawText(DEFAULTS.icons.indicator, thumbStart + i, loc.y, indicatorColor);
+      }
     }
+  });
+
+  scrollbarElement.onResize = Effect.fn(function* (width: number, height: number) {
+    yield* Ref.update(scrollbarElement.dimensions, (dims) => ({
+      ...dims,
+      width: width,
+      height: height,
+      widthValue: width,
+      heightValue: height,
+    }));
   });
 
   return {

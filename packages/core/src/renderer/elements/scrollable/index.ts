@@ -219,12 +219,12 @@ export const scrollable = Effect.fn(function* <T extends any, FBT extends string
   // Update scrollbars with content information
   const updateScrollbars = Effect.fn(function* () {
     const contentDims = yield* Ref.get(content.dimensions);
-    const containerDims = yield* Ref.get(scrollableContainer.dimensions);
+    const contentAreaDims = yield* Ref.get(contentAreaElement.dimensions);
     const vOffset = yield* getScrollOffset("vertical");
     const hOffset = yield* getScrollOffset("horizontal");
 
-    yield* verticalScrollbarElement.setScrollInfo(contentDims.heightValue, containerDims.heightValue, vOffset);
-    yield* horizontalScrollbarElement.setScrollInfo(contentDims.widthValue, containerDims.widthValue, hOffset);
+    yield* verticalScrollbarElement.setScrollInfo(contentDims.heightValue, contentAreaDims.heightValue, vOffset);
+    yield* horizontalScrollbarElement.setScrollInfo(contentDims.widthValue, contentAreaDims.widthValue, hOffset);
   });
 
   // Event handlers
@@ -249,14 +249,79 @@ export const scrollable = Effect.fn(function* <T extends any, FBT extends string
     // Mouse events are handled by individual scrollbar elements
   });
 
+  scrollableContainer.onResize = Effect.fn(function* (width: number, height: number) {
+    yield* Ref.update(scrollableContainer.dimensions, (dims) => ({
+      ...dims,
+      widthValue: width,
+      heightValue: height,
+    }));
+
+    const contentAreaWidth = options.axis.vertical ? width - 1 : width;
+    const contentAreaHeight = options.axis.horizontal ? height - 1 : height;
+    const verticalScrollbarHeight = options.axis.horizontal ? height - 1 : height;
+    const horizontalScrollbarWidth = options.axis.vertical ? width - 1 : width;
+
+    // Update content area
+    yield* contentAreaElement.onResize(contentAreaWidth, contentAreaHeight);
+
+    // Update vertical scrollbar
+    if (options.axis.vertical) {
+      yield* Ref.update(verticalScrollbarElement.dimensions, (dims) => ({
+        ...dims,
+        widthValue: 1,
+        heightValue: verticalScrollbarHeight,
+      }));
+      yield* Ref.update(verticalScrollbarElement.location, (loc) => ({
+        ...loc,
+        x: width - 1,
+        y: 0,
+      }));
+    }
+
+    // Update horizontal scrollbar
+    if (options.axis.horizontal) {
+      yield* Ref.update(horizontalScrollbarElement.dimensions, (dims) => ({
+        ...dims,
+        widthValue: horizontalScrollbarWidth,
+        heightValue: 1,
+      }));
+      yield* Ref.update(horizontalScrollbarElement.location, (loc) => ({
+        ...loc,
+        x: 0,
+        y: height - 1,
+      }));
+    }
+
+    const contentDims = yield* Ref.get(content.dimensions);
+    const contentAreaDims = yield* Ref.get(contentAreaElement.dimensions);
+    const vOffset = yield* getScrollOffset("vertical");
+    yield* verticalScrollbarElement.setScrollInfo(contentDims.heightValue, contentAreaDims.heightValue, vOffset);
+    const hOffset = yield* getScrollOffset("horizontal");
+    yield* horizontalScrollbarElement.setScrollInfo(contentDims.widthValue, contentAreaDims.widthValue, hOffset);
+    yield* updateScrollbars();
+  });
+
   // Update method
-  const onUpdate = Effect.fn(function* () {
+  scrollableContainer.onUpdate = Effect.fn(function* (self) {
     yield* updateScrollbars();
 
     // Update content area scroll offset
     const vOffset = yield* getScrollOffset("vertical");
     const hOffset = yield* getScrollOffset("horizontal");
     yield* contentAreaElement.setScrollOffset(vOffset, hOffset);
+
+    // const ctx = yield* Ref.get(binds.context);
+    // const [loc, dims] = yield* Effect.all([Ref.get(self.location), Ref.get(self.dimensions)]);
+    // yield* ctx.addToHitGrid(loc.x, loc.y, dims.widthValue, dims.heightValue, self.num);
+
+    const children = yield* Ref.get(scrollableContainer.renderables);
+    yield* Effect.all(
+      children.map((child) => Effect.suspend(() => child.update())),
+      { concurrency: 10 },
+    );
+
+    // Update scrollbars again after children are updated
+    yield* updateScrollbars();
   });
 
   yield* scrollableContainer.add(contentAreaElement);
@@ -269,7 +334,6 @@ export const scrollable = Effect.fn(function* <T extends any, FBT extends string
   return {
     ...scrollableContainer,
     type: "scrollable",
-    onUpdate,
     onKeyboardEvent,
     handleKeyPress,
     onMouseEvent,

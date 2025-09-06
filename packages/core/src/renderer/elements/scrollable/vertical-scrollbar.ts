@@ -8,6 +8,7 @@ import { parseColor } from "../../../utils";
 import { Library } from "../../../zig";
 import { base, type BaseElement } from "../base";
 import type { Binds, ElementOptions } from "../utils";
+import type { HorizontalScrollbarElement } from "./horizontal-scrollbar";
 
 export interface VerticalScrollbarElement extends BaseElement<"vertical-scrollbar", VerticalScrollbarElement> {
   setScrollInfo: (
@@ -50,7 +51,7 @@ const DEFAULTS = {
   },
 } satisfies VerticalScrollbarOptions;
 
-export const verticalScrollbar = Effect.fn(function* <T extends any>(
+export const verticalScrollbar = Effect.fn(function* (
   binds: Binds,
   options: VerticalScrollbarOptions,
   parentElement: BaseElement<any, any> | null = null,
@@ -274,10 +275,36 @@ export const verticalScrollbar = Effect.fn(function* <T extends any>(
 
     // Render indicator
     if (cHeight > vHeight && dims.heightValue >= 3) {
+      const trackHeight = dims.heightValue - 2;
+      const thumbHeight = Math.max(1, Math.floor((vHeight / cHeight) * trackHeight));
       const scrollRatio = currentOffset / Math.max(1, cHeight - vHeight);
-      const indicatorY = loc.y + 1 + Math.floor(scrollRatio * Math.max(0, dims.heightValue - 3));
-      yield* buffer.drawText(DEFAULTS.icons.indicator, loc.x, indicatorY, indicatorColor);
+      const thumbStart = loc.y + 1 + Math.floor(scrollRatio * Math.max(0, trackHeight - thumbHeight));
+      for (let i = 0; i < thumbHeight; i++) {
+        yield* buffer.drawText(DEFAULTS.icons.indicator, loc.x, thumbStart + i, indicatorColor);
+      }
     }
+  });
+
+  scrollbarElement.onUpdate = Effect.fn(function* (self: VerticalScrollbarElement) {
+    const [cHeight, vHeight] = yield* Effect.all([Ref.get(contentHeight), Ref.get(visibleHeight)]);
+    const offset = yield* Ref.get(scrollOffset);
+    yield* setScrollInfo(cHeight, vHeight, offset);
+
+    //add to hit grid
+    const [loc, dims] = yield* Effect.all([Ref.get(self.location), Ref.get(self.dimensions)]);
+    const ctx = yield* Ref.get(binds.context);
+    yield* ctx.addToHitGrid(loc.x, loc.y, dims.widthValue, dims.heightValue, self.num);
+  });
+
+  scrollbarElement.onResize = Effect.fn(function* (width: number, height: number) {
+    // update the position of the scrollbar
+    yield* Ref.update(scrollbarElement.dimensions, (dims) => ({
+      ...dims,
+      width,
+      height,
+      widthValue: width,
+      heightValue: height,
+    }));
   });
 
   return {
