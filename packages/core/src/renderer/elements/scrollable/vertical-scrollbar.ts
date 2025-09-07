@@ -84,6 +84,8 @@ export const verticalScrollbar = Effect.fn(function* (
     parentElement,
   );
 
+  const framebuffer = yield* scrollbarElement.createFrameBuffer();
+
   const setScrollInfo = Effect.fn(function* (cHeight: number, vHeight: number, offset: number) {
     yield* Ref.set(contentHeight, cHeight);
     yield* Ref.set(visibleHeight, vHeight);
@@ -270,15 +272,18 @@ export const verticalScrollbar = Effect.fn(function* (
         (focused ? DEFAULTS.colors.focusedIndicator : DEFAULTS.colors.indicator),
     );
 
+    yield* framebuffer.clear(trackColor);
+
     // Render track
     for (let y = 0; y < dims.heightValue; y++) {
-      yield* buffer.drawText(DEFAULTS.icons.track, loc.x, loc.y + y, trackColor);
+      yield* framebuffer.drawText(DEFAULTS.icons.track, 0, y, trackColor);
     }
 
     // Render arrows
-    yield* buffer.drawText(DEFAULTS.icons.up, loc.x, loc.y, indicatorColor);
+    yield* framebuffer.drawText(DEFAULTS.icons.up, 0, 0, indicatorColor, trackColor);
+
     if (dims.heightValue >= 3) {
-      yield* buffer.drawText(DEFAULTS.icons.down, loc.x, loc.y + dims.heightValue - 1, indicatorColor);
+      yield* framebuffer.drawText(DEFAULTS.icons.down, 0, dims.heightValue - 1, indicatorColor, trackColor);
     }
 
     // Render indicator
@@ -286,11 +291,13 @@ export const verticalScrollbar = Effect.fn(function* (
       const trackHeight = dims.heightValue - 2;
       const thumbHeight = Math.max(1, Math.floor((vHeight / cHeight) * trackHeight));
       const scrollRatio = currentOffset / Math.max(1, cHeight - vHeight);
-      const thumbStart = loc.y + 1 + Math.floor(scrollRatio * Math.max(0, trackHeight - thumbHeight));
+      const thumbStart = 1 + Math.floor(scrollRatio * Math.max(0, trackHeight - thumbHeight));
       for (let i = 0; i < thumbHeight; i++) {
-        yield* buffer.drawText(DEFAULTS.icons.indicator, loc.x, thumbStart + i, indicatorColor);
+        yield* framebuffer.drawText(DEFAULTS.icons.indicator, 0, thumbStart + i, indicatorColor, trackColor);
       }
     }
+
+    yield* buffer.drawFrameBuffer(loc.x, loc.y, framebuffer);
   });
 
   scrollbarElement.onUpdate = Effect.fn(function* (self: VerticalScrollbarElement) {
@@ -298,10 +305,10 @@ export const verticalScrollbar = Effect.fn(function* (
     const offset = yield* Ref.get(scrollOffset);
     yield* setScrollInfo(cHeight, vHeight, offset);
 
-    //add to hit grid
-    const [loc, dims] = yield* Effect.all([Ref.get(self.location), Ref.get(self.dimensions)]);
-    const ctx = yield* Ref.get(binds.context);
-    yield* ctx.addToHitGrid(loc.x, loc.y, dims.widthValue, dims.heightValue, self.num);
+    // //add to hit grid
+    // const [loc, dims] = yield* Effect.all([Ref.get(self.location), Ref.get(self.dimensions)]);
+    // const ctx = yield* Ref.get(binds.context);
+    // yield* ctx.addToHitGrid(loc.x, loc.y, dims.widthValue, dims.heightValue, self.num);
   });
 
   scrollbarElement.onResize = Effect.fn(function* (width: number, height: number) {
@@ -313,6 +320,8 @@ export const verticalScrollbar = Effect.fn(function* (
       widthValue: width,
       heightValue: height,
     }));
+    yield* Ref.set(contentHeight, Math.max(0, height));
+    yield* Ref.set(visibleHeight, Math.max(0, height));
   });
 
   return {

@@ -530,6 +530,7 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
     const { widthMethod } = yield* Ref.get(binds.context);
     const fb = yield* OptimizedBuffer.create(w, h, widthMethod, {
       respectAlpha: true,
+      id: id + "fb",
     });
     return fb;
   });

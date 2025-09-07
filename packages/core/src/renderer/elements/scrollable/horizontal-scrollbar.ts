@@ -84,15 +84,17 @@ export const horizontalScrollbar = Effect.fn(function* (
     parentElement,
   );
 
+  const framebuffer = yield* scrollbarElement.createFrameBuffer();
+
   scrollbarElement.onUpdate = Effect.fn(function* (self: HorizontalScrollbarElement) {
     const [cWidth, vWidth] = yield* Effect.all([Ref.get(contentWidth), Ref.get(visibleWidth)]);
     const offset = yield* Ref.get(scrollOffset);
     yield* setScrollInfo(cWidth, vWidth, offset);
 
-    //add to hit grid
-    const [loc, dims] = yield* Effect.all([Ref.get(self.location), Ref.get(self.dimensions)]);
-    const ctx = yield* Ref.get(binds.context);
-    yield* ctx.addToHitGrid(loc.x, loc.y, dims.widthValue, dims.heightValue, self.num);
+    // //add to hit grid
+    // const [loc, dims] = yield* Effect.all([Ref.get(self.location), Ref.get(self.dimensions)]);
+    // const ctx = yield* Ref.get(binds.context);
+    // yield* ctx.addToHitGrid(loc.x, loc.y, dims.widthValue, dims.heightValue, self.num);
   });
 
   const setScrollInfo = Effect.fn(function* (cWidth: number, vWidth: number, offset: number) {
@@ -271,15 +273,17 @@ export const horizontalScrollbar = Effect.fn(function* (
         (focused ? DEFAULTS.colors.focusedIndicator : DEFAULTS.colors.indicator),
     );
 
+    yield* framebuffer.clear(trackColor);
+
     // Render track
     for (let x = 0; x < dims.widthValue; x++) {
-      yield* buffer.drawText(DEFAULTS.icons.track, loc.x + x, loc.y, trackColor);
+      yield* framebuffer.drawText(DEFAULTS.icons.track, x, 0, trackColor);
     }
 
     // Render arrows
-    yield* buffer.drawText(DEFAULTS.icons.left, loc.x, loc.y, indicatorColor);
+    yield* framebuffer.drawText(DEFAULTS.icons.left, 0, 0, indicatorColor);
     if (dims.widthValue >= 3) {
-      yield* buffer.drawText(DEFAULTS.icons.right, loc.x + dims.widthValue - 1, loc.y, indicatorColor);
+      yield* framebuffer.drawText(DEFAULTS.icons.right, dims.widthValue - 1, 0, indicatorColor);
     }
 
     // Render indicator
@@ -287,11 +291,13 @@ export const horizontalScrollbar = Effect.fn(function* (
       const trackWidth = dims.widthValue - 2;
       const thumbWidth = Math.max(1, Math.floor((vWidth / cWidth) * trackWidth));
       const scrollRatio = currentOffset / Math.max(1, cWidth - vWidth);
-      const thumbStart = loc.x + 1 + Math.floor(scrollRatio * Math.max(0, trackWidth - thumbWidth));
+      const thumbStart = 1 + Math.floor(scrollRatio * Math.max(0, trackWidth - thumbWidth));
       for (let i = 0; i < thumbWidth; i++) {
-        yield* buffer.drawText(DEFAULTS.icons.indicator, thumbStart + i, loc.y, indicatorColor);
+        yield* framebuffer.drawText(DEFAULTS.icons.indicator, thumbStart + i, 0, indicatorColor);
       }
     }
+
+    yield* buffer.drawFrameBuffer(loc.x, loc.y, framebuffer);
   });
 
   scrollbarElement.onResize = Effect.fn(function* (width: number, height: number) {
@@ -302,6 +308,8 @@ export const horizontalScrollbar = Effect.fn(function* (
       widthValue: width,
       heightValue: height,
     }));
+    yield* Ref.set(contentWidth, Math.max(0, width - 1));
+    yield* Ref.set(visibleWidth, Math.max(0, width - 1));
   });
 
   return {
