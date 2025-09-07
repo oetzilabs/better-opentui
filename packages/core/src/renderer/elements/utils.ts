@@ -34,6 +34,7 @@ export type ElementOptions<T extends string, E> = Partial<LayoutOptions> & {
     focusedBg?: Input;
     focusedFg?: Input;
   };
+  overflow?: "visible" | "hidden" | "scroll";
   attributes?: number;
   onMouseEvent?: BaseElement<T, E>["onMouseEvent"];
   onKeyboardEvent?: BaseElement<T, E>["onKeyboardEvent"];

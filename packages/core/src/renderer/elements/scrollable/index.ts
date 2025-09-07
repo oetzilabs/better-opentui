@@ -109,6 +109,7 @@ export const scrollable = Effect.fn(function* <T extends any, FBT extends string
       top: 0,
       visible: true,
       focused: options.focused ?? true,
+      overflow: "scroll",
     },
     parentElement,
   );

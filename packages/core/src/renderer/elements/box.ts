@@ -135,7 +135,7 @@ export const box = Effect.fn(function* (
     yield* Ref.set(titleAlignment, value);
   });
 
-  b.render = Effect.fn("box.render")(function* (buffer: OptimizedBuffer, _dt: number) {
+  const render = Effect.fn("box.render")(function* (buffer: OptimizedBuffer, _dt: number) {
     const v = yield* Ref.get(b.visible);
     if (!v) return;
 
@@ -188,6 +188,7 @@ export const box = Effect.fn(function* (
 
   return {
     ...b,
+    render,
     setBorder,
     setBorderStyle,
     setBorderColor,

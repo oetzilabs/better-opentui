@@ -300,7 +300,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
 
     if (sa) {
       // show the input
-      yield* searchinput.render(buffer, _dt);
+      yield* searchinput.doRender()(buffer, _dt);
     }
   });
 

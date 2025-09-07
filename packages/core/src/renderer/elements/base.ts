@@ -96,6 +96,7 @@ export type BaseElement<T extends string, E> = {
   setVisible: (value: boolean) => Effect.Effect<void>;
   update: () => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   onUpdate: (self: E) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
+  doRender: () => (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, Collection, Library>;
   render: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, Collection, Library>;
   add: (container: BaseElement<any, any>, index?: number | undefined) => Effect.Effect<void, Collection, never>;
   remove: (container: BaseElement<any, any>) => Effect.Effect<void, Collection, never>;
@@ -225,6 +226,7 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
   yogaConfig.setPointScaleFactor(1);
   const layoutNode = createTrackedNode(type, {}, yogaConfig, parentElement?.layoutNode);
   const _setupYogaNode = yield* Ref.make(false);
+  const overflow = yield* Ref.make<"visible" | "hidden" | "scroll">(options.overflow ?? "visible");
 
   const setBackgroundColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
     if (typeof color === "function") {
@@ -598,7 +600,7 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
     const es = yield* Ref.get(renderables);
     if (es.length > 0) {
       yield* Effect.all(
-        es.map((e) => Effect.suspend(() => e.render(buffer, deltaTime))),
+        es.map((e) => Effect.suspend(() => e.doRender()(buffer, deltaTime))),
         { concurrency: 10, concurrentFinalizers: true },
       );
     }
@@ -814,6 +816,31 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
     return yield* getTreeInfoRecursive("", self as BaseElement<any, any>);
   });
 
+  const base_getScissorRect = Effect.fn(function* (dimension: { widthValue: number; heightValue: number }) {
+    const { widthValue: w, heightValue: h } = dimension;
+    const { x, y } = yield* Ref.get(location);
+    return { x, y, width: w, height: h };
+  });
+
+  const preRender = Effect.fn(function* (buffer: OptimizedBuffer) {
+    const _of = yield* Ref.get(overflow);
+    const dims = yield* Ref.get(dimensions);
+    const shouldPushScissor = _of !== "visible" && dims.widthValue > 0 && dims.heightValue > 0;
+    if (shouldPushScissor) {
+      const scissorRect = yield* base_getScissorRect(dims);
+      yield* buffer.pushScissorRect(scissorRect.x, scissorRect.y, scissorRect.width, scissorRect.height);
+    }
+  });
+
+  const postRender = Effect.fn(function* (buffer: OptimizedBuffer) {
+    const _of = yield* Ref.get(overflow);
+    const { widthValue: w, heightValue: h } = yield* Ref.get(dimensions);
+    const shouldPopScissor = _of !== "visible" && w > 0 && h > 0;
+    if (shouldPopScissor) {
+      yield* buffer.popScissorRect();
+    }
+  });
+
   return {
     id,
     num,
@@ -834,6 +861,15 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
     ensureZIndexSorted,
     setVisible,
     render,
+    doRender: function (this) {
+      const handler = this.render;
+      return (buffer: OptimizedBuffer, deltaTime: number) =>
+        Effect.gen(function* () {
+          yield* preRender(buffer);
+          yield* handler(buffer, deltaTime);
+          yield* postRender(buffer);
+        });
+    },
     add,
     remove,
     setLocation,

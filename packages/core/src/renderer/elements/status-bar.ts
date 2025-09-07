@@ -86,7 +86,7 @@ export const statusBar = Effect.fn(function* <ST extends string = "status-bar">(
     const bgColor = yield* parseColor(colors.bg);
     yield* framebuffer_buffer.clear(bgColor);
     yield* buffer.drawFrameBuffer(loc.x, loc.y, framebuffer_buffer);
-    yield* b.render(buffer, deltaTime);
+    yield* b.doRender()(buffer, deltaTime);
   });
 
   const onUpdate = Effect.fn(function* (self) {

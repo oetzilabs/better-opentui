@@ -33,6 +33,11 @@ export class OpenTUI extends Effect.Service<OpenTUI>()("OpenTUI", {
     const lib = yield* Effect.try({
       try: () =>
         dlopen(resolvedLibPath, {
+          // Logging
+          setLogCallback: {
+            args: ["ptr"],
+            returns: "void",
+          },
           // Renderer management
           createRenderer: {
             args: ["u32", "u32"],
@@ -76,7 +81,7 @@ export class OpenTUI extends Effect.Service<OpenTUI>()("OpenTUI", {
           },
 
           createOptimizedBuffer: {
-            args: ["u32", "u32", "bool", "u8"],
+            args: ["u32", "u32", "bool", "u8", "ptr", "usize"],
             returns: "ptr",
           },
           destroyOptimizedBuffer: {
@@ -124,12 +129,20 @@ export class OpenTUI extends Effect.Service<OpenTUI>()("OpenTUI", {
             args: ["ptr", "bool"],
             returns: "void",
           },
+          bufferGetId: {
+            args: ["ptr", "ptr", "usize"],
+            returns: "usize",
+          },
 
           bufferDrawText: {
             args: ["ptr", "ptr", "u32", "u32", "u32", "ptr", "ptr", "u8"],
             returns: "void",
           },
           bufferSetCellWithAlphaBlending: {
+            args: ["ptr", "u32", "u32", "u32", "ptr", "ptr", "u8"],
+            returns: "void",
+          },
+          bufferSetCell: {
             args: ["ptr", "u32", "u32", "u32", "ptr", "ptr", "u8"],
             returns: "void",
           },
@@ -189,6 +202,18 @@ export class OpenTUI extends Effect.Service<OpenTUI>()("OpenTUI", {
             args: ["ptr", "i32", "i32", "u32", "u32", "ptr", "u32", "ptr", "ptr", "ptr", "u32"],
             returns: "void",
           },
+          bufferPushScissorRect: {
+            args: ["ptr", "i32", "i32", "u32", "u32"],
+            returns: "void",
+          },
+          bufferPopScissorRect: {
+            args: ["ptr"],
+            returns: "void",
+          },
+          bufferClearScissorRects: {
+            args: ["ptr"],
+            returns: "void",
+          },
 
           addToHitGrid: {
             args: ["ptr", "i32", "i32", "u32", "u32", "u32"],
@@ -244,30 +269,11 @@ export class OpenTUI extends Effect.Service<OpenTUI>()("OpenTUI", {
             args: ["ptr"],
             returns: "ptr",
           },
-          textBufferGetFgPtr: {
-            args: ["ptr"],
-            returns: "ptr",
-          },
-          textBufferGetBgPtr: {
-            args: ["ptr"],
-            returns: "ptr",
-          },
-          textBufferGetAttributesPtr: {
-            args: ["ptr"],
-            returns: "ptr",
-          },
           textBufferGetLength: {
             args: ["ptr"],
             returns: "u32",
           },
-          textBufferSetCell: {
-            args: ["ptr", "u32", "u32", "ptr", "ptr", "u16"],
-            returns: "void",
-          },
-          textBufferConcat: {
-            args: ["ptr", "ptr"],
-            returns: "ptr",
-          },
+
           textBufferResize: {
             args: ["ptr", "u32"],
             returns: "void",
@@ -312,17 +318,29 @@ export class OpenTUI extends Effect.Service<OpenTUI>()("OpenTUI", {
             args: ["ptr"],
             returns: "void",
           },
-          textBufferGetLineStartsPtr: {
-            args: ["ptr"],
-            returns: "ptr",
-          },
-          textBufferGetLineWidthsPtr: {
-            args: ["ptr"],
-            returns: "ptr",
-          },
           textBufferGetLineCount: {
             args: ["ptr"],
             returns: "u32",
+          },
+          textBufferGetLineInfoDirect: {
+            args: ["ptr", "ptr", "ptr"],
+            returns: "void",
+          },
+          textBufferGetSelectionInfo: {
+            args: ["ptr"],
+            returns: "u64",
+          },
+          textBufferGetSelectedText: {
+            args: ["ptr", "ptr", "usize"],
+            returns: "usize",
+          },
+          textBufferSetLocalSelection: {
+            args: ["ptr", "i32", "i32", "i32", "i32", "ptr", "ptr"],
+            returns: "bool",
+          },
+          textBufferResetLocalSelection: {
+            args: ["ptr"],
+            returns: "void",
           },
           bufferDrawTextBuffer: {
             args: ["ptr", "ptr", "i32", "i32", "i32", "i32", "u32", "u32", "bool"],

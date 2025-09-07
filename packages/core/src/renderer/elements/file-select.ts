@@ -237,6 +237,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
         selectedFg: options.colors?.selectedFg ?? DEFAULTS.colors.selectedFg,
         scrollIndicator: options.colors?.scrollIndicator ?? DEFAULTS.colors.scrollIndicator,
       },
+      overflow: "scroll",
       showScrollIndicator: options.showScrollIndicator ?? DEFAULTS.showScrollIndicator,
       renderItem: Effect.fn(function* (buffer, framebuffer_buffer, context: RenderItemContext<FileOption>) {
         const { item: file, index, isFocused, isSelected, x, y, width, height, colors } = context;

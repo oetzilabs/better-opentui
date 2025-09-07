@@ -1012,7 +1012,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         const c = yield* parseColor(Colors.Black);
         const buf = yield* Ref.get(buffers);
         if (!buf.current) return;
-        yield* buf.current.clearLocal(c, "\u0a00");
+        yield* buf.current.clear(c, "\u0a00");
         yield* lib.setRenderOffset(renderer, ro);
       } else {
         yield* Ref.update(_width, (w) => width);
@@ -1024,10 +1024,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       yield* lib.resizeRenderer(renderer, w, h);
 
       const nrba = yield* lib.getNextBuffer(renderer);
-      const nextRenderBuffer = new OptimizedBuffer(nrba.bufferPtr, nrba.buffers, nrba.width, nrba.height, {});
+      const nextRenderBuffer = new OptimizedBuffer(nrba.bufferPtr, nrba.width, nrba.height, {});
 
       const crba = yield* lib.getCurrentBuffer(renderer);
-      const currentRenderBuffer = new OptimizedBuffer(crba.bufferPtr, crba.buffers, crba.width, crba.height, {});
+      const currentRenderBuffer = new OptimizedBuffer(crba.bufferPtr, crba.width, crba.height, {});
 
       yield* Ref.set(buffers, {
         next: nextRenderBuffer,
@@ -1388,7 +1388,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       if (!nextBuffer) {
         return yield* Effect.fail(new NextBufferNotAvailable());
       }
-      yield* root.render(nextBuffer, deltaTime);
+      yield* root.doRender()(nextBuffer, deltaTime);
       // if (config.debugOverlay?.enabled) {
       // yield* debugBox.render(nextBuffer, deltaTime);
       // }

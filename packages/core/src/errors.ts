@@ -493,9 +493,65 @@ export class RendererFailedToSetupTerminal extends Schema.TaggedError<RendererFa
   cause: Schema.optional(Schema.Unknown),
 }) {}
 
+export class RendererFailedToPushScissorRect extends Schema.TaggedError<RendererFailedToPushScissorRect>(
+  "RendererFailedToPushScissorRect",
+)("RendererFailedToPushScissorRect", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class RendererFailedToPopScissorRect extends Schema.TaggedError<RendererFailedToPopScissorRect>(
+  "RendererFailedToPopScissorRect",
+)("RendererFailedToPopScissorRect", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class RendererFailedToClearScissorRects extends Schema.TaggedError<RendererFailedToClearScissorRects>(
+  "RendererFailedToClearScissorRects",
+)("RendererFailedToClearScissorRects", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class RendererFailedToGetTextBufferLineInfoDirect extends Schema.TaggedError<RendererFailedToGetTextBufferLineInfoDirect>(
+  "RendererFailedToGetTextBufferLineInfoDirect",
+)("RendererFailedToGetTextBufferLineInfoDirect", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class RendererFailedToResizeTextBuffer extends Schema.TaggedError<RendererFailedToResizeTextBuffer>(
+  "RendererFailedToResizeTextBuffer",
+)("RendererFailedToResizeTextBuffer", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class RendererFailedToGetSelectedText extends Schema.TaggedError<RendererFailedToGetSelectedText>(
+  "RendererFailedToGetSelectedText",
+)("RendererFailedToGetSelectedText", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class RendererFailedToSetLocalSelection extends Schema.TaggedError<RendererFailedToSetLocalSelection>(
+  "RendererFailedToSetLocalSelection",
+)("RendererFailedToSetLocalSelection", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
+export class RendererFailedToCreateOptimizedBuffer extends Schema.TaggedError<RendererFailedToCreateOptimizedBuffer>(
+  "RendererFailedToCreateOptimizedBuffer",
+)("RendererFailedToCreateOptimizedBuffer", {
+  cause: Schema.optional(Schema.Unknown),
+}) {}
+
 // all errors
 export type Collection =
   | Error
+  | RendererFailedToCreateOptimizedBuffer
+  | RendererFailedToSetLocalSelection
+  | RendererFailedToGetSelectedText
+  | RendererFailedToResizeTextBuffer
+  | RendererFailedToGetTextBufferLineInfoDirect
+  | RendererFailedToClearScissorRects
+  | RendererFailedToPopScissorRect
+  | RendererFailedToPushScissorRect
   | RendererFailedToSetupTerminal
   | RendererFailedToProcessCapabilityResponse
   | RendererFailedToSetTerminalTitle

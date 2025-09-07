@@ -6,44 +6,21 @@ import { Library } from "../zig";
 
 export class TextBuffer {
   private bufferPtr: Pointer;
-  private buffer: {
-    char: Uint32Array;
-    fg: Float32Array;
-    bg: Float32Array;
-    attributes: Uint16Array;
-  };
   private _length: number = 0;
   private _capacity: number;
   private _lineInfo?: { lineStarts: number[]; lineWidths: number[] };
 
-  constructor(
-    ptr: Pointer,
-    buffer: {
-      char: Uint32Array;
-      fg: Float32Array;
-      bg: Float32Array;
-      attributes: Uint16Array;
-    },
-    capacity: number,
-  ) {
+  constructor(ptr: Pointer, capacity: number) {
     this.bufferPtr = ptr;
-    this.buffer = buffer;
     this._capacity = capacity;
   }
 
   static create = (capacity: number = 256, widthMethod: WidthMethod) =>
     Effect.gen(function* () {
       const lib = yield* Library;
-      const textBufferAttributes = yield* lib.createTextBufferAttributes(capacity, widthMethod);
-      return new TextBuffer(textBufferAttributes.bufferPtr, textBufferAttributes.buffers, capacity);
+      const textBufferPointer = yield* lib.createTextBufferPointer(capacity, widthMethod);
+      return new TextBuffer(textBufferPointer, capacity);
     });
-
-  private syncBuffersAfterResize = Effect.gen(this, function* () {
-    const lib = yield* Library;
-    const capacity = yield* lib.textBufferGetCapacity(this.bufferPtr);
-    this.buffer = yield* lib.getTextBufferArrays(this.bufferPtr, capacity);
-    this._capacity = capacity;
-  });
 
   public setStyledText = (text: StyledText) =>
     Effect.gen(this, function* () {
@@ -62,10 +39,10 @@ export class TextBuffer {
         );
 
         if (result & 1) {
-          yield* this.syncBuffersAfterResize;
+          this._capacity = yield* lib.textBufferGetCapacity(this.bufferPtr);
         }
       }
-
+      // TODO: textBufferFinalizeLineInfo can return the length of the text buffer, not another call to textBufferGetLength
       yield* lib.textBufferFinalizeLineInfo(this.bufferPtr);
       this._length = yield* lib.textBufferGetLength(this.bufferPtr);
     });
@@ -106,6 +83,17 @@ export class TextBuffer {
     return this.bufferPtr;
   }
 
+  public getSelectedText = () =>
+    Effect.gen(this, function* () {
+      const lib = yield* Library;
+      if (this._length === 0) return "";
+      const selectedBytes = yield* lib.getSelectedTextBytes(this.bufferPtr, this._length);
+
+      if (!selectedBytes) return "";
+
+      return lib.decoder.decode(selectedBytes);
+    });
+
   public getLineInfo = () =>
     Effect.gen(this, function* () {
       const lib = yield* Library;
@@ -113,21 +101,6 @@ export class TextBuffer {
         this._lineInfo = yield* lib.textBufferGetLineInfo(this.bufferPtr);
       }
       return this._lineInfo;
-    });
-
-  public toString(): string {
-    const chars: string[] = [];
-    for (let i = 0; i < this._length; i++) {
-      chars.push(String.fromCharCode(this.buffer.char[i]));
-    }
-    return chars.join("");
-  }
-
-  public concat = (other: TextBuffer) =>
-    Effect.gen(this, function* () {
-      const lib = yield* Library;
-      const attributes = yield* lib.textBufferConcat(this.bufferPtr, other.bufferPtr);
-      return new TextBuffer(attributes.bufferPtr, attributes.buffers, attributes.length);
     });
 
   public setSelection = (start: number, end: number, bgColor?: RGBA, fgColor?: RGBA) =>
@@ -140,6 +113,45 @@ export class TextBuffer {
     Effect.gen(this, function* () {
       const lib = yield* Library;
       yield* lib.textBufferResetSelection(this.bufferPtr);
+    });
+
+  public setLocalSelection = (
+    anchorX: number,
+    anchorY: number,
+    focusX: number,
+    focusY: number,
+    bgColor?: RGBA,
+    fgColor?: RGBA,
+  ) =>
+    Effect.gen(this, function* () {
+      const lib = yield* Library;
+      return yield* lib.textBufferSetLocalSelection(
+        this.bufferPtr,
+        anchorX,
+        anchorY,
+        focusX,
+        focusY,
+        bgColor || null,
+        fgColor || null,
+      );
+    });
+
+  public resetLocalSelection = () =>
+    Effect.gen(this, function* () {
+      const lib = yield* Library;
+      yield* lib.textBufferResetLocalSelection(this.bufferPtr);
+    });
+
+  public getSelection = () =>
+    Effect.gen(this, function* () {
+      const lib = yield* Library;
+      return lib.textBufferGetSelection(this.bufferPtr);
+    });
+
+  public hasSelection = () =>
+    Effect.gen(this, function* () {
+      const sel = yield* this.getSelection();
+      return sel !== null;
     });
 
   public destroy = () =>

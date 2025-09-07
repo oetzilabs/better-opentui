@@ -94,7 +94,7 @@ export const contentArea = Effect.fn(function* <T extends any>(
     yield* frameBuffer.clear(bgColor);
     const children = yield* Ref.get(contentAreaElement.renderables);
     yield* Effect.all(
-      children.map((child) => Effect.suspend(() => child.render(frameBuffer, deltaTime))),
+      children.map((child) => Effect.suspend(() => child.doRender()(frameBuffer, deltaTime))),
       { concurrency: 10, concurrentFinalizers: true },
     );
     yield* buffer.drawFrameBuffer(loc.x, loc.y, frameBuffer);

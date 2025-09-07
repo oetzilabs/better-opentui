@@ -98,8 +98,8 @@ export const text = Effect.fn(function* (
   const capacity = 256 as const;
   const { widthMethod } = yield* Ref.get(binds.context);
 
-  const tba = yield* lib.createTextBufferAttributes(capacity, widthMethod);
-  const textBuffer = new TextBuffer(tba.bufferPtr, tba.buffers, capacity);
+  const tbp = yield* lib.createTextBufferPointer(capacity, widthMethod);
+  const textBuffer = new TextBuffer(tbp, capacity);
 
   const c = yield* Ref.get(b.colors);
   const bgC = yield* parseColor(c.bg);

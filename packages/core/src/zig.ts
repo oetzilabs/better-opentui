@@ -1,12 +1,14 @@
-import { toArrayBuffer, type Pointer } from "bun:ffi";
+import { ptr, toArrayBuffer, type Pointer } from "bun:ffi";
 import { Effect } from "effect";
 import * as Cursor from "./cursor-style";
 import {
   RendererFailedToAddToHitGrid,
   RendererFailedToCheckHit,
   RendererFailedToClearBuffer,
+  RendererFailedToClearScissorRects,
   RendererFailedToCreate,
   RendererFailedToCreateFrameBuffer,
+  RendererFailedToCreateOptimizedBuffer,
   RendererFailedToCreateTextBuffer,
   RendererFailedToDestroy,
   RendererFailedToDestroyOptimizedBuffer,
@@ -34,22 +36,28 @@ import {
   RendererFailedToGetForegroundPointer,
   RendererFailedToGetNextBuffer,
   RendererFailedToGetRespectAlpha,
+  RendererFailedToGetSelectedText,
   RendererFailedToGetTerminalCapabilities,
   RendererFailedToGetTextBuffer,
   RendererFailedToGetTextBufferAttributesPtr,
   RendererFailedToGetTextBufferBgPtr,
   RendererFailedToGetTextBufferCharPtr,
   RendererFailedToGetTextBufferFgPtr,
+  RendererFailedToGetTextBufferLineInfoDirect,
+  RendererFailedToPopScissorRect,
   RendererFailedToProcessCapabilityResponse,
+  RendererFailedToPushScissorRect,
   RendererFailedToRender,
   RendererFailedToResetTextBuffer,
   RendererFailedToResizeBuffer,
   RendererFailedToResizeRenderer,
+  RendererFailedToResizeTextBuffer,
   RendererFailedToSetBackgroundColor,
   RendererFailedToSetCellWithAlphaBlending,
   RendererFailedToSetCursorColor,
   RendererFailedToSetCursorPosition,
   RendererFailedToSetCursorStyle,
+  RendererFailedToSetLocalSelection,
   RendererFailedToSetOffset,
   RendererFailedToSetRespectAlpha,
   RendererFailedToSetTerminalTitle,
@@ -74,6 +82,7 @@ export class Library extends Effect.Service<Library>()("Library", {
     const opentui = yield* OpenTUI;
 
     const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
 
     const createRenderer = Effect.fn(function* (width: number, height: number) {
       const rendererPointer = yield* Effect.try({
@@ -165,11 +174,9 @@ export class Library extends Effect.Service<Library>()("Library", {
       });
 
       const size = width * height;
-      const buffers = yield* getBuffer(bufferPtr, size);
 
       return {
         bufferPtr,
-        buffers,
         width,
         height,
       };
@@ -193,8 +200,7 @@ export class Library extends Effect.Service<Library>()("Library", {
         catch: (error) => new RendererFailedToGetBufferWidth({ cause: error }),
       });
       const size = width * height;
-      const buffers = yield* getBuffer(bufferPtr, size);
-      return { bufferPtr, buffers, width, height };
+      return { bufferPtr, width, height };
     });
 
     const getBuffer = Effect.fn(function* (bufferPtr: Pointer, size: number) {
@@ -517,26 +523,29 @@ export class Library extends Effect.Service<Library>()("Library", {
       });
     });
 
-    const createOptimizedBufferAttributes = Effect.fn(function* (
+    const createOptimizedBufferPointer = Effect.fn(function* (
       width: number,
       height: number,
       widthMethod: WidthMethod,
       respectAlpha: boolean = false,
+      id?: string,
     ) {
-      const widthMethodCode = widthMethod === "wcwidth" ? 0 : 1;
-      const bufferPtr = opentui.symbols.createOptimizedBuffer(width, height, respectAlpha, widthMethodCode);
-      if (!bufferPtr) {
-        // return yield* Effect.fail(new Error(`Failed to create optimized buffer: ${width}x${height}`));
-        return yield* Effect.fail(new RendererFailedToCreateFrameBuffer());
+      if (Number.isNaN(width) || Number.isNaN(height)) {
+        return yield* Effect.fail(new RendererFailedToCreateOptimizedBuffer());
       }
-      const size = width * height;
-      const buffers = yield* getBuffer(bufferPtr, size);
-      return {
-        bufferPtr,
-        buffers,
-        width,
-        height,
-      };
+      const widthMethodCode = widthMethod === "wcwidth" ? 0 : 1;
+      const idToUse = id || "unnamed buffer";
+      const idBytes = encoder.encode(idToUse);
+      const bufferPtr = yield* Effect.try({
+        try: () =>
+          opentui.symbols.createOptimizedBuffer(width, height, respectAlpha, widthMethodCode, idBytes, idBytes.length),
+        catch: (e) => new RendererFailedToCreateOptimizedBuffer({ cause: e }),
+      });
+      if (!bufferPtr) {
+        return yield* Effect.fail(new RendererFailedToCreateOptimizedBuffer());
+      }
+
+      return bufferPtr;
     });
 
     const bufferDrawBox = Effect.fn(function* (
@@ -574,7 +583,7 @@ export class Library extends Effect.Service<Library>()("Library", {
       });
     });
 
-    const createTextBufferAttributes = Effect.fn(function* (capacity: number, widthMethod: WidthMethod) {
+    const createTextBufferPointer = Effect.fn(function* (capacity: number, widthMethod: WidthMethod) {
       const widthMethodCode = widthMethod === "wcwidth" ? 0 : 1;
       const bufferPtr = yield* Effect.try({
         try: () => opentui.symbols.createTextBuffer(capacity, widthMethodCode),
@@ -583,23 +592,7 @@ export class Library extends Effect.Service<Library>()("Library", {
       if (!bufferPtr) {
         return yield* Effect.fail(new RendererFailedToCreateTextBuffer());
       }
-
-      const charPtr = yield* textBufferGetCharPtr(bufferPtr);
-      const fgPtr = yield* textBufferGetFgPtr(bufferPtr);
-      const bgPtr = yield* textBufferGetBgPtr(bufferPtr);
-      const attributesPtr = yield* textBufferGetAttributesPtr(bufferPtr);
-
-      const buffer = {
-        char: new Uint32Array(toArrayBuffer(charPtr, 0, capacity * 4)),
-        fg: new Float32Array(toArrayBuffer(fgPtr, 0, capacity * 4 * 4)),
-        bg: new Float32Array(toArrayBuffer(bgPtr, 0, capacity * 4 * 4)),
-        attributes: new Uint16Array(toArrayBuffer(attributesPtr, 0, capacity * 2)), // 2 bytes per u16
-      };
-
-      return {
-        bufferPtr,
-        buffers: buffer,
-      };
+      return bufferPtr;
     });
 
     const textBufferGetCharPtr = Effect.fn(function* (buffer: Pointer) {
@@ -613,116 +606,15 @@ export class Library extends Effect.Service<Library>()("Library", {
       return ptr;
     });
 
-    const textBufferGetFgPtr = Effect.fn(function* (buffer: Pointer) {
-      const ptr = yield* Effect.try({
-        try: () => opentui.symbols.textBufferGetFgPtr(buffer),
-        catch: (e) => new RendererFailedToGetTextBufferFgPtr({ cause: e }),
-      });
-      if (!ptr) {
-        return yield* Effect.fail(new RendererFailedToGetTextBufferFgPtr());
-      }
-      return ptr;
-    });
-
-    const textBufferGetBgPtr = Effect.fn(function* (buffer: Pointer) {
-      const ptr = yield* Effect.try({
-        try: () => opentui.symbols.textBufferGetBgPtr(buffer),
-        catch: (e) => new RendererFailedToGetTextBufferBgPtr({ cause: e }),
-      });
-      if (!ptr) {
-        return yield* Effect.fail(new RendererFailedToGetTextBufferBgPtr());
-      }
-      return ptr;
-    });
-
-    const textBufferGetAttributesPtr = Effect.fn(function* (buffer: Pointer) {
-      const ptr = yield* Effect.try({
-        try: () => opentui.symbols.textBufferGetAttributesPtr(buffer),
-        catch: (e) => new RendererFailedToGetTextBufferAttributesPtr({ cause: e }),
-      });
-      if (!ptr) {
-        return yield* Effect.fail(new RendererFailedToGetTextBufferAttributesPtr());
-      }
-      return ptr;
-    });
-
     const textBufferGetLength = Effect.fn(function* (buffer: Pointer) {
       return opentui.symbols.textBufferGetLength(buffer);
     });
 
-    const textBufferSetCell = Effect.fn(function* (
-      buffer: Pointer,
-      index: number,
-      char: number,
-      fg: Float32Array,
-      bg: Float32Array,
-      attr: number,
-    ) {
-      opentui.symbols.textBufferSetCell(buffer, index, char, fg, bg, attr);
-    });
-
-    const textBufferConcat = Effect.fn(function* (buffer1: Pointer, buffer2: Pointer) {
-      const resultPtr = opentui.symbols.textBufferConcat(buffer1, buffer2);
-      if (!resultPtr) {
-        return yield* Effect.fail(new Error("Failed to concatenate TextBuffers"));
-      }
-
-      const length = yield* textBufferGetLength(resultPtr);
-      const charPtr = yield* textBufferGetCharPtr(resultPtr);
-      const fgPtr = yield* textBufferGetFgPtr(resultPtr);
-      const bgPtr = yield* textBufferGetBgPtr(resultPtr);
-      const attributesPtr = yield* textBufferGetAttributesPtr(resultPtr);
-
-      const buffer = {
-        char: new Uint32Array(toArrayBuffer(charPtr, 0, length * 4)),
-        fg: new Float32Array(toArrayBuffer(fgPtr, 0, length * 4 * 4)),
-        bg: new Float32Array(toArrayBuffer(bgPtr, 0, length * 4 * 4)),
-        attributes: new Uint16Array(toArrayBuffer(attributesPtr, 0, length * 2)),
-      };
-
-      return {
-        bufferPtr: resultPtr,
-        buffers: buffer,
-        length,
-      };
-    });
-
-    const getTextBuffer = Effect.fn(function* (bufferPtr: Pointer, size: number) {
-      const charPtr = yield* Effect.try({
-        try: () => opentui.symbols.textBufferGetCharPtr(bufferPtr),
-        catch: (e) => new RendererFailedToGetTextBufferCharPtr({ cause: e }),
-      });
-      const fgPtr = yield* Effect.try({
-        try: () => opentui.symbols.textBufferGetFgPtr(bufferPtr),
-        catch: (e) => new RendererFailedToGetTextBufferFgPtr({ cause: e }),
-      });
-      const bgPtr = yield* Effect.try({
-        try: () => opentui.symbols.textBufferGetBgPtr(bufferPtr),
-        catch: (e) => new RendererFailedToGetTextBufferBgPtr({ cause: e }),
-      });
-      const attributesPtr = yield* Effect.try({
-        try: () => opentui.symbols.textBufferGetAttributesPtr(bufferPtr),
-        catch: (e) => new RendererFailedToGetTextBufferAttributesPtr({ cause: e }),
-      });
-
-      if (!charPtr || !fgPtr || !bgPtr || !attributesPtr) {
-        return yield* Effect.fail(new RendererFailedToGetTextBuffer());
-      }
-
-      const buffers = {
-        char: new Uint32Array(toArrayBuffer(charPtr, 0, size * 4)),
-        fg: new Float32Array(toArrayBuffer(fgPtr, 0, size * 4 * 4)), // 4 floats per RGBA
-        bg: new Float32Array(toArrayBuffer(bgPtr, 0, size * 4 * 4)), // 4 floats per RGBA
-        attributes: new Uint16Array(toArrayBuffer(attributesPtr, 0, size * 2)), // 2 bytes per u16
-      };
-
-      return buffers;
-    });
-
     const textBufferResize = Effect.fn(function* (buffer: Pointer, newLength: number) {
-      opentui.symbols.textBufferResize(buffer, newLength);
-      const buffers = yield* getTextBuffer(buffer, newLength);
-      return buffers;
+      yield* Effect.try({
+        try: () => opentui.symbols.textBufferResize(buffer, newLength),
+        catch: (e) => new RendererFailedToResizeTextBuffer({ cause: e }),
+      });
     });
 
     const textBufferReset = Effect.fn(function* (buffer: Pointer) {
@@ -802,24 +694,23 @@ export class Library extends Effect.Service<Library>()("Library", {
         return { lineStarts: [], lineWidths: [] };
       }
 
-      const lineStartsPtr = opentui.symbols.textBufferGetLineStartsPtr(buffer);
-      const lineWidthsPtr = opentui.symbols.textBufferGetLineWidthsPtr(buffer);
+      const lineStarts = new Uint32Array(lineCount);
+      const lineWidths = new Uint32Array(lineCount);
 
-      if (!lineStartsPtr || !lineWidthsPtr) {
-        return { lineStarts: [], lineWidths: [] };
-      }
+      yield* textBufferGetLineInfoDirect(buffer, ptr(lineStarts), ptr(lineWidths));
 
-      const lineStartsArray = new Uint32Array(toArrayBuffer(lineStartsPtr, 0, lineCount * 4));
-      const lineWidthsArray = new Uint32Array(toArrayBuffer(lineWidthsPtr, 0, lineCount * 4));
-
-      const lineStarts = Array.from(lineStartsArray);
-      const lineWidths = Array.from(lineWidthsArray);
-
-      return { lineStarts, lineWidths };
+      return { lineStarts: Array.from(lineStarts), lineWidths: Array.from(lineWidths) };
     });
 
-    const getTextBufferArrays = Effect.fn(function* (buffer: Pointer, size: number) {
-      return yield* getTextBuffer(buffer, size);
+    const textBufferGetLineInfoDirect = Effect.fn(function* (
+      buffer: Pointer,
+      lineStartsPtr: Pointer,
+      lineWidthsPtr: Pointer,
+    ) {
+      yield* Effect.try({
+        try: () => opentui.symbols.textBufferGetLineInfoDirect(buffer, lineStartsPtr, lineWidthsPtr),
+        catch: (e) => new RendererFailedToGetTextBufferLineInfoDirect({ cause: e }),
+      });
     });
 
     const bufferDrawTextBuffer = Effect.fn(function* (
@@ -930,14 +821,127 @@ export class Library extends Effect.Service<Library>()("Library", {
       });
     });
 
+    const bufferPushScissorRect = Effect.fn(function* (
+      buffer: Pointer,
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+    ) {
+      yield* Effect.try({
+        try: () => opentui.symbols.bufferPushScissorRect(buffer, x, y, width, height),
+        catch: (e) => new RendererFailedToPushScissorRect({ cause: e }),
+      });
+    });
+
+    const bufferPopScissorRect = Effect.fn(function* (buffer: Pointer) {
+      yield* Effect.try({
+        try: () => opentui.symbols.bufferPopScissorRect(buffer),
+        catch: (e) => new RendererFailedToPopScissorRect({ cause: e }),
+      });
+    });
+
+    const bufferClearScissorRects = Effect.fn(function* (buffer: Pointer) {
+      yield* Effect.try({
+        try: () => opentui.symbols.bufferClearScissorRects(buffer),
+        catch: (e) => new RendererFailedToClearScissorRects({ cause: e }),
+      });
+    });
+
+    const textBufferGetSelectedText = Effect.fn(function* (buffer: Pointer, outBuffer: Pointer, maxLength: number) {
+      const result = yield* Effect.try({
+        try: () => opentui.symbols.textBufferGetSelectedText(buffer, outBuffer, maxLength),
+        catch: (e) => new RendererFailedToGetSelectedText({ cause: e }),
+      });
+      return typeof result === "bigint" ? Number(result) : result;
+    });
+
+    const getSelectedTextBytes = Effect.fn(function* (buffer: Pointer, maxLength: number) {
+      const outBuffer = new Uint8Array(maxLength);
+
+      const actualLen = yield* textBufferGetSelectedText(buffer, ptr(outBuffer), maxLength);
+
+      if (actualLen === 0) {
+        return null;
+      }
+
+      return outBuffer.slice(0, actualLen);
+    });
+
+    const textBufferSetLocalSelection = Effect.fn(function* (
+      buffer: Pointer,
+      anchorX: number,
+      anchorY: number,
+      focusX: number,
+      focusY: number,
+      bgColor: RGBA | null,
+      fgColor: RGBA | null,
+    ) {
+      const bg = bgColor ? bgColor.buffer : null;
+      const fg = fgColor ? fgColor.buffer : null;
+
+      return yield* Effect.try({
+        try: () => opentui.symbols.textBufferSetLocalSelection(buffer, anchorX, anchorY, focusX, focusY, bg, fg),
+        catch: (e) => new RendererFailedToSetLocalSelection({ cause: e }),
+      });
+    });
+
+    const textBufferResetLocalSelection = Effect.fn(function* (buffer: Pointer) {
+      return yield* Effect.try({
+        try: () => opentui.symbols.textBufferResetLocalSelection(buffer),
+        catch: (e) => new RendererFailedToSetLocalSelection({ cause: e }),
+      });
+    });
+
+    const textBufferGetSelectionInfo = Effect.fn(function* (buffer: Pointer) {
+      return yield* Effect.try({
+        try: () => opentui.symbols.textBufferGetSelectionInfo(buffer),
+        catch: (e) => new RendererFailedToGetSelectedText({ cause: e }),
+      });
+    });
+
+    const textBufferGetSelection = Effect.fn(function* (buffer: Pointer) {
+      const packedInfo = yield* textBufferGetSelectionInfo(buffer);
+
+      // Check for no selection marker (0xFFFFFFFF_FFFFFFFF)
+      if (packedInfo === 0xffff_ffff_ffff_ffffn) {
+        return null;
+      }
+
+      const start = Number(packedInfo >> 32n);
+      const end = Number(packedInfo & 0xffff_ffffn);
+
+      return { start, end };
+    });
+
+    const bufferSetCell = Effect.fn(function* (
+      buffer: Pointer,
+      x: number,
+      y: number,
+      char: string,
+      color: RGBA,
+      bgColor: RGBA,
+      attributes?: number,
+    ) {
+      const charPtr = char.codePointAt(0) ?? " ".codePointAt(0)!;
+      const bg = bgColor.buffer;
+      const fg = color.buffer;
+
+      return yield* Effect.try({
+        try: () => opentui.symbols.bufferSetCell(buffer, x, y, charPtr, fg, bg, attributes ?? 0),
+        catch: (e) => new RendererFailedToSetCellWithAlphaBlending({ cause: e }),
+      });
+    });
+
     return {
+      decoder,
       enableMouse,
       disableMouse,
       createRenderer,
       bufferDrawBox,
-      createTextBufferAttributes,
+      createTextBufferPointer,
       destroyRenderer,
-      createOptimizedBufferAttributes,
+      createOptimizedBufferPointer,
       destroyOptimizedBuffer,
       setUseThread,
       setBackgroundColor,
@@ -974,14 +978,8 @@ export class Library extends Effect.Service<Library>()("Library", {
       dumpStdoutBuffer,
       addToHitGrid,
       checkHit,
-      getTextBufferArrays,
       textBufferGetCharPtr,
-      textBufferGetFgPtr,
-      textBufferGetBgPtr,
-      textBufferGetAttributesPtr,
       textBufferGetLength,
-      textBufferSetCell,
-      textBufferConcat,
       textBufferResize,
       textBufferReset,
       textBufferSetSelection,
@@ -1001,6 +999,15 @@ export class Library extends Effect.Service<Library>()("Library", {
       getTerminalCapabilities,
       processCapabilityResponse,
       setupTerminal,
+      bufferPushScissorRect,
+      bufferPopScissorRect,
+      bufferClearScissorRects,
+      textBufferGetLineInfoDirect,
+      getSelectedTextBytes,
+      textBufferSetLocalSelection,
+      textBufferResetLocalSelection,
+      textBufferGetSelection,
+      bufferSetCell,
     } as const;
   }),
 }) {}
