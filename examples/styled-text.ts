@@ -18,11 +18,5 @@ if (import.meta.main) {
 
       yield* cli.add(parentContainer);
     }),
-    on: {
-      start: Effect.fn("styled-text.start")(function* (cli) {}),
-      resize: Effect.fn(function* (width, height) {}),
-      exit: Effect.fn(function* (reason) {}),
-      panic: Effect.fn(function* (err) {}),
-    },
   });
 }

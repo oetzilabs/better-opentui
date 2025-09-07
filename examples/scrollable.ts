@@ -44,11 +44,5 @@ if (import.meta.main) {
 
       yield* cli.add(parentContainer);
     }),
-    on: {
-      start: Effect.fn("scrollbar.start")(function* (cli) {}),
-      resize: Effect.fn(function* (_width, _height) {}),
-      exit: Effect.fn(function* (_reason) {}),
-      panic: Effect.fn(function* (_err) {}),
-    },
   });
 }
