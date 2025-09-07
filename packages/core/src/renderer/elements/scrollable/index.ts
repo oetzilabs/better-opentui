@@ -118,10 +118,10 @@ export const scrollable = Effect.fn(function* <T extends any, FBT extends string
   const containerDims = yield* Ref.get(scrollableContainer.dimensions);
 
   // Calculate dimensions for content area and scrollbars
-  const contentWidth = options.axis.vertical ? containerDims.widthValue - 1 : containerDims.widthValue;
-  const contentHeight = options.axis.horizontal ? containerDims.heightValue - 1 : containerDims.heightValue;
-  const scrollbarHeight = options.axis.horizontal ? containerDims.heightValue - 1 : containerDims.heightValue;
-  const scrollbarWidth = options.axis.vertical ? containerDims.widthValue - 1 : containerDims.widthValue;
+  const contentWidth = containerDims.widthValue - (options.axis.vertical ? 1 : 0);
+  const contentHeight = containerDims.heightValue - (options.axis.horizontal ? 1 : 0);
+  const scrollbarHeight = containerDims.heightValue - (options.axis.horizontal ? 1 : 0);
+  const scrollbarWidth = containerDims.widthValue - (options.axis.vertical ? 1 : 0);
 
   // Create content area - leave space for scrollbars
   const contentAreaElement = yield* contentArea(

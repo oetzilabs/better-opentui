@@ -1394,7 +1394,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       // }
       const visibleErrors = yield* Ref.get(errorBox.visible);
       if (visibleErrors) {
-        yield* errorBox.render(nextBuffer, deltaTime);
+        yield* errorBox.doRender()(nextBuffer, deltaTime);
       }
 
       // yield* errorRenderer(nextBuffer, deltaTime);
