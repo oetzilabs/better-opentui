@@ -275,9 +275,7 @@ export const verticalScrollbar = Effect.fn(function* (
     yield* framebuffer.clear(trackColor);
 
     // Render track
-    for (let y = 0; y < dims.heightValue; y++) {
-      yield* framebuffer.drawText(DEFAULTS.icons.track, 0, y, trackColor);
-    }
+    yield* framebuffer.fillRect(0, 0, 1, dims.heightValue, trackColor);
 
     // Render arrows
     yield* framebuffer.drawText(DEFAULTS.icons.up, 0, 0, indicatorColor, trackColor);
@@ -292,9 +290,7 @@ export const verticalScrollbar = Effect.fn(function* (
       const thumbHeight = Math.max(1, Math.floor((vHeight / cHeight) * trackHeight));
       const scrollRatio = currentOffset / Math.max(1, cHeight - vHeight);
       const thumbStart = 1 + Math.floor(scrollRatio * Math.max(0, trackHeight - thumbHeight));
-      for (let i = 0; i < thumbHeight; i++) {
-        yield* framebuffer.drawText(DEFAULTS.icons.indicator, 0, thumbStart + i, indicatorColor, trackColor);
-      }
+      yield* framebuffer.fillRect(0, thumbStart, 1, thumbHeight, indicatorColor);
     }
 
     yield* buffer.drawFrameBuffer(loc.x, loc.y, framebuffer);
