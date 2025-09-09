@@ -3,10 +3,10 @@ import { BunContext, BunRuntime } from "@effect/platform-bun";
 import { Cause, Console, Effect, Exit, Logger } from "effect";
 import { ClearFromCursor, ShowCursor, SwitchToMainScreen } from "./ansi";
 import * as Errors from "./errors";
+import { Library, LibraryLive } from "./lib";
 import { createOtelLayer } from "./otel";
 import { CliRenderer, CliRendererLive, type HookFunction, type ShutdownReason } from "./renderer/cli";
 import { Shutdown, ShutdownLive } from "./renderer/latch/shutdown";
-import { Library, LibraryLive } from "./zig";
 
 export type SetupFunction = (
   cli: CliRenderer,

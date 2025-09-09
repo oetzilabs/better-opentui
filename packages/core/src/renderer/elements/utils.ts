@@ -2,8 +2,8 @@ import { type Pointer } from "bun:ffi";
 import { Effect, Ref } from "effect";
 import type { Input } from "../../colors";
 import type { RendererFailedToAddToHitGrid } from "../../errors";
+import type { Library } from "../../lib";
 import type { SelectionState, WidthMethod } from "../../types";
-import type { Library } from "../../zig";
 import type { LayoutOptions } from "../utils/layout";
 import type { BaseElement } from "./base";
 

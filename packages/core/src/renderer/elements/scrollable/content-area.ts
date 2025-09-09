@@ -1,10 +1,10 @@
 import { Effect, Ref } from "effect";
 import { OptimizedBuffer } from "../../../buffer/optimized";
 import { Colors, Input } from "../../../colors";
+import { parseColor } from "../../../colors/utils";
 import type { Collection } from "../../../errors";
 import type { MouseEvent } from "../../../events/mouse";
-import { parseColor } from "../../../utils";
-import { Library } from "../../../zig";
+import { Library } from "../../../lib";
 import { PositionRelative } from "../../utils/position";
 import { base, type BaseElement } from "../base";
 import type { Binds, ElementOptions } from "../utils";

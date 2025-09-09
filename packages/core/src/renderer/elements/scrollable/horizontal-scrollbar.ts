@@ -1,11 +1,11 @@
 import { Effect, Match, Ref } from "effect";
 import { OptimizedBuffer } from "../../../buffer/optimized";
 import { Colors, Input } from "../../../colors";
+import { parseColor } from "../../../colors/utils";
 import type { Collection } from "../../../errors";
 import type { MouseEvent } from "../../../events/mouse";
 import type { ParsedKey } from "../../../inputs/keyboard";
-import { parseColor } from "../../../utils";
-import { Library } from "../../../zig";
+import { Library } from "../../../lib";
 import { base, type BaseElement } from "../base";
 import type { Binds, ElementOptions } from "../utils";
 import type { VerticalScrollbarElement } from "./vertical-scrollbar";

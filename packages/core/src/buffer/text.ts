@@ -1,8 +1,9 @@
 import { type Pointer } from "bun:ffi";
 import { Effect, Schema } from "effect";
+import { RGBA } from "../colors/rgba";
+import { Library } from "../lib";
 import type { StyledText } from "../renderer/utils/styled-text";
-import { RGBA, type WidthMethod } from "../types";
-import { Library } from "../zig";
+import { type WidthMethod } from "../types";
 
 export class TextBuffer {
   private bufferPtr: Pointer;

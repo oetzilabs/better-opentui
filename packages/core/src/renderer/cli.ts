@@ -21,6 +21,7 @@ import {
 } from "../ansi";
 import { OptimizedBuffer } from "../buffer/optimized";
 import { Colors, Input } from "../colors";
+import { parseColor } from "../colors/utils";
 import { OpenTuiConfig, OpenTuiConfigLive } from "../config";
 import type { Style } from "../cursor-style";
 import {
@@ -46,10 +47,9 @@ import {
   MouseParser,
   MouseParserLive,
 } from "../inputs/mouse";
+import { Library } from "../lib";
 import type { RunnerEvent, RunnerEventMap, RunnerHooks } from "../run";
 import type { SelectionState } from "../types";
-import { parseColor } from "../utils";
-import { Library } from "../zig";
 import { Elements, ElementsLive, type ElementElement, type MethodParameters, type Methods } from "./elements";
 import type { BaseElement } from "./elements/base";
 import { Shutdown } from "./latch/shutdown";

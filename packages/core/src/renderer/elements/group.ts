@@ -1,6 +1,4 @@
 import { Effect, Ref } from "effect";
-import type { KeyboardEvent } from "../../events/keyboard";
-import type { MouseEvent } from "../../events/mouse";
 import { isMouseDown, isMouseDrag, isMouseUp } from "../../inputs/mouse";
 import type { SelectionState } from "../../types";
 import { PositionRelative } from "../utils/position";

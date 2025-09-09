@@ -1,6 +1,7 @@
 import { ptr, toArrayBuffer, type Pointer } from "bun:ffi";
 import { Effect } from "effect";
-import * as Cursor from "./cursor-style";
+import type { RGBA } from "../colors/rgba";
+import * as Cursor from "../cursor-style";
 import {
   RendererFailedToAddToHitGrid,
   RendererFailedToCheckHit,
@@ -65,9 +66,9 @@ import {
   RendererFailedToSetUseThread,
   RendererFailedToUpdateMemoryStats,
   RendererFailedToUpdateStats,
-} from "./errors";
-import { OpenTUI, OpenTUILive } from "./lib";
-import { RGBA, type WidthMethod } from "./types";
+} from "../errors";
+import { type WidthMethod } from "../types";
+import { OpenTUI, OpenTUILive } from "./opentui";
 
 export enum DebugOverlayCorner {
   topLeft = 0,

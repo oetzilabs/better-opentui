@@ -2,11 +2,11 @@
 import { Effect, Ref } from "effect";
 import { getCharacterPositions, measureText, renderFontToFrameBuffer, type fonts } from "../../ascii/ascii.font";
 import type { OptimizedBuffer } from "../../buffer/optimized";
-import { Colors, Input } from "../../colors";
+import { Colors, type Input } from "../../colors";
+import { parseColor } from "../../colors/utils";
 import type { Collection } from "../../errors";
+import { Library } from "../../lib";
 import type { SelectionState } from "../../types";
-import { parseColor } from "../../utils";
-import { Library } from "../../zig";
 import { ASCIIFontSelectionHelper } from "../utils/selection";
 import type { BaseElement } from "./base";
 import { framebuffer, type FrameBufferOptions } from "./framebuffer";

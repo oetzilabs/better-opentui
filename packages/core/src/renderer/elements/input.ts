@@ -1,13 +1,12 @@
 import type { FileSystem, Path } from "@effect/platform";
 import { Effect, Match, Ref } from "effect";
 import type { OptimizedBuffer } from "../../buffer/optimized";
-// import { CliRenderer } from "../../cli";
-import { Colors, Input } from "../../colors";
+import { Colors, type Input } from "../../colors";
+import { parseColor } from "../../colors/utils";
 import { Block } from "../../cursor-style";
 import type { Collection } from "../../errors";
 import type { ParsedKey } from "../../inputs/keyboard";
-import { parseColor } from "../../utils";
-import { Library } from "../../zig";
+import { Library } from "../../lib";
 import { base, type BaseElement } from "./base";
 import { type FrameBufferOptions } from "./framebuffer";
 import type { Binds, ElementOptions } from "./utils";

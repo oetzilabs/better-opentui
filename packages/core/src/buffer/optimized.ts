@@ -1,6 +1,7 @@
-import { RGBA, type WidthMethod } from "@better-opentui/core/src/types";
+import { RGBA } from "@better-opentui/core/src/colors/rgba";
+import { Library } from "@better-opentui/core/src/lib";
+import { type WidthMethod } from "@better-opentui/core/src/types";
 import { packDrawOptions } from "@better-opentui/core/src/utils";
-import { Library } from "@better-opentui/core/src/zig";
 import { type Pointer } from "bun:ffi";
 import { Effect } from "effect";
 import { getBorderCharArrays, type BorderSides, type BorderStyle } from "../renderer/utils/border";

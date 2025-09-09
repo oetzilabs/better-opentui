@@ -1,8 +1,41 @@
+import os from "os";
 import { FileSystem, Path } from "@effect/platform";
 import { dlopen, suffix } from "bun:ffi";
 import { Config, Effect } from "effect";
-import { OpenTueeLibraryNotFound, OpenTueeLibraryNotLoaded } from "./errors";
-import { getPlatformTarget } from "./utils";
+import {
+  OpenTueeLibraryNotFound,
+  OpenTueeLibraryNotLoaded,
+  UnsupportedArchitecture,
+  UnsupportedPlatform,
+} from "./errors";
+
+const platforms = {
+  darwin: "macos",
+  win32: "windows",
+  linux: "linux",
+} as const;
+
+const archs = {
+  x64: "x86_64",
+  arm64: "aarch64",
+} as const;
+
+const getPlatformTarget = Effect.gen(function* () {
+  const platform = os.platform();
+  const arch = os.arch();
+
+  if (Object.hasOwn(platforms, platform)) {
+    const zigPlatform = platforms[platform as keyof typeof platforms];
+    if (Object.hasOwn(archs, arch)) {
+      const zigArch = archs[arch as keyof typeof archs];
+      return `${zigArch}-${zigPlatform}` as const;
+    } else {
+      return yield* Effect.fail(new UnsupportedArchitecture({ arch }));
+    }
+  } else {
+    return yield* Effect.fail(new UnsupportedPlatform({ platform }));
+  }
+});
 
 export const findLibrary = Effect.gen(function* () {
   const path = yield* Path.Path;

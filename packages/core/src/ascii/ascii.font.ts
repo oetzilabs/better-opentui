@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 import { OptimizedBuffer } from "../buffer/optimized";
-import { RGBA } from "../types";
+import { RGBA } from "../colors/rgba";
 import block from "./fonts/block.json";
 import shade from "./fonts/shade.json";
 import slick from "./fonts/slick.json";

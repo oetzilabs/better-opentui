@@ -1,5 +1,4 @@
 import { Config, Effect, Ref } from "effect";
-import { Std } from "./stream";
 import { DebugBottomRight, DebugOverlayCorner } from "./types";
 
 export class OpenTuiConfig extends Effect.Service<OpenTuiConfig>()("OpenTuiConfig", {

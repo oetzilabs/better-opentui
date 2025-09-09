@@ -20,8 +20,8 @@ import {
 } from "../../errors";
 import type { KeyboardEvent } from "../../events/keyboard";
 import type { MouseEvent } from "../../events/mouse";
+import { Library } from "../../lib";
 import type { SelectionState } from "../../types";
-import { Library } from "../../zig";
 import {
   isDimension,
   isFlexBasis,

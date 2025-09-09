@@ -1,6 +1,6 @@
 import { Context, type Effect } from "effect";
 import type { RendererFailedToAddToHitGrid } from "./errors";
-import type { Library } from "./zig";
+import type { Library } from "./lib";
 
 export interface RenderContextInterface {
   addToHitGrid: (

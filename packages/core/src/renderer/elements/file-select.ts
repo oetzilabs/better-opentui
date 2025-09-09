@@ -1,12 +1,12 @@
 import { FileSystem, Path } from "@effect/platform";
 import { Effect, Match, Option, Order, Ref, Schema } from "effect";
 import Fuse, { type IFuseOptions } from "fuse.js";
-import { Colors, Input } from "../../colors";
+import { Colors, type Input } from "../../colors";
+import { parseColor } from "../../colors/utils";
 import type { Collection } from "../../errors";
 import type { KeyboardEvent } from "../../events/keyboard";
 import type { ParsedKey } from "../../inputs/keyboard";
-import { parseColor } from "../../utils";
-import { Library } from "../../zig";
+import { Library } from "../../lib";
 import { collection, type Sorting } from "../utils/collection";
 import { PositionRelative } from "../utils/position";
 import { type BaseElement } from "./base";

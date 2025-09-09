@@ -3,10 +3,10 @@ import { C } from "vitest/dist/chunks/reporters.d.BFLkQcL6.js";
 import { Edge } from "yoga-layout";
 import { OptimizedBuffer } from "../../buffer/optimized";
 import { Colors, type Input } from "../../colors";
+import { parseColor } from "../../colors/utils";
 import type { Collection } from "../../errors";
 import { isMouseDown, isMouseDrag, isMouseMove, isMouseUp } from "../../inputs/mouse";
-import { parseColor } from "../../utils";
-import { Library } from "../../zig";
+import { Library } from "../../lib";
 import {
   borderCharsToArray,
   getBorderSides,

@@ -1,8 +1,8 @@
 import type { FileSystem, Path } from "@effect/platform";
 import { Effect, Ref } from "effect";
 import { MissingRenderContext } from "../../errors";
+import type { Library } from "../../lib";
 import type { SelectionState } from "../../types";
-import type { Library } from "../../zig";
 import { asciifont } from "./asciifont";
 import type { BaseElement } from "./base";
 import { box } from "./box";

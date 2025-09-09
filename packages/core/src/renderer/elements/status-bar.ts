@@ -1,9 +1,9 @@
 import { Effect, Ref } from "effect";
 import type { OptimizedBuffer } from "../../buffer/optimized";
-import { Colors, Input } from "../../colors";
+import { Colors, type Input } from "../../colors";
+import { parseColor } from "../../colors/utils";
 import type { Collection } from "../../errors";
-import { parseColor } from "../../utils";
-import { Library } from "../../zig";
+import { Library } from "../../lib";
 import { FlexColumn } from "../utils/flex";
 import { PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
