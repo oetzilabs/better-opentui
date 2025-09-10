@@ -13,7 +13,11 @@ import type { Binds, ElementOptions } from "./utils";
 export interface ButtonElement<BT extends string = "button"> extends BaseElement<"button", ButtonElement<BT>> {
   setText: (text: string) => Effect.Effect<void, Collection, Library>;
   getText: () => Effect.Effect<string, Collection, Library>;
-  onClick: () => Effect.Effect<void, Collection, Library>;
+  onClick: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
+  onHover: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
+  onBlur: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
+  onFocus: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
+  onPress: (event?: MouseEvent) => Effect.Effect<void, Collection, Library>;
 }
 
 export type ButtonOptions<BT extends string = "button"> = ElementOptions<BT, ButtonElement<BT>> & {
@@ -26,7 +30,11 @@ export type ButtonOptions<BT extends string = "button"> = ElementOptions<BT, But
     pressedFg?: Input;
   };
   text?: string;
-  onClick?: () => Effect.Effect<void, Collection, Library>;
+  onClick?: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
+  onHover?: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
+  onBlur?: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
+  onFocus?: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
+  onPress?: (event?: MouseEvent) => Effect.Effect<void, Collection, Library>;
   padding?: number;
 };
 
@@ -80,6 +88,11 @@ export const button = Effect.fn(function* <BT extends string = "button">(
   const pressedBg = yield* Ref.make(options.colors?.pressedBg ?? DEFAULTS.colors.pressedBg);
   const pressedFg = yield* Ref.make(options.colors?.pressedFg ?? DEFAULTS.colors.pressedFg);
 
+  const previousFocused = yield* Ref.make(false);
+  const previousPressed = yield* Ref.make(false);
+  const pressStartTime = yield* Ref.make(0);
+  const holdDelay = 500; // ms
+
   // Rendering
   const render = Effect.fn(function* (buffer: OptimizedBuffer, _dt: number) {
     const v = yield* Ref.get(b.visible);
@@ -130,16 +143,25 @@ export const button = Effect.fn(function* <BT extends string = "button">(
     const isInside = localX >= 0 && localX < w && localY >= 0 && localY < h;
 
     if (event.type === "down" && isInside) {
+      const currentPressed = yield* Ref.get(isPressed);
+      yield* Ref.set(previousPressed, currentPressed);
       yield* Ref.set(isPressed, true);
       yield* Ref.set(isHovered, true);
+      yield* Ref.set(pressStartTime, Date.now());
+      yield* onFocus(event);
     } else if (event.type === "up") {
       const wasPressed = yield* Ref.get(isPressed);
+      yield* Ref.set(previousPressed, wasPressed);
       if (wasPressed && isInside) {
-        yield* onClick();
+        yield* onClick(event);
       }
       yield* Ref.set(isPressed, false);
+      yield* Ref.set(pressStartTime, 0);
     } else if (event.type === "move") {
+      if (isInside) yield* onHover(event);
       yield* Ref.set(isHovered, isInside);
+    } else {
+      yield* onBlur(event);
     }
   });
 
@@ -152,16 +174,65 @@ export const button = Effect.fn(function* <BT extends string = "button">(
     return yield* Ref.get(buttonText);
   });
 
-  const onClick = Effect.fn(function* () {
-    const fn = options.onClick ?? Effect.fn(function* () {});
-    yield* fn();
+  const onHover = Effect.fn(function* (event: MouseEvent) {
+    const fn = options.onHover ?? Effect.fn(function* (event: MouseEvent) {});
+    yield* fn(event);
+    yield* Ref.set(isHovered, true);
   });
 
-  const onUpdate = Effect.fn(function* (_self) {
-    const ctx = yield* Ref.get(binds.context);
-    const { x, y } = yield* Ref.get(b.location);
-    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-    yield* ctx.addToHitGrid(x, y, w, h, b.num);
+  const onBlur = Effect.fn(function* (event: MouseEvent) {
+    const currentFocused = yield* Ref.get(b.focused);
+    yield* Ref.set(previousFocused, currentFocused);
+    const fn = options.onBlur ?? Effect.fn(function* (event: MouseEvent) {});
+    yield* fn(event);
+    yield* Ref.set(b.focused, false);
+    yield* Ref.set(isHovered, false);
+  });
+
+  const onPress = Effect.fn(function* (event?: MouseEvent) {
+    const currentPressed = yield* Ref.get(isPressed);
+    yield* Ref.set(previousPressed, currentPressed);
+    const fn = options.onPress ?? Effect.fn(function* (_event?: MouseEvent) {});
+    yield* fn(event);
+    yield* Ref.set(isPressed, true);
+    yield* Ref.set(isHovered, true);
+  });
+
+  const onFocus = Effect.fn(function* (event: MouseEvent) {
+    const currentFocused = yield* Ref.get(b.focused);
+    yield* Ref.set(previousFocused, currentFocused);
+    const fn = options.onFocus ?? Effect.fn(function* (event: MouseEvent) {});
+    yield* fn(event);
+    yield* Ref.set(b.focused, true);
+    yield* Ref.set(isHovered, true);
+  });
+
+  const onClick = Effect.fn(function* (event: MouseEvent) {
+    const fn = options.onClick ?? Effect.fn(function* (event: MouseEvent) {});
+    yield* fn(event);
+  });
+
+  const onUpdate = Effect.fn(function* (_self: ButtonElement) {
+    const fn = options.onUpdate ?? Effect.fn(function* (_self: ButtonElement) {});
+    yield* fn(_self);
+    // set dimensions of the button based on the text
+    const text = yield* Ref.get(buttonText);
+    const textWidth = text.length + (options.padding ?? DEFAULTS.padding) * 2;
+    const textHeight = 1;
+    yield* framebuffer_buffer.resize(textWidth, textHeight);
+    yield* Ref.update(b.dimensions, (bd) => ({
+      ...bd,
+      width: textWidth,
+      widthValue: textWidth,
+      height: textHeight,
+      heightValue: textHeight,
+    }));
+
+    const pressed = yield* Ref.get(isPressed);
+    const startTime = yield* Ref.get(pressStartTime);
+    if (pressed && startTime > 0 && Date.now() - startTime > holdDelay) {
+      yield* onPress();
+    }
   });
 
   const destroy = Effect.fn(function* () {
@@ -174,6 +245,10 @@ export const button = Effect.fn(function* <BT extends string = "button">(
     onMouseEvent,
     onUpdate,
     onClick,
+    onHover,
+    onBlur,
+    onFocus,
+    onPress,
     render,
     setText,
     getText,

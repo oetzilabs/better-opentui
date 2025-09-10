@@ -335,10 +335,6 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   const sortButton = yield* button(
     binds,
     {
-      position: PositionRelative.make(1),
-      height: 1,
-      left: 0,
-      top: 0,
       text: "Sort",
       colors: options.colors,
       onClick: Effect.fn(function* () {
@@ -358,7 +354,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
         yield* statusBarRightText.setText(`Sort: ${sortText}`);
       }),
     },
-    statusBarElement, // Parent is the status bar
+    statusBarElement,
   );
 
   yield* statusBarElement.addElement("left", sortButton);
