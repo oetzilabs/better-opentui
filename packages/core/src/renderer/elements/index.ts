@@ -7,6 +7,7 @@ import { asciifont } from "./asciifont";
 import type { BaseElement } from "./base";
 import { box } from "./box";
 import { button } from "./button";
+import { checkbox } from "./checkbox";
 import { fileSelect } from "./file-select";
 import { framebuffer } from "./framebuffer";
 import { group } from "./group";
@@ -94,6 +95,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
         return yield* Effect.fail(new MissingRenderContext());
       }
       const fn = text.bind(text, { context: context as Ref.Ref<RenderContextInterface>, cachedGlobalSelection });
+      // @ts-ignore
       const r = yield* fn(...args);
       yield* Ref.update(renderables, (es) => {
         es.push(r);
@@ -307,6 +309,33 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       return r;
     });
 
+    const _checkbox = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof checkbox>>) {
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = checkbox.bind(checkbox, {
+        context: context as Ref.Ref<RenderContextInterface>,
+        cachedGlobalSelection,
+      });
+      const r = yield* fn(...args);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
+      const initialLocation = yield* Ref.get(r.location);
+      const initialDimensions = yield* Ref.get(r.dimensions);
+
+      yield* ctx.addToHitGrid(
+        initialLocation.x,
+        initialLocation.y,
+        initialDimensions.widthValue,
+        initialDimensions.heightValue,
+        r.num,
+      );
+      return r;
+    });
+
     const _statusBar = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof statusBar>>) {
       const ctx = yield* Ref.get(context);
       if (!ctx) {
@@ -402,6 +431,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       tabselect: _tabselect,
       "file-select": _fileSelect,
       button: _button,
+      checkbox: _checkbox,
       "status-bar": _statusBar,
       scrollable: _scrollable,
     } as const;
