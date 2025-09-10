@@ -32,6 +32,7 @@ export type CheckboxOptions<BT extends string = "checkbox"> = ElementOptions<BT,
     pressedFg?: Input;
   };
   text?: string;
+  checked?: boolean;
   onClick?: (
     event: MouseEvent & {
       checked: boolean;
@@ -70,6 +71,7 @@ const DEFAULTS = {
     pressedFg: Colors.White,
   },
   text: "Checkbox",
+  checked: false,
   padding: 1,
 } satisfies CheckboxOptions;
 
@@ -102,7 +104,7 @@ export const checkbox = Effect.fn(function* <BT extends string = "checkbox">(
   const framebuffer_buffer = yield* b.createFrameBuffer();
 
   const checkboxText = yield* Ref.make(options.text ?? DEFAULTS.text);
-  const isChecked = yield* Ref.make(false);
+  const isChecked = yield* Ref.make(options.checked ?? DEFAULTS.checked);
   const isPressed = yield* Ref.make(false);
   const isHovered = yield* Ref.make(false);
 
