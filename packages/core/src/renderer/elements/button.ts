@@ -80,15 +80,16 @@ export const button = Effect.fn(function* <BT extends string = "button">(
 
   const _content = yield* convertToElement(options.content ?? DEFAULTS.content, binds, b);
   let [contentWidth, contentHeight] = yield* calculateContentDimensions(_content);
+
   yield* Ref.update(b.dimensions, (bd) => ({
     ...bd,
-    width: contentWidth + (options.padding ?? DEFAULTS.padding) * 2,
-    widthValue: contentWidth + (options.padding ?? DEFAULTS.padding) * 2,
+    width: contentWidth + ((options.padding as number | undefined) ?? DEFAULTS.padding) * 2,
+    widthValue: contentWidth + ((options.padding as number | undefined) ?? DEFAULTS.padding) * 2,
     height: contentHeight,
     heightValue: contentHeight,
   }));
 
-  const padding = options.padding ?? DEFAULTS.padding;
+  const padding = (options.padding as number | undefined) ?? DEFAULTS.padding;
   if (padding > 0) {
     yield* _content.setLocation({ x: padding, y: 0 });
   }

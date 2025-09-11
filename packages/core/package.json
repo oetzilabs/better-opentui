@@ -5,7 +5,7 @@
   "private": true,
   "dependencies": {
     "@effect/experimental": "^0.54.6",
-    "@effect/opentelemetry": "0.56.4",
+    "@effect/opentelemetry": "0.56.6",
     "@opentelemetry/exporter-logs-otlp-http": "0.203.0",
     "@opentelemetry/exporter-metrics-otlp-http": "0.203.0",
     "@opentelemetry/exporter-trace-otlp-http": "0.203.0",
