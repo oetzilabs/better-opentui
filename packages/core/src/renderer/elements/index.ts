@@ -8,6 +8,7 @@ import type { BaseElement } from "./base";
 import { box } from "./box";
 import { button } from "./button";
 import { checkbox } from "./checkbox";
+import { counter } from "./counter";
 import { fileSelect } from "./file-select";
 import { framebuffer } from "./framebuffer";
 import { group } from "./group";
@@ -336,6 +337,33 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       return r;
     });
 
+    const _counter = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof counter>>) {
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = counter.bind(counter, {
+        context: context as Ref.Ref<RenderContextInterface>,
+        cachedGlobalSelection,
+      });
+      const r = yield* fn(...args);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
+      const initialLocation = yield* Ref.get(r.location);
+      const initialDimensions = yield* Ref.get(r.dimensions);
+
+      yield* ctx.addToHitGrid(
+        initialLocation.x,
+        initialLocation.y,
+        initialDimensions.widthValue,
+        initialDimensions.heightValue,
+        r.num,
+      );
+      return r;
+    });
+
     const _statusBar = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof statusBar>>) {
       const ctx = yield* Ref.get(context);
       if (!ctx) {
@@ -432,6 +460,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       "file-select": _fileSelect,
       button: _button,
       checkbox: _checkbox,
+      counter: _counter,
       "status-bar": _statusBar,
       scrollable: _scrollable,
     } as const;

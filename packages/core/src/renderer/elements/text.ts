@@ -12,7 +12,7 @@ import { isPositionAbsolute, PositionRelative } from "../utils/position";
 import { TextSelectionHelper } from "../utils/selection";
 import { StyledText } from "../utils/styled-text";
 import { base, type BaseElement } from "./base";
-import type { Binds, ElementOptions } from "./utils";
+import { calculateContentDimensions, type Binds, type ElementOptions } from "./utils";
 
 export interface TextElement extends BaseElement<"text", TextElement> {
   setContent: (content: string | StyledText) => Effect.Effect<void, Collection, Library>;
@@ -30,7 +30,7 @@ export type TextOptions = ElementOptions<"text", TextElement> & {
 
 const DEFAULTS = {
   colors: {
-    bg: Colors.White,
+    bg: Colors.Transparent,
     fg: Colors.Black,
     selectableBg: Colors.Custom("#334455"),
     selectableFg: Colors.Yellow,
@@ -39,6 +39,7 @@ const DEFAULTS = {
   height: "auto",
   position: PositionRelative.make(1),
   content: "",
+  selectable: false,
 } satisfies TextOptions;
 
 export const text = Effect.fn(function* (
@@ -66,6 +67,7 @@ export const text = Effect.fn(function* (
         selectableBg: options.colors?.selectableBg ?? DEFAULTS.colors.selectableBg,
         selectableFg: options.colors?.selectableFg ?? DEFAULTS.colors.selectableFg,
       },
+      selectable: options.selectable ?? DEFAULTS.selectable,
     },
     parentElement,
   );
@@ -74,12 +76,17 @@ export const text = Effect.fn(function* (
     // yield* b.onUpdate(self);
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
-    const ctx = yield* Ref.get(binds.context);
-    const { x, y } = yield* Ref.get(b.location);
-    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-    yield* ctx.addToHitGrid(x, y, w, h, b.num);
-    yield* updateTextInfo();
+    // update width and height based on the content
+    const [textWidth, textHeight] = yield* calculateContentDimensions(self);
+    yield* Ref.update(b.dimensions, (d) => ({
+      ...d,
+      width: textWidth,
+      widthValue: textWidth,
+      height: textHeight,
+      heightValue: textHeight,
+    }));
   });
+
   let st: StyledText;
   const textEncoder = new TextEncoder();
   if (typeof content === "string") {
@@ -92,6 +99,7 @@ export const text = Effect.fn(function* (
   } else {
     st = content;
   }
+
   const _content = yield* Ref.make(st);
   const contentLength = st.toString().length;
 
@@ -183,7 +191,7 @@ export const text = Effect.fn(function* (
     const numLines = b.lineInfo.lineStarts.length;
     const { width, height, heightValue: currentHeight, widthValue: currentWidth } = yield* Ref.get(b.dimensions);
     const loc = yield* Ref.get(b.location);
-    if (isPositionAbsolute(loc.type) && height === "auto" && numLines !== currentHeight) {
+    if (height === "auto" && numLines !== currentHeight) {
       yield* Ref.update(b.dimensions, (d) => ({
         ...d,
         heightValue: numLines,
@@ -192,7 +200,7 @@ export const text = Effect.fn(function* (
     }
 
     const maxLineWidth = Math.max(...b.lineInfo.lineWidths);
-    if (isPositionAbsolute(loc.type) && width === "auto" && maxLineWidth !== currentWidth) {
+    if (width === "auto" && maxLineWidth !== currentWidth) {
       yield* Ref.update(b.dimensions, (d) => ({
         ...d,
         widthValue: maxLineWidth,

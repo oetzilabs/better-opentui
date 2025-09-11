@@ -8,7 +8,8 @@ import { Library } from "../../lib";
 import { PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { type FrameBufferOptions } from "./framebuffer";
-import type { Binds, ElementOptions } from "./utils";
+import type { Content } from "./types";
+import { calculateContentDimensions, convertToElement, type Binds, type ElementOptions } from "./utils";
 
 export interface ButtonElement<BT extends string = "button"> extends BaseElement<"button", ButtonElement<BT>> {
   setText: (text: string) => Effect.Effect<void, Collection, Library>;
@@ -29,7 +30,7 @@ export type ButtonOptions<BT extends string = "button"> = ElementOptions<BT, But
     pressedBg?: Input;
     pressedFg?: Input;
   };
-  text?: string;
+  content?: Content;
   onClick?: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
   onHover?: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
   onBlur?: (event: MouseEvent) => Effect.Effect<void, Collection, Library>;
@@ -47,7 +48,7 @@ const DEFAULTS = {
     pressedBg: Colors.Custom("#222222"),
     pressedFg: Colors.White,
   },
-  text: "Button",
+  content: "Button",
   padding: 1,
 } satisfies ButtonOptions;
 
@@ -65,8 +66,8 @@ export const button = Effect.fn(function* <BT extends string = "button">(
       ...options,
       position: PositionRelative.make(1),
       selectable: true,
-      height: options.height ?? 1,
-      width: options.width ?? (options.text ?? DEFAULTS.text).length + (options.padding ?? DEFAULTS.padding) * 2,
+      height: options.height ?? "auto",
+      width: options.width ?? "auto",
       colors: {
         bg: options.colors?.bg ?? DEFAULTS.colors.bg,
         fg: options.colors?.fg ?? DEFAULTS.colors.fg,
@@ -77,9 +78,24 @@ export const button = Effect.fn(function* <BT extends string = "button">(
     parentElement,
   );
 
+  const _content = yield* convertToElement(options.content ?? DEFAULTS.content, binds, b);
+  let [contentWidth, contentHeight] = yield* calculateContentDimensions(_content);
+  yield* Ref.update(b.dimensions, (bd) => ({
+    ...bd,
+    width: contentWidth + (options.padding ?? DEFAULTS.padding) * 2,
+    widthValue: contentWidth + (options.padding ?? DEFAULTS.padding) * 2,
+    height: contentHeight,
+    heightValue: contentHeight,
+  }));
+
+  const padding = options.padding ?? DEFAULTS.padding;
+  if (padding > 0) {
+    yield* _content.setLocation({ x: padding, y: 0 });
+  }
+
   const framebuffer_buffer = yield* b.createFrameBuffer();
 
-  const buttonText = yield* Ref.make(options.text ?? DEFAULTS.text);
+  const buttonContent = yield* Ref.make(_content);
   const isPressed = yield* Ref.make(false);
   const isHovered = yield* Ref.make(false);
 
@@ -124,11 +140,14 @@ export const button = Effect.fn(function* <BT extends string = "button">(
 
     yield* framebuffer_buffer.clear(parsedBg);
 
-    const text = yield* Ref.get(buttonText);
-    const textX = Math.floor((w - text.length) / 2);
-    const textY = Math.floor(h / 2);
+    // const rs = yield* Ref.get(b.renderables);
+    // yield* Effect.all(
+    //   rs.map((r) => r.doRender()(framebuffer_buffer, _dt)),
+    //   { concurrency: "unbounded" },
+    // );
 
-    yield* framebuffer_buffer.drawText(text, textX, textY, parsedFg);
+    const content = yield* Ref.get(buttonContent);
+    yield* content.doRender()(framebuffer_buffer, _dt);
 
     yield* buffer.drawFrameBuffer(loc.x, loc.y, framebuffer_buffer);
   });
@@ -163,15 +182,18 @@ export const button = Effect.fn(function* <BT extends string = "button">(
     } else {
       yield* onBlur(event);
     }
+    event.preventDefault();
   });
 
   // Setters/getters
-  const setText = Effect.fn(function* (text: string) {
-    yield* Ref.set(buttonText, text);
+  const setContent = Effect.fn(function* (content: Content) {
+    const converted = yield* convertToElement(content, binds, b);
+    yield* Ref.set(buttonContent, converted);
+    yield* Ref.set(b.renderables, [converted]);
   });
 
-  const getText = Effect.fn(function* () {
-    return yield* Ref.get(buttonText);
+  const getContent = Effect.fn(function* () {
+    return yield* Ref.get(buttonContent);
   });
 
   const onHover = Effect.fn(function* (event: MouseEvent) {
@@ -215,18 +237,32 @@ export const button = Effect.fn(function* <BT extends string = "button">(
   const onUpdate = Effect.fn(function* (_self: ButtonElement) {
     const fn = options.onUpdate ?? Effect.fn(function* (_self: ButtonElement) {});
     yield* fn(_self);
-    // set dimensions of the button based on the text
-    const text = yield* Ref.get(buttonText);
-    const textWidth = text.length + (options.padding ?? DEFAULTS.padding) * 2;
-    const textHeight = 1;
-    yield* framebuffer_buffer.resize(textWidth, textHeight);
+    // const rs = yield* Ref.get(b.renderables);
+    // yield* Effect.all(
+    //   rs.map((r) => r.update()),
+    //   { concurrency: "unbounded" },
+    // );
+
+    const padding = options.padding ?? DEFAULTS.padding;
+    const bc = yield* Ref.get(buttonContent);
+    yield* bc.update();
+    const [textWidth, textHeight] = yield* calculateContentDimensions(bc);
+    const fbWidth = textWidth + padding * 2;
+    const fbHeight = textHeight;
+    yield* framebuffer_buffer.resize(fbWidth, fbHeight);
     yield* Ref.update(b.dimensions, (bd) => ({
       ...bd,
-      width: textWidth,
-      widthValue: textWidth,
-      height: textHeight,
-      heightValue: textHeight,
+      width: fbWidth,
+      widthValue: fbWidth,
+      height: fbHeight,
+      heightValue: fbHeight,
     }));
+    yield* b.layoutNode.setWidth(fbWidth);
+    yield* b.layoutNode.setHeight(fbHeight);
+
+    if (padding > 0) {
+      yield* bc.setLocation({ x: padding, y: 0 });
+    }
 
     const pressed = yield* Ref.get(isPressed);
     const startTime = yield* Ref.get(pressStartTime);
@@ -250,8 +286,8 @@ export const button = Effect.fn(function* <BT extends string = "button">(
     onFocus,
     onPress,
     render,
-    setText,
-    getText,
+    setText: setContent,
+    getText: getContent,
     destroy,
   };
 });
