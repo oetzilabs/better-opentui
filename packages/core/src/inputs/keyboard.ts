@@ -21,14 +21,22 @@ export const Up = Schema.Literal("[A", "OA", "[a", "\u001b[A").pipe(Schema.brand
 export const Down = Schema.Literal("[B", "OB", "[b", "\u001b[B").pipe(Schema.brand("down"));
 export const Right = Schema.Literal("[C", "OC", "[c", "\u001b[C").pipe(Schema.brand("right"));
 export const Left = Schema.Literal("[D", "OD", "[d", "\u001b[D").pipe(Schema.brand("left"));
-export const Clear = Schema.Literal("[E", "OE", "[e", "Oe").pipe(Schema.brand("clear"));
-export const End = Schema.Literal("[F", "OF", "[4~", "[8~", "[8$", "[8^").pipe(Schema.brand("end"));
-export const Home = Schema.Literal("[H", "OH", "[1~", "[7~", "[7$", "[7^").pipe(Schema.brand("home"));
-export const Insert = Schema.Literal("[2~", "[2$", "[2^").pipe(Schema.brand("insert"));
+export const Clear = Schema.Literal("[E", "OE", "[e", "Oe", "\x1b[E").pipe(Schema.brand("clear"));
+export const End = Schema.Literal("[F", "OF", "[4~", "[8~", "[8$", "[8^", "\x1b[F", "\x1b[4~", "\x1b[8~").pipe(
+  Schema.brand("end"),
+);
+export const Home = Schema.Literal("[H", "OH", "[1~", "[7~", "[7$", "[7^", "\x1b[H", "\x1b[1~", "\x1b[7~").pipe(
+  Schema.brand("home"),
+);
+export const Insert = Schema.Literal("[2~", "[2$", "[2^", "\x1b[2~").pipe(Schema.brand("insert"));
 export const Delete = Schema.Literal("[3~", "[3$", "[3^", "\x1b[3~").pipe(Schema.brand("delete"));
-export const PageUp = Schema.Literal("[5~", "[[5~", "[5$", "[5^", "[5;2~", "[5;5~").pipe(Schema.brand("pageup"));
-export const PageDown = Schema.Literal("[6~", "[[6~", "[6$", "[6^", "[6;2~", "[6;5~").pipe(Schema.brand("pagedown")); // putty
-export const Tab = Schema.Literal("[Z").pipe(Schema.brand("tab"));
+export const PageUp = Schema.Literal("[5~", "[[5~", "[5$", "[5^", "[5;2~", "[5;5~", "\x1b[5~").pipe(
+  Schema.brand("pageup"),
+);
+export const PageDown = Schema.Literal("[6~", "[[6~", "[6$", "[6^", "[6;2~", "[6;5~", "\x1b[6~").pipe(
+  Schema.brand("pagedown"),
+); // putty
+export const Tab = Schema.Literal("[Z", "\x1b[Z").pipe(Schema.brand("tab"));
 export const Shift = Schema.Literal("[a", "[b", "[c", "[d", "[e", "[2$", "[3$", "[5$", "[6$", "[7$", "[8$", "[Z").pipe(
   Schema.brand("shift"),
 );
@@ -121,7 +129,19 @@ export const UpperCaseLetter = Schema.Literal(
 ).pipe(Schema.brand("uppercaseletter"));
 export type UpperCaseLetter = typeof UpperCaseLetter.Type;
 export const isUpperCaseLetter = (name: string) => Schema.is(UpperCaseLetter)(name);
-export const SpecialChar = Schema.String.pipe(Schema.brand("special"));
+export const SpecialChar = Schema.String.pipe(
+  Schema.filter((s) => {
+    // Only match single printable characters that are not escape sequences
+    return (
+      s.length === 1 &&
+      s.charCodeAt(0) >= 32 &&
+      s.charCodeAt(0) <= 126 &&
+      !/^[a-zA-Z0-9]$/.test(s) &&
+      !/[\r\n\t\b\x1b]/.test(s)
+    );
+  }),
+  Schema.brand("special"),
+);
 export type SpecialChar = typeof SpecialChar.Type;
 export const isSpecialChar = (name: string) => Schema.is(SpecialChar)(name);
 
@@ -139,7 +159,6 @@ export const Specials = Schema.Union(
   Number,
   LowerCaseLetter,
   UpperCaseLetter,
-  SpecialChar,
 );
 export type Specials = typeof Specials.Type;
 
@@ -153,6 +172,7 @@ export const KeyNames = Schema.Union(
   Shift,
   Ctrl,
   ...Specials.members,
+  SpecialChar,
   ...FKeys.members,
   ...ArrowKeys.members,
   ...UtilityKeys.members,
@@ -299,12 +319,6 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
       xresult.number = true;
       return xresult;
     }),
-    Match.when(Schema.is(SpecialChar), (s) => {
-      xresult.name = s;
-      xresult.sequence = s;
-      xresult.number = true;
-      return xresult;
-    }),
     Match.orElse(() => xresult),
   );
   if (xresult.name !== "unknown") return xresult;
@@ -433,6 +447,12 @@ export const parse = Effect.fn(function* (key: ParseInput = "") {
       xresult.name = "shift";
       xresult.sequence = s;
       xresult.shift = true;
+      return xresult;
+    }),
+    Match.when(Schema.is(SpecialChar), (s) => {
+      xresult.name = s;
+      xresult.sequence = s;
+      xresult.number = true;
       return xresult;
     }),
     Match.orElse((s) => {

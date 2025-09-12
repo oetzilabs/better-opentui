@@ -21,6 +21,7 @@ import { select } from "./select";
 import { statusBar } from "./status-bar";
 import { tabselect } from "./tabselect";
 import { text } from "./text";
+import { textarea } from "./textarea";
 import { type RemoveBindsFromArgs, type RenderContextInterface } from "./utils";
 
 export class Elements extends Effect.Service<Elements>()("Elements", {
@@ -445,6 +446,33 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       return r;
     });
 
+    const _textarea = Effect.fn(function* (...args: RemoveBindsFromArgs<Parameters<typeof textarea>>) {
+      const ctx = yield* Ref.get(context);
+      if (!ctx) {
+        return yield* Effect.fail(new MissingRenderContext());
+      }
+      const fn = textarea.bind(textarea, {
+        context: context as Ref.Ref<RenderContextInterface>,
+        cachedGlobalSelection,
+      });
+      const r = yield* fn(...args);
+      yield* Ref.update(renderables, (es) => {
+        es.push(r);
+        return es;
+      });
+      const initialLocation = yield* Ref.get(r.location);
+      const initialDimensions = yield* Ref.get(r.dimensions);
+
+      yield* ctx.addToHitGrid(
+        initialLocation.x,
+        initialLocation.y,
+        initialDimensions.widthValue,
+        initialDimensions.heightValue,
+        r.num,
+      );
+      return r;
+    });
+
     const element_functions = {
       root: _root,
       box: _box,
@@ -453,6 +481,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       asciifont: _asciifont,
       framebuffer: _framebuffer,
       input: _input,
+      textarea: _textarea,
       select: _select,
       "multi-select": _multiSelect,
       list: _list,
