@@ -11,8 +11,8 @@ import { type FrameBufferOptions } from "./framebuffer";
 import type { Binds, ElementOptions } from "./utils";
 
 export interface CheckboxElement<BT extends string = "checkbox"> extends BaseElement<"checkbox", CheckboxElement<BT>> {
-  setText: (text: string) => Effect.Effect<void, Collection, Library>;
-  getText: () => Effect.Effect<string, Collection, Library>;
+  setDescription: (description: string) => Effect.Effect<void, Collection, Library>;
+  getDescription: () => Effect.Effect<string, Collection, Library>;
   setChecked: (checked: boolean) => Effect.Effect<void, Collection, Library>;
   getChecked: () => Effect.Effect<boolean, Collection, Library>;
   onClick: (event: MouseEvent & { checked: boolean }) => Effect.Effect<void, Collection, Library>;
@@ -31,7 +31,8 @@ export type CheckboxOptions<BT extends string = "checkbox"> = ElementOptions<BT,
     pressedBg?: Input;
     pressedFg?: Input;
   };
-  text?: string;
+  description?: string;
+  showDescription?: boolean;
   checked?: boolean;
   onClick?: (
     event: MouseEvent & {
@@ -59,6 +60,11 @@ export type CheckboxOptions<BT extends string = "checkbox"> = ElementOptions<BT,
     },
   ) => Effect.Effect<void, Collection, Library>;
   padding?: number;
+  icons?: {
+    checked?: "✔" | "✖" | (string & {});
+    unchecked?: string;
+    partial?: "—" | (string & {});
+  };
 };
 
 const DEFAULTS = {
@@ -70,7 +76,13 @@ const DEFAULTS = {
     pressedBg: Colors.Custom("#222222"),
     pressedFg: Colors.White,
   },
-  text: "Checkbox",
+  description: "Checkbox",
+  showDescription: true,
+  icons: {
+    checked: "✖",
+    unchecked: " ",
+    partial: "—",
+  },
   checked: false,
   padding: 1,
 } satisfies CheckboxOptions;
@@ -90,7 +102,11 @@ export const checkbox = Effect.fn(function* <BT extends string = "checkbox">(
       position: PositionRelative.make(1),
       selectable: true,
       height: options.height ?? 1,
-      width: options.width ?? (options.text ?? DEFAULTS.text).length + (options.padding ?? DEFAULTS.padding) * 2,
+      width:
+        options.width ??
+        ((options.showDescription ?? DEFAULTS.showDescription)
+          ? (options.description ?? DEFAULTS.description).length + 1 + (options.padding ?? DEFAULTS.padding) * 2
+          : 1),
       colors: {
         bg: options.colors?.bg ?? DEFAULTS.colors.bg,
         fg: options.colors?.fg ?? DEFAULTS.colors.fg,
@@ -103,7 +119,7 @@ export const checkbox = Effect.fn(function* <BT extends string = "checkbox">(
 
   const framebuffer_buffer = yield* b.createFrameBuffer();
 
-  const checkboxText = yield* Ref.make(options.text ?? DEFAULTS.text);
+  const checkboxDescription = yield* Ref.make(options.description ?? DEFAULTS.description);
   const isChecked = yield* Ref.make(options.checked ?? DEFAULTS.checked);
   const isPressed = yield* Ref.make(false);
   const isHovered = yield* Ref.make(false);
@@ -117,6 +133,8 @@ export const checkbox = Effect.fn(function* <BT extends string = "checkbox">(
   const previousPressed = yield* Ref.make(false);
   const pressStartTime = yield* Ref.make(0);
   const holdDelay = 500; // ms
+
+  const icons = options.icons ?? DEFAULTS.icons;
 
   // Rendering
   const render = Effect.fn(function* (buffer: OptimizedBuffer, _dt: number) {
@@ -150,9 +168,11 @@ export const checkbox = Effect.fn(function* <BT extends string = "checkbox">(
 
     yield* framebuffer_buffer.clear(parsedBg);
 
-    const text = yield* Ref.get(checkboxText);
-    const checkboxSymbol = checked ? "[x]" : "[ ]";
-    const fullText = `${checkboxSymbol} ${text}`;
+    const description = yield* Ref.get(checkboxDescription);
+    const showDescription = options.showDescription ?? DEFAULTS.showDescription;
+    let checkboxSymbol = checked ? icons.checked : icons.unchecked;
+    checkboxSymbol = checkboxSymbol ?? " ";
+    const fullText = showDescription ? `${checkboxSymbol} ${description}` : checkboxSymbol;
     const textX = 0;
     const textY = Math.floor(h / 2);
 
@@ -194,12 +214,12 @@ export const checkbox = Effect.fn(function* <BT extends string = "checkbox">(
   });
 
   // Setters/getters
-  const setText = Effect.fn(function* (text: string) {
-    yield* Ref.set(checkboxText, text);
+  const setDescription = Effect.fn(function* (description: string) {
+    yield* Ref.set(checkboxDescription, description);
   });
 
-  const getText = Effect.fn(function* () {
-    return yield* Ref.get(checkboxText);
+  const getDescription = Effect.fn(function* () {
+    return yield* Ref.get(checkboxDescription);
   });
 
   const setChecked = Effect.fn(function* (checked: boolean) {
@@ -265,10 +285,14 @@ export const checkbox = Effect.fn(function* <BT extends string = "checkbox">(
   const onUpdate = Effect.fn(function* (_self: CheckboxElement) {
     const fn = options.onUpdate ?? Effect.fn(function* (_self: CheckboxElement) {});
     yield* fn(_self);
-    // set dimensions of the checkbox based on the text
-    const text = yield* Ref.get(checkboxText);
-    const fullText = `[ ] ${text}`;
-    const textWidth = fullText.length + (options.padding ?? DEFAULTS.padding) * 2;
+    // set dimensions of the checkbox based on the description
+    const description = yield* Ref.get(checkboxDescription);
+    const showDescription = options.showDescription ?? DEFAULTS.showDescription;
+    const checked = yield* Ref.get(isChecked);
+    let checkboxSymbol = checked ? icons.checked : icons.unchecked;
+    checkboxSymbol = checkboxSymbol ?? " ";
+    const fullText = showDescription ? `${checkboxSymbol} ${description}` : checkboxSymbol;
+    const textWidth = showDescription ? fullText.length + (options.padding ?? DEFAULTS.padding) * 2 : fullText.length;
     const textHeight = 1;
     yield* framebuffer_buffer.resize(textWidth, textHeight);
     yield* Ref.update(b.dimensions, (bd) => ({
@@ -301,8 +325,8 @@ export const checkbox = Effect.fn(function* <BT extends string = "checkbox">(
     onFocus,
     onPress,
     render,
-    setText,
-    getText,
+    setDescription,
+    getDescription,
     setChecked,
     getChecked,
     destroy,

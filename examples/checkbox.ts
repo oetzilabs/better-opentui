@@ -10,14 +10,15 @@ if (import.meta.main) {
 
       const statusText = yield* parentContainer.create("text", "Status: Unchecked", {
         colors: {
-          bg: Colors.Custom("#444444"),
+          bg: Colors.Transparent,
           fg: Colors.White,
         },
       });
 
       const checkbox1 = yield* parentContainer.create("checkbox", {
         top: 1,
-        text: "Enable Feature",
+        description: "Enable Feature",
+        showDescription: false,
         checked: true, // Starts checked
         colors: {
           bg: Colors.Custom("#444444"),
@@ -33,7 +34,8 @@ if (import.meta.main) {
 
       const checkbox2 = yield* parentContainer.create("checkbox", {
         top: 3,
-        text: "Debug Mode",
+        description: "Debug Mode",
+        showDescription: true,
         checked: false, // Starts unchecked (default)
         colors: {
           bg: Colors.Custom("#444444"),
