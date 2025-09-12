@@ -15,9 +15,9 @@ if (import.meta.main) {
         height: 10,
         visible: true,
         focused: true,
-        autoHeight: false,
+        autoHeight: true,
         value:
-          "This is a multi-line\ntextarea component.\n\nYou can type here!\n\nTry pressing Enter to add new lines.",
+          "This is a multi-line\ntextarea component.\n\nYou can type here!\n\nTry pressing Enter to add new lines.\n\nThe height adjusts automatically!",
         placeholder: "Start typing...",
         colors: {
           bg: Colors.Black,
@@ -38,10 +38,10 @@ if (import.meta.main) {
       // Create a status text below the textarea
       const statusText = yield* parentContainer.create(
         "text",
-        "Use arrow keys to navigate, Enter for new lines, Backspace/Delete to edit",
+        "Use arrow keys to navigate, Enter for new lines, Backspace/Delete to edit\nHeight adjusts automatically based on content!",
         {
           position: PositionRelative.make(1),
-          top: 12,
+          top: 15,
           colors: {
             fg: Colors.Yellow,
           },

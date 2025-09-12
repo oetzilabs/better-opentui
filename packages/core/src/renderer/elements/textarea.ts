@@ -74,7 +74,8 @@ export const textarea = Effect.fn(function* (
       ...options,
       selectable: true,
       width: options.width ?? "auto",
-      height: options.height ?? (options.autoHeight ? "auto" : 5),
+      height:
+        options.height ?? (options.autoHeight ? Math.max(1, (options.value ?? DEFAULTS.value).split("\n").length) : 5),
       colors: {
         ...options.colors,
         bg: options.colors.bg ?? DEFAULTS.colors.bg,
@@ -177,7 +178,7 @@ export const textarea = Effect.fn(function* (
     const textColorParsed = yield* parseColor(isPlaceholder ? phc : baseTextColor);
 
     const lines = displayText.split("\n");
-    const maxVisibleLines = h - 1;
+    const maxVisibleLines = h; // Use full height
 
     for (let i = 0; i < Math.min(lines.length, maxVisibleLines); i++) {
       const line = lines[i];
@@ -206,6 +207,8 @@ export const textarea = Effect.fn(function* (
       const dims = yield* Ref.get(b.dimensions);
       if (dims.heightValue !== lineCount) {
         yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: lineCount, height: lineCount }));
+        // Update the Yoga layout node to reflect the new height
+        yield* b.layoutNode.setHeight(lineCount);
       }
     }
 
@@ -271,6 +274,17 @@ export const textarea = Effect.fn(function* (
     const newValue = lines.join("\n");
     yield* Ref.set(value, newValue);
     yield* Ref.update(cursorPosition, (pos) => ({ ...pos, col: pos.col + text.length }));
+
+    const ah = yield* Ref.get(autoHeight);
+    if (ah) {
+      const lineCount = lines.length;
+      const dims = yield* Ref.get(b.dimensions);
+      if (dims.heightValue !== lineCount) {
+        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: lineCount, height: lineCount }));
+        yield* b.layoutNode.setHeight(lineCount);
+      }
+    }
+
     yield* updateCursorPosition();
   });
 
@@ -298,6 +312,7 @@ export const textarea = Effect.fn(function* (
       const dims = yield* Ref.get(b.dimensions);
       if (dims.heightValue !== lineCount) {
         yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: lineCount, height: lineCount }));
+        yield* b.layoutNode.setHeight(lineCount);
       }
     }
 
@@ -352,11 +367,14 @@ export const textarea = Effect.fn(function* (
 
     const ah = yield* Ref.get(autoHeight);
     if (ah) {
-      const lines = v.split("\n");
+      // Get the updated value after deletion
+      const newValue = yield* Ref.get(value);
+      const lines = newValue.split("\n");
       const lineCount = lines.length;
       const dims = yield* Ref.get(b.dimensions);
       if (dims.heightValue !== lineCount) {
         yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: lineCount, height: lineCount }));
+        yield* b.layoutNode.setHeight(lineCount);
       }
     }
 
