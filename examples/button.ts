@@ -21,6 +21,8 @@ if (import.meta.main) {
         content: "+1",
         colors: {
           bg: Colors.Custom("#57cc99"),
+          hoverBg: Colors.Custom("#4baf84"),
+          focusedBg: Colors.Custom("#3e9b73"),
         },
         onClick: Effect.fn(function* () {
           yield* counter.increment();
@@ -35,6 +37,8 @@ if (import.meta.main) {
         content: "-1",
         colors: {
           bg: Colors.Custom("#D62828"),
+          hoverBg: Colors.Custom("#c12222"),
+          focusedBg: Colors.Custom("#b21e1e"),
         },
         onClick: Effect.fn(function* () {
           yield* counter.decrement();
