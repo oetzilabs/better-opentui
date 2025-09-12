@@ -20,6 +20,7 @@ export const group = Effect.fn(function* (
   },
   parentElement: BaseElement<any, any> | null = null,
 ) {
+  if (!parentElement) return yield* Effect.fail(new Error("Parent element is required"));
   const b = yield* base(
     "group",
     binds,
@@ -89,8 +90,23 @@ export const group = Effect.fn(function* (
     yield* b.destroy();
   });
 
+  const onResize = Effect.fn(function* (width: number, height: number) {
+    // check if the group width and height are a percentage and if so, update it accordingly
+    yield* Ref.update(b.dimensions, (d) => ({
+      ...d,
+      widthValue: width,
+      heightValue: height,
+    }));
+    const children = yield* Ref.get(b.renderables);
+    yield* Effect.all(
+      children.map((child) => Effect.suspend(() => child.onResize(width, height))),
+      { concurrency: 10 },
+    );
+  });
+
   return {
     ...b,
+    onResize,
     shouldStartSelection,
     onSelectionChanged,
     destroy,

@@ -22,6 +22,7 @@ export interface TextElement extends BaseElement<"text", TextElement> {
 
 export type TextOptions = ElementOptions<"text", TextElement> & {
   content?: StyledText | string;
+  textWrap?: boolean;
   onMouseEvent?: BaseElement<"text", TextElement>["onMouseEvent"];
   onKeyboardEvent?: BaseElement<"text", TextElement>["onKeyboardEvent"];
   onUpdate?: (self: TextElement) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
@@ -40,6 +41,7 @@ const DEFAULTS = {
   position: PositionRelative.make(1),
   content: "",
   selectable: false,
+  textWrap: false,
 } satisfies TextOptions;
 
 export const text = Effect.fn(function* (
@@ -48,6 +50,7 @@ export const text = Effect.fn(function* (
   options: TextOptions,
   parentElement: BaseElement<any, any> | null = null,
 ) {
+  if (!parentElement) return yield* Effect.fail(new Error("Parent element is required"));
   const lib = yield* Library;
 
   const contentWidth = content instanceof StyledText ? content.toString().length : content.length;
@@ -85,6 +88,7 @@ export const text = Effect.fn(function* (
       height: textHeight,
       heightValue: textHeight,
     }));
+    yield* updateTextInfo();
   });
 
   let st: StyledText;
@@ -103,11 +107,36 @@ export const text = Effect.fn(function* (
   const _content = yield* Ref.make(st);
   const contentLength = st.toString().length;
 
+  const textWrap = options.textWrap ?? DEFAULTS.textWrap;
+
   const capacity = 256 as const;
   const { widthMethod } = yield* Ref.get(binds.context);
 
   const tbp = yield* lib.createTextBufferPointer(capacity, widthMethod);
   const textBuffer = new TextBuffer(tbp, capacity);
+
+  const updateTextBuffer = Effect.fn(function* () {
+    let st = yield* Ref.get(_content);
+    if (textWrap) {
+      const { widthValue: currentWidth } = yield* Ref.get(parentElement.dimensions);
+      if (currentWidth > 0) {
+        const plain = st.toString();
+        const lines = wrapText(plain, currentWidth);
+        const newChunks = lines.map((line) =>
+          TextChunkSchema.make({
+            __isChunk: true as const,
+            text: textEncoder.encode(line + "\n"),
+            plainText: line + "\n",
+            fg: st.chunks[0]?.fg,
+            bg: st.chunks[0]?.bg,
+            attributes: st.chunks[0]?.attributes,
+          }),
+        );
+        st = new StyledText(newChunks);
+      }
+    }
+    yield* textBuffer.setStyledText(st);
+  });
 
   const c = yield* Ref.get(b.colors);
   const bgC = yield* parseColor(c.bg);
@@ -164,10 +193,21 @@ export const text = Effect.fn(function* (
 
   yield* Effect.sync(() => b.layoutNode.yogaNode.setMeasureFunc(measureFunc));
 
-  const updateTextBuffer = Effect.fn(function* () {
-    const st = yield* Ref.get(_content);
-    yield* textBuffer.setStyledText(st);
-  });
+  const wrapText = (text: string, width: number): string[] => {
+    const words = text.split(" ");
+    const lines: string[] = [];
+    let currentLine = "";
+    for (const word of words) {
+      if (currentLine.length + word.length + 1 <= width) {
+        currentLine += (currentLine ? " " : "") + word;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  };
 
   const syncSelectionToTextBuffer = Effect.fn(function* () {
     const selection = selectionHelper.getSelection();
@@ -217,10 +257,17 @@ export const text = Effect.fn(function* (
   const onResize = Effect.fn(function* (width: number, height: number) {
     const fn = options.onResize ?? Effect.fn(function* (width: number, height: number) {});
     yield* fn(width, height);
+    yield* Ref.update(b.dimensions, (d) => ({
+      ...d,
+      widthValue: width,
+      heightValue: height,
+    }));
     const changed = yield* selectionHelper.reevaluateSelection(width, height);
     if (changed) {
       yield* syncSelectionToTextBuffer();
     }
+
+    yield* updateTextInfo();
   });
 
   const render = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
