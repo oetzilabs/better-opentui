@@ -35,6 +35,7 @@ export type TextareaOptions = ElementOptions<"textarea", TextareaElement> & {
   maxLength?: number;
   value?: string;
   autoHeight?: boolean;
+  minHeight?: number;
   onUpdate?: (self: TextareaElement) => Effect.Effect<void, Collection, Library>;
   onChange?: (text: string) => Effect.Effect<void, Collection, Library>;
   validate?: (value: string) => boolean;
@@ -55,6 +56,7 @@ const DEFAULTS = {
   maxLength: 10000,
   value: "",
   autoHeight: false,
+  minHeight: 3,
 };
 
 export const textarea = Effect.fn(function* (
@@ -75,7 +77,10 @@ export const textarea = Effect.fn(function* (
       selectable: true,
       width: options.width ?? "auto",
       height:
-        options.height ?? (options.autoHeight ? Math.max(1, (options.value ?? DEFAULTS.value).split("\n").length) : 5),
+        options.height ??
+        (options.autoHeight
+          ? Math.max(options.minHeight ?? DEFAULTS.minHeight, (options.value ?? DEFAULTS.value).split("\n").length)
+          : 5),
       colors: {
         ...options.colors,
         bg: options.colors.bg ?? DEFAULTS.colors.bg,
@@ -96,6 +101,7 @@ export const textarea = Effect.fn(function* (
   const placeholder = yield* Ref.make(options.placeholder ?? DEFAULTS.placeholder);
   const maxLength = yield* Ref.make(options.maxLength ?? DEFAULTS.maxLength);
   const autoHeight = yield* Ref.make(options.autoHeight ?? DEFAULTS.autoHeight);
+  const minHeight = yield* Ref.make(options.minHeight ?? DEFAULTS.minHeight);
 
   const placeholderColor = yield* Ref.make(options.colors.placeholderColor ?? DEFAULTS.colors.placeholderColor);
   const cursorColor = yield* Ref.make(options.colors.cursorColor ?? DEFAULTS.colors.cursorColor);
@@ -204,11 +210,13 @@ export const textarea = Effect.fn(function* (
     const ah = yield* Ref.get(autoHeight);
     if (ah) {
       const lineCount = lines.length;
+      const minH = yield* Ref.get(minHeight);
+      const effectiveHeight = Math.max(minH, lineCount);
       const dims = yield* Ref.get(b.dimensions);
-      if (dims.heightValue !== lineCount) {
-        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: lineCount, height: lineCount }));
+      if (dims.heightValue !== effectiveHeight) {
+        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: effectiveHeight, height: effectiveHeight }));
         // Update the Yoga layout node to reflect the new height
-        yield* b.layoutNode.setHeight(lineCount);
+        yield* b.layoutNode.setHeight(effectiveHeight);
       }
     }
 
@@ -278,10 +286,12 @@ export const textarea = Effect.fn(function* (
     const ah = yield* Ref.get(autoHeight);
     if (ah) {
       const lineCount = lines.length;
+      const minH = yield* Ref.get(minHeight);
+      const effectiveHeight = Math.max(minH, lineCount);
       const dims = yield* Ref.get(b.dimensions);
-      if (dims.heightValue !== lineCount) {
-        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: lineCount, height: lineCount }));
-        yield* b.layoutNode.setHeight(lineCount);
+      if (dims.heightValue !== effectiveHeight) {
+        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: effectiveHeight, height: effectiveHeight }));
+        yield* b.layoutNode.setHeight(effectiveHeight);
       }
     }
 
@@ -309,10 +319,12 @@ export const textarea = Effect.fn(function* (
     const ah = yield* Ref.get(autoHeight);
     if (ah) {
       const lineCount = lines.length;
+      const minH = yield* Ref.get(minHeight);
+      const effectiveHeight = Math.max(minH, lineCount);
       const dims = yield* Ref.get(b.dimensions);
-      if (dims.heightValue !== lineCount) {
-        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: lineCount, height: lineCount }));
-        yield* b.layoutNode.setHeight(lineCount);
+      if (dims.heightValue !== effectiveHeight) {
+        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: effectiveHeight, height: effectiveHeight }));
+        yield* b.layoutNode.setHeight(effectiveHeight);
       }
     }
 
@@ -371,10 +383,12 @@ export const textarea = Effect.fn(function* (
       const newValue = yield* Ref.get(value);
       const lines = newValue.split("\n");
       const lineCount = lines.length;
+      const minH = yield* Ref.get(minHeight);
+      const effectiveHeight = Math.max(minH, lineCount);
       const dims = yield* Ref.get(b.dimensions);
-      if (dims.heightValue !== lineCount) {
-        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: lineCount, height: lineCount }));
-        yield* b.layoutNode.setHeight(lineCount);
+      if (dims.heightValue !== effectiveHeight) {
+        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: effectiveHeight, height: effectiveHeight }));
+        yield* b.layoutNode.setHeight(effectiveHeight);
       }
     }
 
