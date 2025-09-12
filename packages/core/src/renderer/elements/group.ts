@@ -92,11 +92,53 @@ export const group = Effect.fn(function* (
 
   const onResize = Effect.fn(function* (width: number, height: number) {
     // check if the group width and height are a percentage and if so, update it accordingly
-    yield* Ref.update(b.dimensions, (d) => ({
-      ...d,
-      widthValue: width,
-      heightValue: height,
-    }));
+    const { widthValue: pWidth, heightValue: pHeight } = yield* Ref.get(parentElement.dimensions);
+    const { width: oldWidth, height: oldHeight } = yield* Ref.get(b.dimensions);
+
+    if (typeof oldWidth === "string") {
+      if (oldWidth !== "auto" && oldWidth.endsWith("%")) {
+        const newWidth = Math.floor(pWidth * (parseFloat(oldWidth.slice(0, -1)) / 100));
+        yield* Ref.update(b.dimensions, (d) => ({
+          ...d,
+          widthValue: newWidth,
+        }));
+      } else {
+        // do nothing?
+        const cw = oldWidth as "auto" | number;
+        yield* Ref.update(b.dimensions, (d) => ({
+          ...d,
+          widthValue: width,
+        }));
+        // if (cw === "auto") {
+        // } else {
+        // }
+      }
+    }
+    if (typeof oldHeight === "string") {
+      if (oldHeight !== "auto" && oldHeight.endsWith("%")) {
+        const newHeight = Math.floor(pHeight * (parseFloat(oldHeight.slice(0, -1)) / 100));
+        yield* Ref.update(b.dimensions, (d) => ({
+          ...d,
+          heightValue: newHeight,
+        }));
+      } else {
+        const ch = oldHeight as "auto" | number;
+        yield* Ref.update(b.dimensions, (d) => ({
+          ...d,
+          heightValue: height,
+        }));
+        // console.debug("height", ch, height);
+        // if (ch === "auto") {
+        // } else {
+        // }
+      }
+    }
+
+    // yield* Ref.update(b.dimensions, (d) => ({
+    //   ...d,
+    //   widthValue: width,
+    //   heightValue: height,
+    // }));
     const children = yield* Ref.get(b.renderables);
     yield* Effect.all(
       children.map((child) => Effect.suspend(() => child.onResize(width, height))),
