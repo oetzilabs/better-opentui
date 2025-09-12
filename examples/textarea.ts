@@ -14,9 +14,11 @@ if (import.meta.main) {
         width: 50,
         visible: true,
         focused: true,
-        autoHeight: true,
+        autoHeight: false,
         minHeight: 3,
-        value: "This is a multi-line\ntextarea component.\n\nTry adding/removing lines!",
+        maxHeight: 10,
+        value:
+          "This is a multi-line\ntextarea component.\n\nTry adding/removing lines!\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10\nLine 11\nLine 12\n",
         placeholder: "Start typing...",
         colors: {
           bg: Colors.Black,

@@ -320,6 +320,11 @@ export const verticalScrollbar = Effect.fn(function* (
     yield* Ref.set(visibleHeight, Math.max(0, height));
   });
 
+  const handleKeyPress = Effect.fn(function* (key: ParsedKey) {
+    // Handle key presses for scrollbar
+    return false;
+  });
+
   return {
     ...scrollbarElement,
     render,
@@ -328,5 +333,6 @@ export const verticalScrollbar = Effect.fn(function* (
     setScrollInfo,
     getScrollOffset,
     setScrollOffset,
+    handleKeyPress,
   };
 });

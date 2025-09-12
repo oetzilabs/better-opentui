@@ -36,6 +36,8 @@ export type TextareaOptions = ElementOptions<"textarea", TextareaElement> & {
   value?: string;
   autoHeight?: boolean;
   minHeight?: number;
+  maxHeight?: number;
+  maxWidth?: number;
   onUpdate?: (self: TextareaElement) => Effect.Effect<void, Collection, Library>;
   onChange?: (text: string) => Effect.Effect<void, Collection, Library>;
   validate?: (value: string) => boolean;
@@ -65,7 +67,14 @@ export const textarea = Effect.fn(function* (
   parentElement: BaseElement<any, any> | null = null,
 ) {
   const lib = yield* Library;
+
+  if (!parentElement) return yield* Effect.fail(new Error("Parent element is required"));
+
   const { cli } = yield* Ref.get(binds.context);
+
+  if ((options.autoHeight ?? DEFAULTS.autoHeight) && options.maxHeight !== undefined) {
+    return yield* Effect.fail(new Error("autoHeight and maxHeight cannot be used together"));
+  }
 
   const lastValue = yield* Ref.make(options.value ?? DEFAULTS.value);
 
@@ -102,13 +111,48 @@ export const textarea = Effect.fn(function* (
   const maxLength = yield* Ref.make(options.maxLength ?? DEFAULTS.maxLength);
   const autoHeight = yield* Ref.make(options.autoHeight ?? DEFAULTS.autoHeight);
   const minHeight = yield* Ref.make(options.minHeight ?? DEFAULTS.minHeight);
+  const maxHeight = yield* Ref.make(options.maxHeight);
+  const maxWidth = yield* Ref.make(options.maxWidth);
+
+  // Scroll state
+  const verticalScrollOffset = yield* Ref.make(0);
+  const horizontalScrollOffset = yield* Ref.make(0);
 
   const placeholderColor = yield* Ref.make(options.colors.placeholderColor ?? DEFAULTS.colors.placeholderColor);
   const cursorColor = yield* Ref.make(options.colors.cursorColor ?? DEFAULTS.colors.cursorColor);
 
   const lastCommittedValue = yield* Ref.make(options.value ?? DEFAULTS.value);
 
+  // Track if height needs updating for autoHeight
+  const needsHeightUpdate = yield* Ref.make(false);
+
   // Helper functions
+  const updateAutoHeight = Effect.fn(function* () {
+    const needsUpdate = yield* Ref.get(needsHeightUpdate);
+    if (!needsUpdate) return;
+
+    const ah = yield* Ref.get(autoHeight);
+    if (!ah) {
+      yield* Ref.set(needsHeightUpdate, false);
+      return;
+    }
+
+    const lines = yield* getLines();
+    const lineCount = lines.length;
+    const minH = yield* Ref.get(minHeight);
+    const effectiveHeight = Math.max(minH, lineCount);
+    const dims = yield* Ref.get(b.dimensions);
+
+    if (dims.heightValue !== effectiveHeight) {
+      yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: effectiveHeight, height: effectiveHeight }));
+      // Update the Yoga layout node to reflect the new height
+      yield* b.layoutNode.setHeight(effectiveHeight);
+    }
+
+    // Reset the flag
+    yield* Ref.set(needsHeightUpdate, false);
+  });
+
   const getLines = Effect.fn(function* () {
     const v = yield* Ref.get(value);
     return v.split("\n");
@@ -119,21 +163,146 @@ export const textarea = Effect.fn(function* (
     return lines.length;
   });
 
+  const getContentDimensions = Effect.fn(function* () {
+    const lines = yield* getLines();
+    const contentHeight = lines.length;
+    const contentWidth = lines.reduce((max, line) => Math.max(max, line.length), 0);
+    return { contentHeight, contentWidth };
+  });
+
+  const getVisibleDimensions = Effect.fn(function* () {
+    const dims = yield* Ref.get(b.dimensions);
+    const mh = yield* Ref.get(maxHeight);
+    const mw = yield* Ref.get(maxWidth);
+    const ah = yield* Ref.get(autoHeight);
+
+    let visibleHeight = mh ?? dims.heightValue;
+    let visibleWidth = mw ?? dims.widthValue;
+
+    // If maxHeight/maxWidth is not set, use the textarea dimensions
+    if (!mh) {
+      visibleHeight = dims.heightValue;
+    }
+    if (!mw) {
+      visibleWidth = dims.widthValue;
+    }
+
+    // Ensure we have valid dimensions (fallback to reasonable defaults)
+    visibleHeight = Math.max(1, visibleHeight);
+    visibleWidth = Math.max(1, visibleWidth);
+
+    return { visibleHeight, visibleWidth };
+  });
+
+  const shouldShowVerticalScrollbar = Effect.fn(function* () {
+    const { contentHeight } = yield* getContentDimensions();
+    const { visibleHeight } = yield* getVisibleDimensions();
+    const ah = yield* Ref.get(autoHeight);
+    const mh = yield* Ref.get(maxHeight);
+
+    // Show scrollbar if content exceeds visible height, and either maxHeight is set or not autoHeight
+    return contentHeight > visibleHeight && (!ah || mh !== undefined);
+  });
+
+  const shouldShowHorizontalScrollbar = Effect.fn(function* () {
+    const { contentWidth } = yield* getContentDimensions();
+    const { visibleWidth } = yield* getVisibleDimensions();
+
+    // Show scrollbar if content exceeds visible width
+    return contentWidth > visibleWidth;
+  });
+
+  const clampScrollOffsets = Effect.fn(function* () {
+    const { contentHeight, contentWidth } = yield* getContentDimensions();
+    const { visibleHeight, visibleWidth } = yield* getVisibleDimensions();
+
+    const currentVOffset = yield* Ref.get(verticalScrollOffset);
+    const currentHOffset = yield* Ref.get(horizontalScrollOffset);
+
+    const maxVOffset = Math.max(0, contentHeight - visibleHeight);
+    const maxHOffset = Math.max(0, contentWidth - visibleWidth);
+
+    const clampedVOffset = Math.max(0, Math.min(currentVOffset, maxVOffset));
+    const clampedHOffset = Math.max(0, Math.min(currentHOffset, maxHOffset));
+
+    if (clampedVOffset !== currentVOffset) {
+      yield* Ref.set(verticalScrollOffset, clampedVOffset);
+    }
+    if (clampedHOffset !== currentHOffset) {
+      yield* Ref.set(horizontalScrollOffset, clampedHOffset);
+    }
+  });
+
   const updateCursorPosition = Effect.fn(function* () {
     const focused = yield* Ref.get(b.focused);
     if (!focused) return;
     const loc = yield* Ref.get(b.location);
-    const { widthValue: w } = yield* Ref.get(b.dimensions);
+    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
     const curPos = yield* Ref.get(cursorPosition);
     const lines = yield* getLines();
+    const vOffset = yield* Ref.get(verticalScrollOffset);
+    const hOffset = yield* Ref.get(horizontalScrollOffset);
 
-    if (curPos.row >= lines.length) return;
+    // Clamp cursor position to valid boundaries
+    const clampedRow = Math.max(0, Math.min(curPos.row, lines.length - 1));
+    const line = lines[clampedRow] || "";
+    const clampedCol = Math.max(0, Math.min(curPos.col, line.length));
 
-    const line = lines[curPos.row];
-    const cursorCol = Math.min(curPos.col, line.length);
+    // Update cursor position if it was out of bounds
+    if (clampedRow !== curPos.row || clampedCol !== curPos.col) {
+      yield* Ref.set(cursorPosition, { row: clampedRow, col: clampedCol });
+    }
 
-    const absoluteCursorX = loc.x + cursorCol + 1;
-    const absoluteCursorY = loc.y + curPos.row + 1;
+    // Calculate scrollbar visibility
+    const { contentHeight, contentWidth } = yield* getContentDimensions();
+    const { visibleHeight: fullVisibleHeight, visibleWidth: fullVisibleWidth } = yield* getVisibleDimensions();
+    const ah = yield* Ref.get(autoHeight);
+    const mh = yield* Ref.get(maxHeight);
+
+    const showVScrollbar = contentHeight > fullVisibleHeight && (!ah || mh !== undefined);
+    const showHScrollbar = contentWidth > fullVisibleWidth;
+    const visibleWidth = w - (showVScrollbar ? 1 : 0);
+    const visibleHeight = h - (showHScrollbar ? 1 : 0);
+
+    // Adjust for scrolling
+    const visibleRow = clampedRow - vOffset;
+    const visibleCol = clampedCol - hOffset;
+
+    // Auto-scroll if cursor is outside visible area
+    let newVOffset = vOffset;
+    let newHOffset = hOffset;
+
+    if (visibleRow < 0) {
+      newVOffset = Math.max(0, clampedRow);
+    } else if (visibleRow >= visibleHeight) {
+      newVOffset = Math.max(0, clampedRow - visibleHeight + 1);
+    }
+
+    if (visibleCol < 0) {
+      newHOffset = Math.max(0, clampedCol);
+    } else if (visibleCol >= visibleWidth) {
+      newHOffset = Math.max(0, clampedCol - visibleWidth + 1);
+    }
+
+    // Clamp scroll offsets to valid ranges
+    const maxVOffset = Math.max(0, contentHeight - visibleHeight);
+    const maxHOffset = Math.max(0, contentWidth - visibleWidth);
+    newVOffset = Math.max(0, Math.min(newVOffset, maxVOffset));
+    newHOffset = Math.max(0, Math.min(newHOffset, maxHOffset));
+
+    // Update scroll offsets if they changed
+    if (newVOffset !== vOffset) {
+      yield* Ref.set(verticalScrollOffset, newVOffset);
+    }
+    if (newHOffset !== hOffset) {
+      yield* Ref.set(horizontalScrollOffset, newHOffset);
+    }
+
+    const finalVisibleRow = clampedRow - newVOffset;
+    const finalVisibleCol = clampedCol - newHOffset;
+
+    const absoluteCursorX = loc.x + finalVisibleCol + 1;
+    const absoluteCursorY = loc.y + finalVisibleRow + 1;
 
     const cc = yield* Ref.get(cursorColor);
     const parsedCC = yield* parseColor(cc);
@@ -162,6 +331,8 @@ export const textarea = Effect.fn(function* (
 
   b.onResize = Effect.fn(function* (width: number, height: number) {
     yield* updateCursorPosition();
+    yield* updateAutoHeight();
+    yield* clampScrollOffsets();
   });
 
   const render = Effect.fn(function* (buffer: OptimizedBuffer, _dt: number) {
@@ -184,17 +355,76 @@ export const textarea = Effect.fn(function* (
     const textColorParsed = yield* parseColor(isPlaceholder ? phc : baseTextColor);
 
     const lines = displayText.split("\n");
-    const maxVisibleLines = h; // Use full height
+    const vOffset = yield* Ref.get(verticalScrollOffset);
+    const hOffset = yield* Ref.get(horizontalScrollOffset);
 
-    for (let i = 0; i < Math.min(lines.length, maxVisibleLines); i++) {
-      const line = lines[i];
-      const visibleText = line.substring(0, w - 1);
-      if (visibleText) {
-        yield* framebuffer_buffer.drawText(visibleText, 0, i, textColorParsed);
+    // Calculate scrollbar visibility based on full dimensions
+    const { contentHeight, contentWidth } = yield* getContentDimensions();
+    const { visibleHeight: fullVisibleHeight, visibleWidth: fullVisibleWidth } = yield* getVisibleDimensions();
+    const ah = yield* Ref.get(autoHeight);
+    const mh = yield* Ref.get(maxHeight);
+
+    const showVScrollbar = contentHeight > fullVisibleHeight && (!ah || mh !== undefined);
+    const showHScrollbar = contentWidth > fullVisibleWidth;
+
+    const visibleWidth = w - (showVScrollbar ? 1 : 0);
+    const visibleHeight = h - (showHScrollbar ? 1 : 0);
+
+    // Ensure visible dimensions are at least 1
+    const safeVisibleWidth = Math.max(1, visibleWidth);
+    const safeVisibleHeight = Math.max(1, visibleHeight);
+
+    const maxVisibleLines = Math.min(lines.length - vOffset, safeVisibleHeight);
+
+    for (let i = 0; i < maxVisibleLines; i++) {
+      const lineIndex = i + vOffset;
+      if (lineIndex < lines.length) {
+        const line = lines[lineIndex];
+        const visibleText = line.substring(hOffset, hOffset + safeVisibleWidth);
+        if (visibleText) {
+          yield* framebuffer_buffer.drawText(visibleText, 0, i, textColorParsed);
+        }
       }
     }
 
     yield* buffer.drawFrameBuffer(loc.x, loc.y, framebuffer_buffer);
+
+    // Render scrollbars if needed
+    if (showVScrollbar) {
+      // Render vertical scrollbar
+      const scrollbarX = loc.x + safeVisibleWidth;
+      const scrollbarY = loc.y;
+      const scrollbarHeight = safeVisibleHeight;
+
+      // Render scrollbar track
+      yield* buffer.fillRect(scrollbarX, scrollbarY, 1, scrollbarHeight, yield* parseColor(Colors.Custom("#333333")));
+
+      // Render scrollbar indicator
+      if (contentHeight > safeVisibleHeight) {
+        const thumbHeight = Math.max(1, Math.floor((safeVisibleHeight / contentHeight) * scrollbarHeight));
+        const scrollRatio = vOffset / Math.max(1, contentHeight - safeVisibleHeight);
+        const thumbStart = scrollbarY + Math.floor(scrollRatio * Math.max(0, scrollbarHeight - thumbHeight));
+        yield* buffer.fillRect(scrollbarX, thumbStart, 1, thumbHeight, yield* parseColor(Colors.Custom("#666666")));
+      }
+    }
+
+    if (showHScrollbar) {
+      // Render horizontal scrollbar
+      const scrollbarX = loc.x;
+      const scrollbarY = loc.y + safeVisibleHeight;
+      const scrollbarWidth = safeVisibleWidth;
+
+      // Render scrollbar track
+      yield* buffer.fillRect(scrollbarX, scrollbarY, scrollbarWidth, 1, yield* parseColor(Colors.Custom("#333333")));
+
+      // Render scrollbar indicator
+      if (contentWidth > safeVisibleWidth) {
+        const thumbWidth = Math.max(1, Math.floor((safeVisibleWidth / contentWidth) * scrollbarWidth));
+        const scrollRatio = hOffset / Math.max(1, contentWidth - safeVisibleWidth);
+        const thumbStart = scrollbarX + Math.floor(scrollRatio * Math.max(0, scrollbarWidth - thumbWidth));
+        yield* buffer.fillRect(thumbStart, scrollbarY, thumbWidth, 1, yield* parseColor(Colors.Custom("#666666")));
+      }
+    }
   });
 
   // Setters/getters
@@ -207,19 +437,15 @@ export const textarea = Effect.fn(function* (
     const lastLine = lines[lines.length - 1] || "";
     yield* Ref.set(cursorPosition, { row: lines.length - 1, col: lastLine.length });
 
-    const ah = yield* Ref.get(autoHeight);
-    if (ah) {
-      const lineCount = lines.length;
-      const minH = yield* Ref.get(minHeight);
-      const effectiveHeight = Math.max(minH, lineCount);
-      const dims = yield* Ref.get(b.dimensions);
-      if (dims.heightValue !== effectiveHeight) {
-        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: effectiveHeight, height: effectiveHeight }));
-        // Update the Yoga layout node to reflect the new height
-        yield* b.layoutNode.setHeight(effectiveHeight);
-      }
-    }
+    // Reset scroll offsets when value changes
+    yield* Ref.set(verticalScrollOffset, 0);
+    yield* Ref.set(horizontalScrollOffset, 0);
 
+    // Mark that height may need updating for autoHeight
+    yield* Ref.set(needsHeightUpdate, true);
+
+    // Clamp scroll offsets and update cursor position
+    yield* clampScrollOffsets();
     yield* updateCursorPosition();
   });
 
@@ -240,11 +466,38 @@ export const textarea = Effect.fn(function* (
     yield* updateCursorPosition();
   });
 
+  const insertText = Effect.fn(function* (text: string) {
+    const v = yield* Ref.get(value);
+    const curPos = yield* Ref.get(cursorPosition);
+    const maxLen = yield* Ref.get(maxLength);
+    if (v.length + text.length > maxLen) return;
+
+    const lines = v.split("\n");
+    const line = lines[curPos.row] || "";
+    const beforeCursor = line.substring(0, curPos.col);
+    const afterCursor = line.substring(curPos.col);
+    lines[curPos.row] = beforeCursor + text + afterCursor;
+
+    const newValue = lines.join("\n");
+    yield* Ref.set(value, newValue);
+    yield* Ref.update(cursorPosition, (pos) => ({ ...pos, col: pos.col + text.length }));
+
+    // Mark that height may need updating for autoHeight
+    yield* Ref.set(needsHeightUpdate, true);
+
+    // Clamp scroll offsets to valid ranges after content change
+    yield* clampScrollOffsets();
+    yield* updateCursorPosition();
+  });
+
   const setMaxLength = Effect.fn(function* (len: number) {
     yield* Ref.set(maxLength, len);
     const v = yield* Ref.get(value);
     if (v.length > len) {
       yield* Ref.set(value, v.substring(0, len));
+      // Clamp scroll offsets and update cursor position after content change
+      yield* clampScrollOffsets();
+      yield* updateCursorPosition();
     }
   });
 
@@ -267,36 +520,6 @@ export const textarea = Effect.fn(function* (
   });
 
   // Key handling
-  const insertText = Effect.fn(function* (text: string) {
-    const v = yield* Ref.get(value);
-    const curPos = yield* Ref.get(cursorPosition);
-    const maxLen = yield* Ref.get(maxLength);
-    if (v.length + text.length > maxLen) return;
-
-    const lines = v.split("\n");
-    const line = lines[curPos.row] || "";
-    const beforeCursor = line.substring(0, curPos.col);
-    const afterCursor = line.substring(curPos.col);
-    lines[curPos.row] = beforeCursor + text + afterCursor;
-
-    const newValue = lines.join("\n");
-    yield* Ref.set(value, newValue);
-    yield* Ref.update(cursorPosition, (pos) => ({ ...pos, col: pos.col + text.length }));
-
-    const ah = yield* Ref.get(autoHeight);
-    if (ah) {
-      const lineCount = lines.length;
-      const minH = yield* Ref.get(minHeight);
-      const effectiveHeight = Math.max(minH, lineCount);
-      const dims = yield* Ref.get(b.dimensions);
-      if (dims.heightValue !== effectiveHeight) {
-        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: effectiveHeight, height: effectiveHeight }));
-        yield* b.layoutNode.setHeight(effectiveHeight);
-      }
-    }
-
-    yield* updateCursorPosition();
-  });
 
   const insertNewLine = Effect.fn(function* () {
     const v = yield* Ref.get(value);
@@ -316,18 +539,11 @@ export const textarea = Effect.fn(function* (
     yield* Ref.set(value, newValue);
     yield* Ref.set(cursorPosition, { row: curPos.row + 1, col: 0 });
 
-    const ah = yield* Ref.get(autoHeight);
-    if (ah) {
-      const lineCount = lines.length;
-      const minH = yield* Ref.get(minHeight);
-      const effectiveHeight = Math.max(minH, lineCount);
-      const dims = yield* Ref.get(b.dimensions);
-      if (dims.heightValue !== effectiveHeight) {
-        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: effectiveHeight, height: effectiveHeight }));
-        yield* b.layoutNode.setHeight(effectiveHeight);
-      }
-    }
+    // Mark that height may need updating for autoHeight
+    yield* Ref.set(needsHeightUpdate, true);
 
+    // Clamp scroll offsets to valid ranges after content change
+    yield* clampScrollOffsets();
     yield* updateCursorPosition();
   });
 
@@ -377,21 +593,11 @@ export const textarea = Effect.fn(function* (
       }
     }
 
-    const ah = yield* Ref.get(autoHeight);
-    if (ah) {
-      // Get the updated value after deletion
-      const newValue = yield* Ref.get(value);
-      const lines = newValue.split("\n");
-      const lineCount = lines.length;
-      const minH = yield* Ref.get(minHeight);
-      const effectiveHeight = Math.max(minH, lineCount);
-      const dims = yield* Ref.get(b.dimensions);
-      if (dims.heightValue !== effectiveHeight) {
-        yield* Ref.update(b.dimensions, (d) => ({ ...d, heightValue: effectiveHeight, height: effectiveHeight }));
-        yield* b.layoutNode.setHeight(effectiveHeight);
-      }
-    }
+    // Mark that height may need updating for autoHeight
+    yield* Ref.set(needsHeightUpdate, true);
 
+    // Clamp scroll offsets to valid ranges after content change
+    yield* clampScrollOffsets();
     yield* updateCursorPosition();
   });
 
@@ -469,6 +675,27 @@ export const textarea = Effect.fn(function* (
         }),
       ),
       Match.when(
+        "pageup",
+        Effect.fn(function* () {
+          const { visibleHeight } = yield* getVisibleDimensions();
+          const cp = yield* Ref.get(cursorPosition);
+          const newRow = Math.max(0, cp.row - visibleHeight);
+          yield* setCursorPosition(newRow, cp.col);
+          return true;
+        }),
+      ),
+      Match.when(
+        "pagedown",
+        Effect.fn(function* () {
+          const { visibleHeight } = yield* getVisibleDimensions();
+          const cp = yield* Ref.get(cursorPosition);
+          const lines = yield* getLines();
+          const newRow = Math.min(lines.length - 1, cp.row + visibleHeight);
+          yield* setCursorPosition(newRow, cp.col);
+          return true;
+        }),
+      ),
+      Match.when(
         "backspace",
         Effect.fn(function* () {
           yield* deleteCharacter("backward");
@@ -519,23 +746,84 @@ export const textarea = Effect.fn(function* (
     yield* b.onUpdate(self);
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
+
+    // Update autoHeight if needed
+    yield* updateAutoHeight();
+
     const ctx = yield* Ref.get(binds.context);
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-    yield* ctx.addToHitGrid(x, y, w, h, b.num);
+
+    // Check scrollbar visibility for both hit grid and framebuffer sizing
+    const { contentHeight: contentHeightUpdate, contentWidth: contentWidthUpdate } = yield* getContentDimensions();
+    const { visibleHeight: fullVisibleHeightUpdate, visibleWidth: fullVisibleWidthUpdate } =
+      yield* getVisibleDimensions();
+    const ahUpdate = yield* Ref.get(autoHeight);
+    const mhUpdate = yield* Ref.get(maxHeight);
+
+    const showVScrollbarUpdate = contentHeightUpdate > fullVisibleHeightUpdate && (!ahUpdate || mhUpdate !== undefined);
+    const showHScrollbarUpdate = contentWidthUpdate > fullVisibleWidthUpdate;
+
+    // Add full area including scrollbars to hit grid
+    const fullWidth = w + (showVScrollbarUpdate ? 1 : 0);
+    const fullHeight = h + (showHScrollbarUpdate ? 1 : 0);
+    yield* ctx.addToHitGrid(x, y, fullWidth, fullHeight, b.num);
 
     const focused = yield* Ref.get(b.focused);
     if (focused) {
       yield* updateCursorPosition();
     }
 
-    yield* framebuffer_buffer.resize(w, h);
+    // Resize framebuffer to content area (excluding scrollbar space)
+    const contentWidth = Math.max(1, w - (showVScrollbarUpdate ? 1 : 0));
+    const contentHeight = Math.max(1, h - (showHScrollbarUpdate ? 1 : 0));
+    yield* framebuffer_buffer.resize(contentWidth, contentHeight);
   });
 
   const onChange: TextareaElement["onChange"] = Effect.fn(function* (text: string) {
     const fn = options.onChange ?? Effect.fn(function* (text: string) {});
     yield* fn(text);
     yield* Ref.set(lastValue, text);
+  });
+
+  b.onMouseEvent = Effect.fn(function* (event) {
+    const fn = options.onMouseEvent ?? Effect.fn(function* (event) {});
+    yield* fn(event);
+    if (!event.defaultPrevented) {
+      // Handle mouse events for scrolling
+      if (event.type === "scroll" && event.scroll) {
+        const { direction, delta } = event.scroll;
+        const amount = Math.abs(delta) > 100 ? 3 : 1;
+
+        if (direction === "up") {
+          const currentOffset = yield* Ref.get(verticalScrollOffset);
+          yield* Ref.set(verticalScrollOffset, Math.max(0, currentOffset - amount));
+          yield* updateCursorPosition();
+          event.preventDefault();
+        } else if (direction === "down") {
+          const currentOffset = yield* Ref.get(verticalScrollOffset);
+          const { contentHeight } = yield* getContentDimensions();
+          const { visibleHeight } = yield* getVisibleDimensions();
+          const maxOffset = Math.max(0, contentHeight - visibleHeight);
+          yield* Ref.set(verticalScrollOffset, Math.min(maxOffset, currentOffset + amount));
+          yield* updateCursorPosition();
+          event.preventDefault();
+        } else if (direction === "left") {
+          const currentOffset = yield* Ref.get(horizontalScrollOffset);
+          yield* Ref.set(horizontalScrollOffset, Math.max(0, currentOffset - amount));
+          yield* updateCursorPosition();
+          event.preventDefault();
+        } else if (direction === "right") {
+          const currentOffset = yield* Ref.get(horizontalScrollOffset);
+          const { contentWidth } = yield* getContentDimensions();
+          const { visibleWidth } = yield* getVisibleDimensions();
+          const maxOffset = Math.max(0, contentWidth - visibleWidth);
+          yield* Ref.set(horizontalScrollOffset, Math.min(maxOffset, currentOffset + amount));
+          yield* updateCursorPosition();
+          event.preventDefault();
+        }
+      }
+    }
   });
 
   b.onKeyboardEvent = Effect.fn(function* (event) {
