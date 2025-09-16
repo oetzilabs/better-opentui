@@ -18,21 +18,21 @@ export type SetupFunction = (
   terminal: TerminalFunctions,
 ) => Effect.Effect<void, Errors.Collection | TypeError, Library | CliRenderer | FileSystem.FileSystem | Path.Path>;
 
-export type SceneSetup = {
+export type SceneSetup<CurrentKey extends string, AllKeys extends string = string> = {
   createElement: CliRenderer["createElement"];
-  switchTo: SceneManager["Type"]["switchTo"];
+  switchTo: (key: Exclude<AllKeys, CurrentKey>) => Effect.Effect<void, Errors.Collection>;
 };
 
-export type SceneSetupFunction = (
-  scene: SceneSetup,
+export type SceneSetupFunction<CurrentKey extends string, AllKeys extends string = string> = (
+  scene: SceneSetup<CurrentKey, AllKeys>,
 ) => Effect.Effect<
   BaseElement<any, any>[] | BaseElement<any, any>,
   Errors.Collection | TypeError,
   Library | CliRenderer | FileSystem.FileSystem | Path.Path
 >;
 
-export type ScenesSetup = {
-  [key: string]: SceneSetupFunction;
+export type ScenesSetup<Keys extends string = string> = {
+  [K in Keys]: SceneSetupFunction<K, Keys>;
 };
 
 export interface RunnerEventMap {
@@ -52,13 +52,13 @@ export type RunnerHooks = {
     [E in RunnerEvent]?: HookFunction<E>;
   };
 };
-export type RunOptions = RunnerHooks & {
+export type RunOptions<Keys extends string = string> = RunnerHooks & {
   setup?: SetupFunction;
-  scenes?: ScenesSetup;
+  scenes?: ScenesSetup<Keys>;
   debug?: boolean;
 };
 
-export const run = (options: RunOptions) =>
+export const run = <Keys extends string = string>(options: RunOptions<Keys>) =>
   Effect.gen(function* () {
     const shutdown = yield* Shutdown;
     const cli = yield* CliRenderer;
@@ -86,7 +86,7 @@ export const run = (options: RunOptions) =>
 
     yield* optionsSetup(cliSetupFunctions);
 
-    const optionsScenes = options.scenes ?? {};
+    const optionsScenes = options.scenes ?? ({} as ScenesSetup<Keys>);
 
     yield* cli.setScenes(optionsScenes);
 

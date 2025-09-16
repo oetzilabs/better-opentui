@@ -48,7 +48,7 @@ import {
   MouseParserLive,
 } from "../inputs/mouse";
 import { Library } from "../lib";
-import type { RunnerEvent, RunnerEventMap, RunnerHooks, ScenesSetup } from "../run";
+import type { RunnerEvent, RunnerEventMap, RunnerHooks, SceneSetupFunction, ScenesSetup } from "../run";
 import type { SelectionState } from "../types";
 import { Elements, ElementsLive, type ElementElement, type MethodParameters, type Methods } from "./elements";
 import type { BaseElement } from "./elements/base";
@@ -1683,23 +1683,29 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       return yield* root.getTreeInfo();
     });
 
-    const setScenes: (
-      scenes: ScenesSetup,
-    ) => Effect.Effect<
+    const setScenes = <Keys extends string>(
+      scenes: ScenesSetup<Keys>,
+    ): Effect.Effect<
       void,
       Collection | TypeError,
       Library | CliRenderer | FileSystem.FileSystem | Path.Path | SceneManager
-    > = Effect.fn(function* (scenes: ScenesSetup) {
-      yield* sceneManager.clear();
-      for (const [key, value] of Object.entries(scenes)) {
-        const v = yield* value({ createElement, switchTo: sceneManager.switchTo });
-        const elements = Array.isArray(v) ? v : [v];
-        const scene = yield* makeScene(key, ...elements);
-        yield* sceneManager.add(key, scene);
-      }
-      // I guess we set the current scene to the first one?
-      yield* sceneManager.switchTo(Object.keys(scenes)[0]);
-    });
+    > =>
+      Effect.gen(function* () {
+        yield* sceneManager.clear();
+        const entries = Object.entries(scenes) as [Keys, SceneSetupFunction<Keys, Keys>][];
+        for (const [key, value] of entries) {
+          const constrainedSwitchTo = (sceneKey: Exclude<Keys, typeof key>) => sceneManager.switchTo(sceneKey);
+          const v = yield* value({ createElement, switchTo: constrainedSwitchTo });
+          const elements = Array.isArray(v) ? v : [v];
+          const scene = yield* makeScene(key, ...elements);
+          yield* sceneManager.add(key, scene);
+        }
+        // I guess we set the current scene to the first one?
+        const firstSceneKey = Object.keys(scenes)[0] as Keys;
+        if (firstSceneKey) {
+          yield* sceneManager.switchTo(firstSceneKey);
+        }
+      });
 
     return {
       setScenes,
