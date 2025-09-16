@@ -1,9 +1,9 @@
 import { OptimizedBuffer } from "@better-opentui/core/src/buffer";
+import { RGBA } from "@better-opentui/core/src/colors/rgba";
 import type {
   RendererFailedToDrawPackedBuffer,
   RendererFailedToDrawSuperSampleBuffer,
 } from "@better-opentui/core/src/errors";
-import { RGBAClass } from "@better-opentui/core/src/types";
 import type { FileSystem } from "@effect/platform";
 import type { PlatformError } from "@effect/platform/Error";
 import { GPUCanvasContextMock } from "bun-webgpu";
@@ -552,7 +552,7 @@ export const makeCliCanvas = Effect.fn(function* (
             yield* Ref.set(superSampleDrawTimeMs, 0);
             const pixelData = new Uint8Array(toArrayBuffer(bufPtr, 0, rbb.size));
             const isBGRA = contextFormat === "bgra8unorm";
-            const backgroundColor = RGBAClass.fromValues(0, 0, 0, 1);
+            const backgroundColor = RGBA.fromValues(0, 0, 0, 1);
 
             for (let y = 0; y < h; y++) {
               for (let x = 0; x < w; x++) {
@@ -578,7 +578,7 @@ export const makeCliCanvas = Effect.fn(function* (
                 const g = gByte / 255.0;
                 const b = bByte / 255.0;
 
-                const cellColor = RGBAClass.fromValues(r, g, b, 1.0);
+                const cellColor = RGBA.fromValues(r, g, b, 1.0);
 
                 yield* buffer.setCell(x, y, "█", cellColor, backgroundColor);
               }

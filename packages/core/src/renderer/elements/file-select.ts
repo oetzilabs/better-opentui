@@ -326,7 +326,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       right: 0,
       top: 0,
       colors: options.colors,
-      text: options.sort && options.sort.length > 0 ? (options.sort[0].direction === "asc" ? "▲" : "▼") : "Ready",
+      content: options.sort && options.sort.length > 0 ? (options.sort[0].direction === "asc" ? "▲" : "▼") : "Ready",
     },
     statusBarElement,
   );
@@ -335,7 +335,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   const sortButton = yield* button(
     binds,
     {
-      text: "Sort",
+      content: "Sort",
       colors: options.colors,
       onClick: Effect.fn(function* () {
         const currentSort = yield* Ref.get(sortConfig);
