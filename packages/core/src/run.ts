@@ -6,11 +6,34 @@ import * as Errors from "./errors";
 import { Library, LibraryLive } from "./lib";
 import { createOtelLayer } from "./otel";
 import { CliRenderer, CliRendererLive, type HookFunction, type ShutdownReason } from "./renderer/cli";
+import type { BaseElement } from "./renderer/elements/base";
 import { Shutdown, ShutdownLive } from "./renderer/latch/shutdown";
+import { SceneManager, SceneManagerLive } from "./renderer/scenes/manager";
+
+export type TerminalFunctions = {
+  setBackgroundColor: CliRenderer["setBackgroundColor"];
+};
 
 export type SetupFunction = (
-  cli: CliRenderer,
+  terminal: TerminalFunctions,
 ) => Effect.Effect<void, Errors.Collection | TypeError, Library | CliRenderer | FileSystem.FileSystem | Path.Path>;
+
+export type SceneSetup = {
+  createElement: CliRenderer["createElement"];
+  switchTo: SceneManager["Type"]["switchTo"];
+};
+
+export type SceneSetupFunction = (
+  scene: SceneSetup,
+) => Effect.Effect<
+  BaseElement<any, any>[] | BaseElement<any, any>,
+  Errors.Collection | TypeError,
+  Library | CliRenderer | FileSystem.FileSystem | Path.Path
+>;
+
+export type ScenesSetup = {
+  [key: string]: SceneSetupFunction;
+};
 
 export interface RunnerEventMap {
   start: [cli: CliRenderer];
@@ -30,7 +53,8 @@ export type RunnerHooks = {
   };
 };
 export type RunOptions = RunnerHooks & {
-  setup: SetupFunction;
+  setup?: SetupFunction;
+  scenes?: ScenesSetup;
   debug?: boolean;
 };
 
@@ -38,6 +62,7 @@ export const run = (options: RunOptions) =>
   Effect.gen(function* () {
     const shutdown = yield* Shutdown;
     const cli = yield* CliRenderer;
+    const sceneManager = yield* SceneManager;
     const latch = yield* Effect.makeLatch();
     let onPanic: HookFunction<"panic"> = Effect.fn(function* (_cause: Cause.Cause<unknown>) {});
 
@@ -53,7 +78,17 @@ export const run = (options: RunOptions) =>
       onPanic = options.on.panic;
     }
 
-    yield* options.setup(cli);
+    const cliSetupFunctions = {
+      setBackgroundColor: cli.setBackgroundColor,
+    };
+
+    const optionsSetup = options.setup ?? Effect.fn(function* (terminal: TerminalFunctions) {});
+
+    yield* optionsSetup(cliSetupFunctions);
+
+    const optionsScenes = options.scenes ?? {};
+
+    yield* cli.setScenes(optionsScenes);
 
     const finalizer = Effect.fn(
       function* (exit: Exit.Exit<unknown, unknown>) {
@@ -82,7 +117,7 @@ export const run = (options: RunOptions) =>
 
     // return yield* Effect.never;
   }).pipe(
-    Effect.provide([CliRendererLive]),
+    Effect.provide([CliRendererLive, SceneManagerLive]),
     Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))),
     Effect.provide([ShutdownLive, LibraryLive, Logger.pretty, createOtelLayer("better-opentui")]),
     Effect.provide(BunContext.layer),

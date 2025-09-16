@@ -48,11 +48,13 @@ import {
   MouseParserLive,
 } from "../inputs/mouse";
 import { Library } from "../lib";
-import type { RunnerEvent, RunnerEventMap, RunnerHooks } from "../run";
+import type { RunnerEvent, RunnerEventMap, RunnerHooks, ScenesSetup } from "../run";
 import type { SelectionState } from "../types";
 import { Elements, ElementsLive, type ElementElement, type MethodParameters, type Methods } from "./elements";
 import type { BaseElement } from "./elements/base";
 import { Shutdown } from "./latch/shutdown";
+import { makeScene } from "./scenes";
+import { SceneManager, SceneManagerLive } from "./scenes/manager";
 import type { PixelResolution } from "./utils";
 import { PositionAbsolute, PositionRelative } from "./utils/position";
 import { Selection } from "./utils/selection";
@@ -104,11 +106,12 @@ export type CapturedOutput = {
 };
 
 export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
-  dependencies: [OpenTuiConfigLive, MouseParserLive, ElementsLive, DevToolsLive, AnimationFrameLive],
+  dependencies: [OpenTuiConfigLive, MouseParserLive, ElementsLive, DevToolsLive, AnimationFrameLive, SceneManagerLive],
   scoped: Effect.gen(function* () {
     const shutdown = yield* Shutdown;
     const cfg = yield* OpenTuiConfig;
     const animationFrame = yield* AnimationFrame;
+    const sceneManager = yield* SceneManager;
     const config = yield* cfg.get();
 
     const outputCache = yield* Ref.make<CapturedOutput[]>([]);
@@ -556,7 +559,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 return yield* shutdown.run;
               }
               if (isDumpHitGridCommand(parsedKey.raw)) {
-                const treeInfo = yield* root.getTreeInfo();
+                // const treeInfo = yield* root.getTreeInfo();
+                const treeInfo = yield* sceneManager.getTreeInfo();
                 const lastMousePos = yield* Ref.get(lastMousePosition);
                 const mouseInfo = `mouse (${lastMousePos.x}, ${lastMousePos.y})`;
                 const treeInfoWithMouse = `${mouseInfo}\n${treeInfo}`;
@@ -703,39 +707,37 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const recursiveMouseEvent: (
-      element: BaseElement<any, any>,
+      elements: BaseElement<any, any>[],
       mouseEventData: MouseEvent,
       x: number,
       y: number,
     ) => Effect.Effect<BaseElement<any, any>[], Collection, Library | FileSystem.FileSystem | Path.Path> = Effect.fn(
       "cli.recursiveMouseEvent",
-    )(function* (element: BaseElement<any, any>, mouseEventData: any, x: number, y: number) {
+    )(function* (elements: BaseElement<any, any>[], mouseEventData: any, x: number, y: number) {
       const matchingElements: BaseElement<any, any>[] = [];
 
-      // Get element's renderables (tree order provides natural layering)
-      const renderables = yield* Ref.get(element.renderables);
-
-      // Check each child in tree order (natural layering through parent-child relationships)
-      for (const child of renderables) {
-        const visible = yield* Ref.get(child.visible);
+      // Check each element in the array
+      for (const element of elements) {
+        const visible = yield* Ref.get(element.visible);
         if (!visible) continue;
 
-        const location = yield* Ref.get(child.location);
-        const dimensions = yield* Ref.get(child.dimensions);
+        const location = yield* Ref.get(element.location);
+        const dimensions = yield* Ref.get(element.dimensions);
 
-        // Check if mouse coordinates are within child's boundaries
+        // Check if mouse coordinates are within element's boundaries
         if (
           x >= location.x &&
           x < location.x + dimensions.widthValue &&
           y >= location.y &&
           y < location.y + dimensions.heightValue
         ) {
-          // Recursively collect child's descendants first (depth-first traversal)
-          const childMatches = yield* Effect.suspend(() => recursiveMouseEvent(child, mouseEventData, x, y));
+          // Recursively collect element's descendants first (depth-first traversal)
+          const renderables = yield* Ref.get(element.renderables);
+          const childMatches = yield* Effect.suspend(() => recursiveMouseEvent(renderables, mouseEventData, x, y));
 
-          // Add child and all its descendants to the collection
-          if (!matchingElements.includes(child)) {
-            matchingElements.push(child);
+          // Add element and all its descendants to the collection
+          if (!matchingElements.includes(element)) {
+            matchingElements.push(element);
             if (childMatches.length > 0) {
               for (const childMatch of childMatches) {
                 if (!matchingElements.includes(childMatch)) {
@@ -745,18 +747,6 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
             }
           }
         }
-      }
-
-      // Check if current element contains coordinates
-      const elementLocation = yield* Ref.get(element.location);
-      const elementDimensions = yield* Ref.get(element.dimensions);
-      if (
-        x >= elementLocation.x &&
-        x < elementLocation.x + elementDimensions.widthValue &&
-        y >= elementLocation.y &&
-        y < elementLocation.y + elementDimensions.heightValue
-      ) {
-        matchingElements.push(element);
       }
 
       return matchingElements;
@@ -778,8 +768,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
         // yield* debugBox.setLocation({ x: mouseEvent.x, y: mouseEvent.y });
 
+        const currentScene = yield* sceneManager.getCurrentScene();
+        if (!currentScene) return false;
+        const sceneElements = yield* Ref.get(currentScene.renderables);
+
         const event = new MouseEvent(root, mouseEvent);
-        const matchingElements = yield* recursiveMouseEvent(root, event, event.x, event.y);
+        const matchingElements = yield* recursiveMouseEvent(sceneElements, event, event.x, event.y);
         yield* Ref.set(lastMousePosition, { x: event.x, y: event.y });
         if (matchingElements.length === 0) {
           return false;
@@ -912,13 +906,20 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     });
 
     const handleKeyboardData = Effect.fn("cli.handleKeyboardData")(function* (parsedKey: ParsedKey) {
-      const keyboardEvent = new KeyboardEvent(root, {
+      const keyboardEvent = new KeyboardEvent(root as any, {
         ...parsedKey,
-        source: root,
+        source: root as any,
         type: "keydown",
       });
 
-      yield* root.processKeyboardEvent(keyboardEvent);
+      const currentScene = yield* sceneManager.getCurrentScene();
+      if (currentScene) {
+        const sceneElements = yield* Ref.get(currentScene.renderables);
+        yield* Effect.all(
+          sceneElements.map((element) => element.processKeyboardEvent(keyboardEvent)),
+          { concurrency: 10 },
+        );
+      }
 
       return true;
     });
@@ -1310,7 +1311,10 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
         yield* errorBox.empty();
       }
 
-      yield* root.update();
+      // !INFO: This was the old way of rendering the tree, but we are moving to scenes.
+      // yield* root.update();
+
+      yield* sceneManager.update();
 
       const pendingHitGridPrintout = yield* Ref.get(pendingHitGridDump);
       if (pendingHitGridPrintout) {
@@ -1388,7 +1392,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       if (!nextBuffer) {
         return yield* Effect.fail(new NextBufferNotAvailable());
       }
-      yield* root.doRender()(nextBuffer, deltaTime);
+
+      // !INFO: This was the old way of rendereing the tree, but we are moving to scenes.
+      // yield* root.doRender()(nextBuffer, deltaTime);
+
+      yield* sceneManager.render(nextBuffer, deltaTime);
+
       // if (config.debugOverlay?.enabled) {
       // yield* debugBox.render(nextBuffer, deltaTime);
       // }
@@ -1674,7 +1683,26 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       return yield* root.getTreeInfo();
     });
 
+    const setScenes: (
+      scenes: ScenesSetup,
+    ) => Effect.Effect<
+      void,
+      Collection | TypeError,
+      Library | CliRenderer | FileSystem.FileSystem | Path.Path | SceneManager
+    > = Effect.fn(function* (scenes: ScenesSetup) {
+      yield* sceneManager.clear();
+      for (const [key, value] of Object.entries(scenes)) {
+        const v = yield* value({ createElement, switchTo: sceneManager.switchTo });
+        const elements = Array.isArray(v) ? v : [v];
+        const scene = yield* makeScene(key, ...elements);
+        yield* sceneManager.add(key, scene);
+      }
+      // I guess we set the current scene to the first one?
+      yield* sceneManager.switchTo(Object.keys(scenes)[0]);
+    });
+
     return {
+      setScenes,
       getTreeInfo,
       getErrors,
       getSelectionText,

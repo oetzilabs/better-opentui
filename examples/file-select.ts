@@ -5,26 +5,28 @@ import { Effect } from "effect";
 if (import.meta.main) {
   run({
     // debug: true,
-    setup: Effect.fn("run.setup")(function* (cli) {
-      const parentContainer = yield* cli.createElement("group");
+    scenes: {
+      main: Effect.fn("run.scenes.main")(function* (scene) {
+        const parentContainer = yield* scene.createElement("group");
 
-      const fileSelectElement = yield* parentContainer.create("file-select", {
-        position: PositionRelative.make(1),
-        width: "100%",
-        height: "auto",
-        visible: true,
-        focused: true,
-        lookup_path: process.cwd(), // Start in current directory
-        search: { enabled: true },
-        statusBar: { enabled: true },
-        showScrollIndicator: true,
-        layout: ["search", "path", "file-list", "status-bar"],
-        onSelect: (files) => Effect.gen(function* () {}),
-      });
+        const fileSelectElement = yield* parentContainer.create("file-select", {
+          position: PositionRelative.make(1),
+          width: "100%",
+          height: "auto",
+          visible: true,
+          focused: true,
+          lookup_path: process.cwd(), // Start in current directory
+          search: { enabled: true },
+          statusBar: { enabled: true },
+          showScrollIndicator: true,
+          layout: ["search", "path", "file-list", "status-bar"],
+          onSelect: (files) => Effect.gen(function* () {}),
+        });
 
-      yield* parentContainer.add(fileSelectElement);
+        yield* parentContainer.add(fileSelectElement);
 
-      yield* cli.add(parentContainer);
-    }),
+        return parentContainer;
+      }),
+    },
   });
 }
