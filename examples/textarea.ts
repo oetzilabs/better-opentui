@@ -38,43 +38,7 @@ if (import.meta.main) {
             }),
         });
 
-        const button = yield* parentContainer.create("button", {
-          content: "Go to second",
-          position: PositionRelative.make(1),
-          top: 15,
-          colors: {
-            fg: Colors.Yellow,
-          },
-          onClick: () => scene.switchTo("second"),
-        });
-        yield* parentContainer.add(button);
-
         yield* parentContainer.add(textareaElement);
-
-        return parentContainer;
-      }),
-      second: Effect.fn("run.scenes.second")(function* (scene) {
-        const parentContainer = yield* scene.createElement("group");
-
-        const text = yield* parentContainer.create("text", "Hello World", {
-          position: PositionRelative.make(1),
-          top: 1,
-          textWrap: true,
-          colors: {
-            fg: Colors.Yellow,
-          },
-        });
-        const button = yield* parentContainer.create("button", {
-          content: "Go to main",
-          position: PositionRelative.make(1),
-          top: 15,
-          colors: {
-            fg: Colors.Yellow,
-          },
-          onClick: () => scene.switchTo("main"),
-        });
-        yield* parentContainer.add(text);
-        yield* parentContainer.add(button);
 
         return parentContainer;
       }),
