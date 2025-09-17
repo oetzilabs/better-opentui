@@ -9,8 +9,8 @@
     "postinstall": "bun run build-zig"
   },
   "devDependencies": {
-    "@effect/language-service": "^0.36.0",
-    "@ianvs/prettier-plugin-sort-imports": "^4.6.2",
+    "@effect/language-service": "^0.40.0",
+    "@ianvs/prettier-plugin-sort-imports": "^4.7.0",
     "@types/bun": "latest",
     "prettier": "^3.6.2",
     "vitest": "^3.2.4"
