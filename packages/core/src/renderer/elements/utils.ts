@@ -1,6 +1,6 @@
 import { type Pointer } from "bun:ffi";
-import { Effect, Ref } from "effect";
-import type { Input } from "../../colors";
+import { Effect, Ref, Schema } from "effect";
+import { Input } from "../../colors";
 import type { RendererFailedToAddToHitGrid } from "../../errors";
 import type { Library } from "../../lib";
 import type { SelectionState, WidthMethod } from "../../types";
@@ -24,19 +24,13 @@ export interface RenderContextInterface {
   widthMethod: WidthMethod;
 }
 
+export const ColorsThemeRecord = Schema.Record({ key: Schema.String, value: Input });
+
 export type ElementOptions<T extends string, E> = Partial<LayoutOptions> & {
   visible?: boolean;
   focused?: boolean;
   selectable?: boolean;
-  colors?: {
-    fg?: Input;
-    bg?: Input;
-    selectableFg?: Input;
-    selectableBg?: Input;
-    focusedBorderColor?: Input;
-    focusedBg?: Input;
-    focusedFg?: Input;
-  };
+  colors?: typeof ColorsThemeRecord.Type;
   overflow?: "visible" | "hidden" | "scroll";
   attributes?: number;
   onMouseEvent?: BaseElement<T, E>["onMouseEvent"];

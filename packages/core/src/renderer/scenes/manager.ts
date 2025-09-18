@@ -4,6 +4,7 @@ import type { Scene } from ".";
 import type { OptimizedBuffer } from "../../buffer/optimized";
 import type { Collection } from "../../errors";
 import type { Library } from "../../lib";
+import { SceneNotFound } from "./errors";
 
 export const makeSceneManager = Effect.fn(function* () {
   const scenes = yield* Ref.make<Map<string, Scene>>(new Map());
@@ -18,7 +19,9 @@ export const makeSceneManager = Effect.fn(function* () {
   const switchTo = Effect.fn(function* (key: string) {
     const s = yield* Ref.get(scenes);
     const scene = s.get(key);
-    if (!scene) return;
+    if (!scene) {
+      return yield* Effect.fail(new SceneNotFound({ name: key }));
+    }
     const hist = yield* Ref.get(history);
 
     const cs = yield* Ref.get(currentScene);
@@ -140,7 +143,7 @@ export interface SceneManagerInterface {
   add: (key: string, value: Scene) => Effect.Effect<void, Collection>;
   update: () => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   getCurrentScene: () => Effect.Effect<Scene | null, Collection>;
-  switchTo: (key: string) => Effect.Effect<void, Collection>;
+  switchTo: (key: string) => Effect.Effect<void, SceneNotFound>;
   back: () => Effect.Effect<void, Collection>;
   forward: () => Effect.Effect<void, Collection>;
   clear: () => Effect.Effect<void, Collection>;

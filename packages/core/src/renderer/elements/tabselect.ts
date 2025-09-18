@@ -52,6 +52,7 @@ export type TabSelectOptions<OptionsType = any, FBT extends string = "tab-select
     focusedBg?: Input;
     focusedFg?: Input;
     selectedDescriptionColor?: Input;
+    scrollIndicatorColor?: Input;
   };
   maxVisibleTabs?: number;
   onUpdate?: (self: TabSelectElement<OptionsType, FBT>) => Effect.Effect<void, Collection, Library>;
@@ -66,7 +67,7 @@ const DEFAULTS = {
     selectedFg: Colors.Yellow,
     focusedBg: Colors.Custom("#1a1a1a"),
     focusedFg: Colors.White,
-    scrollIndicator: Colors.Custom("#666666"),
+    scrollIndicatorColor: Colors.Custom("#666666"),
     descriptionColor: Colors.Gray,
     selectedDescriptionColor: Colors.Gray,
   },

@@ -4,11 +4,12 @@ import { Colors, type Input } from "../../colors";
 import { parseColor } from "../../colors/utils";
 import type { Collection } from "../../errors";
 import { Library } from "../../lib";
+import { DEFAULT_THEME } from "../../themes";
 import { FlexColumn } from "../utils/flex";
 import { PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { type FrameBufferOptions } from "./framebuffer";
-import type { Binds, ElementOptions } from "./utils";
+import type { Binds, ColorsThemeRecord, ElementOptions } from "./utils";
 
 export type StatusBarArea = "left" | "center" | "right";
 
@@ -27,16 +28,14 @@ export type StatusBarOptions<ST extends string = "status-bar"> = ElementOptions<
   };
 };
 
-const DEFAULTS = {
-  colors: {
-    bg: Colors.Custom("#2a2a2a"),
-    fg: Colors.White,
-  },
-} satisfies StatusBarOptions;
-
 export const statusBar = Effect.fn(function* <ST extends string = "status-bar">(
   binds: Binds,
-  options: StatusBarOptions<ST>,
+  options: StatusBarOptions<ST> = {
+    colors: {
+      bg: DEFAULT_THEME.elements["status-bar"].bg,
+      fg: DEFAULT_THEME.elements["status-bar"].fg,
+    },
+  },
   parentElement: BaseElement<any, any> | null = null,
 ) {
   if (!parentElement) return yield* Effect.fail(new Error("Parent element is required"));
@@ -53,12 +52,14 @@ export const statusBar = Effect.fn(function* <ST extends string = "status-bar">(
       left: 0,
       top: 0,
       selectable: false,
-      colors: {
-        bg: options.colors?.bg ?? DEFAULTS.colors.bg,
-        fg: options.colors?.fg ?? DEFAULTS.colors.fg,
-        focusedBg: options.colors?.bg ?? DEFAULTS.colors.bg,
-        focusedFg: options.colors?.fg ?? DEFAULTS.colors.fg,
-      },
+      ...(options.colors
+        ? {
+            colors: {
+              bg: options.colors.bg ?? DEFAULT_THEME.elements["status-bar"].bg,
+              fg: options.colors.fg ?? DEFAULT_THEME.elements["status-bar"].fg,
+            },
+          }
+        : {}),
     },
     parentElement,
   );
@@ -96,7 +97,6 @@ export const statusBar = Effect.fn(function* <ST extends string = "status-bar">(
     const ctx = yield* Ref.get(binds.context);
     const { x, y } = yield* Ref.get(b.location);
     const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-    yield* ctx.addToHitGrid(x, y, w, h, b.num);
 
     const v = yield* Ref.get(b.visible);
     if (!v) return;

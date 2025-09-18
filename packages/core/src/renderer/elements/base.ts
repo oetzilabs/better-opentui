@@ -38,7 +38,7 @@ import {
   PositionRelative,
 } from "../utils/position";
 import { createTrackedNode, TrackedNode } from "../utils/tracknode";
-import { type Binds, type ElementOptions } from "./utils";
+import { ColorsThemeRecord, type Binds, type ElementOptions } from "./utils";
 
 const validateOptions = Effect.fn(function* <T extends string, E>(id: string, options: ElementOptions<T, E>) {
   if (typeof options.width === "number") {
@@ -61,14 +61,7 @@ export type BaseElement<T extends string, E> = {
   selectable: Ref.Ref<boolean>;
   parent: Ref.Ref<BaseElement<any, E> | null>;
   visible: Ref.Ref<boolean>;
-  colors: Ref.Ref<{
-    fg: Input;
-    bg: Input;
-    selectableFg: Input;
-    selectableBg: Input;
-    focusedFg: Input;
-    focusedBg: Input;
-  }>;
+  colors: Ref.Ref<typeof ColorsThemeRecord.Type>;
   attributes: Ref.Ref<number>;
   location: Ref.Ref<{
     x: number;
@@ -90,14 +83,18 @@ export type BaseElement<T extends string, E> = {
   renderables: Ref.Ref<BaseElement<any, E>[]>;
   yogaConfig: YogaConfig;
   focused: Ref.Ref<boolean>;
+  loadColorTheme: (theme: typeof ColorsThemeRecord.Type) => Effect.Effect<void, Collection, Library>;
   ensureZIndexSorted: () => Effect.Effect<void>;
   getElements: () => Effect.Effect<BaseElement<any, E>[]>;
   getElementsCount: () => Effect.Effect<number>;
   setVisible: (value: boolean) => Effect.Effect<void>;
   update: () => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   onUpdate: (self: E) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
-  doRender: () => (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, Collection, Library>;
-  render: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, Collection, Library>;
+  doRender: () => (
+    buffer: OptimizedBuffer,
+    deltaTime: number,
+  ) => Effect.Effect<void, Collection | CantParseHexColor, Library>;
+  render: (buffer: OptimizedBuffer, deltaTime: number) => Effect.Effect<void, Collection | CantParseHexColor, Library>;
   add: (container: BaseElement<any, any>, index?: number | undefined) => Effect.Effect<void, Collection, never>;
   remove: (container: BaseElement<any, any>) => Effect.Effect<void, Collection, never>;
   setLocation: (loc: { x: number; y: number }) => Effect.Effect<void, never, never>;
@@ -206,14 +203,8 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
   });
   const selectable = yield* Ref.make(options.selectable ?? true);
   const parent = yield* Ref.make<BaseElement<any, E> | null>(parentElement);
-  const colors = yield* Ref.make({
-    fg: options.colors?.fg ?? Colors.Black,
-    bg: options.colors?.bg ?? Colors.Transparent,
-    selectableFg: options.colors?.selectableFg ?? Colors.Transparent,
-    selectableBg: options.colors?.selectableBg ?? Colors.Transparent,
-    focusedFg: options.colors?.focusedFg ?? Colors.Black,
-    focusedBg: options.colors?.focusedBg ?? Colors.Transparent,
-  });
+  // console.debug(`type: ${type}, colors: ${JSON.stringify(options.colors ?? {})}`);
+  const colors = yield* Ref.make(options.colors ?? {});
   const attributes = yield* Ref.make(options.attributes ?? 0);
   const _yogaPerformancePositionUpdated = yield* Ref.make(false);
   const needsZIndexSort = yield* Ref.make(false);
@@ -291,8 +282,8 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
   const updateYogaPosition = Effect.fn(function* (position: Position) {
     const node = layoutNode.yogaNode;
     const { top, right, bottom, left } = position;
-    const { type } = yield* Ref.get(location);
-    if (isPositionRelative(type)) {
+    const { type: posType } = yield* Ref.get(location);
+    if (isPositionRelative(posType)) {
       if (isPositionInput(top)) {
         if (top === "auto") {
           node.setPositionAuto(Edge.Top);
@@ -328,10 +319,10 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
       }
       yield* requestLayout();
     } else {
-      if (typeof top === "number" && isPositionAbsolute(type)) {
+      if (typeof top === "number") {
         yield* Ref.update(location, (l) => ({ ...l, y: top }));
       }
-      if (typeof left === "number" && isPositionAbsolute(type)) {
+      if (typeof left === "number") {
         yield* Ref.update(location, (l) => ({ ...l, x: left }));
       }
       yield* Ref.set(_yogaPerformancePositionUpdated, false);
@@ -572,10 +563,10 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
     // Get computed layout for this element
     const layout = layoutNode.yogaNode.getComputedLayout();
     const { type } = yield* Ref.get(location);
-    const yppu = yield* Ref.get(_yogaPerformancePositionUpdated);
-    if (isPositionRelative(type) || yppu) {
-      yield* Ref.update(location, (l) => ({ ...l, x: layout.left, y: layout.top }));
-    }
+    // const yppu = yield* Ref.get(_yogaPerformancePositionUpdated);
+    // if (isPositionRelative(type) || yppu) {
+    //   yield* Ref.update(location, (l) => ({ ...l, x: layout.left, y: layout.top }));
+    // }
 
     const newWidth = Math.max(layout.width, 1);
     const newHeight = Math.max(layout.height, 1);
@@ -842,6 +833,10 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
     }
   });
 
+  const loadColorTheme = Effect.fn(function* (theme: typeof ColorsThemeRecord.Type) {
+    yield* Ref.update(colors, (c) => ({ ...c, ...theme, ...options.colors }));
+  });
+
   return {
     id,
     num,
@@ -859,6 +854,7 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
     lineInfo,
     zIndex,
     renderables,
+    loadColorTheme,
     ensureZIndexSorted,
     setVisible,
     render,

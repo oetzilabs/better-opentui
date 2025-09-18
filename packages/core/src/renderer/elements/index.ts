@@ -2,6 +2,7 @@ import type { FileSystem, Path } from "@effect/platform";
 import { Effect, Ref } from "effect";
 import { MissingRenderContext } from "../../errors";
 import type { Library } from "../../lib";
+import type { ThemeSchema } from "../../themes/schema";
 import type { SelectionState } from "../../types";
 import { asciifont } from "./asciifont";
 import type { BaseElement } from "./base";
@@ -22,7 +23,7 @@ import { statusBar } from "./status-bar";
 import { tabselect } from "./tabselect";
 import { text } from "./text";
 import { textarea } from "./textarea";
-import { type RemoveBindsFromArgs, type RenderContextInterface } from "./utils";
+import { ColorsThemeRecord, type RemoveBindsFromArgs, type RenderContextInterface } from "./utils";
 
 export class Elements extends Effect.Service<Elements>()("Elements", {
   dependencies: [],
@@ -589,13 +590,21 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
             create: CreateElementBound;
           };
         }
-        yield* Ref.update(renderables, (es) => {
-          es.push(element);
-          return es;
-        });
 
         return element;
       });
+
+    const loadColorTheme = Effect.fn(function* (theme: typeof ThemeSchema.Type) {
+      const es = yield* Ref.get(renderables);
+
+      for (const [elementType, elementColors] of Object.entries(theme.elements)) {
+        for (const element of es) {
+          if (element.type === elementType) {
+            yield* element.loadColorTheme(elementColors);
+          }
+        }
+      }
+    });
 
     return {
       ...element_functions,
@@ -603,6 +612,7 @@ export class Elements extends Effect.Service<Elements>()("Elements", {
       renderables,
       getRenderable,
       destroy,
+      loadColorTheme,
     };
   }),
 }) {}
@@ -611,7 +621,7 @@ export const ElementsLive = Elements.Default;
 
 export type MethodsObj = Omit<
   Elements,
-  "updateContext" | "_tag" | "renderables" | "getRenderable" | "destroy" | "create"
+  "updateContext" | "_tag" | "renderables" | "getRenderable" | "destroy" | "create" | "loadColorTheme"
 >;
 
 export type Methods = keyof MethodsObj;

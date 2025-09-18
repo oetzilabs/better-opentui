@@ -65,7 +65,7 @@ if (import.meta.main) {
             focusedFg: Colors.Yellow,
             selectedBg: Colors.Green,
             selectedFg: Colors.Black,
-            scrollIndicator: Colors.Gray,
+            scrollIndicatorColor: Colors.Gray,
           },
           onSelect: (item) =>
             Effect.gen(function* () {

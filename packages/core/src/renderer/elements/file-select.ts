@@ -7,6 +7,7 @@ import type { Collection } from "../../errors";
 import type { KeyboardEvent } from "../../events/keyboard";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { Library } from "../../lib";
+import { DEFAULT_THEME } from "../../themes";
 import { collection, type Sorting } from "../utils/collection";
 import { PositionRelative } from "../utils/position";
 import { type BaseElement } from "./base";
@@ -17,7 +18,7 @@ import { input } from "./input";
 import { list, type RenderItemContext } from "./list";
 import { statusBar } from "./status-bar";
 import { text } from "./text";
-import type { Binds, ElementOptions } from "./utils";
+import type { Binds, ColorsThemeRecord, ElementOptions } from "./utils";
 
 // Sort schemas
 const SortCriterion = Schema.Union(
@@ -86,15 +87,40 @@ export type FileSelectOptions<FBT extends string = "file-select"> = ElementOptio
     fg?: Input;
     selectedBg?: Input;
     selectedFg?: Input;
+
     focusedBg?: Input;
     focusedFg?: Input;
-    scrollIndicator?: Input;
-    pathBg?: Input;
-    pathFg?: Input;
+    scrollIndicatorColor?: Input;
+
+    searchBg?: Input;
+    searchFg?: Input;
+    searchFocusedBg?: Input;
+    searchFocusedFg?: Input;
+    searchPlaceholderColor?: Input;
+    searchCursorColor?: Input;
+
+    statusBarBg?: Input;
+    statusBarFg?: Input;
+
+    statusBarStatusBg?: Input;
+    statusBarStatusFg?: Input;
+
+    sortButtonBg?: Input;
+    sortButtonFg?: Input;
+    sortButtonHoverBg?: Input;
+    sortButtonHoverFg?: Input;
+    sortButtonFocusBg?: Input;
+    sortButtonFocusFg?: Input;
+    sortButtonPressedBg?: Input;
+    sortButtonPressedFg?: Input;
+
     directoryFg?: Input;
     directoryBg?: Input;
     fileBg?: Input;
     fileFg?: Input;
+
+    pathBg?: Input;
+    pathFg?: Input;
   };
   showScrollIndicator?: boolean;
   selectedIndex?: number;
@@ -113,21 +139,6 @@ export type FileSelectOptions<FBT extends string = "file-select"> = ElementOptio
 };
 
 const DEFAULTS = {
-  colors: {
-    bg: Colors.Transparent,
-    fg: Colors.White,
-    selectedBg: Colors.Custom("#334455"),
-    selectedFg: Colors.Yellow,
-    focusedBg: Colors.Custom("#1a1a1a"),
-    focusedFg: Colors.White,
-    scrollIndicator: Colors.Custom("#666666"),
-    directoryBg: Colors.Custom("#2a2a2a"),
-    directoryFg: Colors.Custom("#4A90E2"), // Blue for directories
-    fileBg: Colors.Transparent,
-    fileFg: Colors.Custom("#7ED321"), // Green for files
-    pathBg: Colors.Custom("#2a2a2a"),
-    pathFg: Colors.White,
-  },
   showScrollIndicator: false,
   selectedIndex: -1,
   search: { enabled: false, config: { keys: ["name"] } },
@@ -150,14 +161,11 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
+  const dt = DEFAULT_THEME.elements["file-select"];
+
   const lookupPath = yield* Ref.make(path.join(process.cwd(), options.lookup_path ?? DEFAULTS.lookup_path));
 
   const searchOpts = options.search ?? DEFAULTS.search;
-
-  const internalColors = yield* Ref.make({
-    ...options.colors,
-    ...DEFAULTS.colors,
-  });
 
   const parentDimensions = yield* Ref.get(parentElement.dimensions);
 
@@ -193,24 +201,15 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   const wrapper = yield* group(
     binds,
     {
-      position: PositionRelative.make(1),
+      position: options.position ?? PositionRelative.make(1),
+      top: options.top ?? 0,
+      left: options.left ?? 0,
       width: "100%",
       height: "auto",
-      left: 0,
-      top: 0,
       visible: true,
     },
     parentElement,
   );
-  const cols = yield* Ref.get(internalColors);
-  const directoryFg = yield* parseColor(cols.directoryFg);
-  const fileFg = yield* parseColor(cols.fileFg);
-  const selFg = yield* parseColor(cols.selectedFg);
-  const directoryBg = yield* parseColor(cols.directoryBg);
-  const fileBg = yield* parseColor(cols.fileBg);
-  const selBg = yield* parseColor(cols.selectedBg);
-  const focusedBg = yield* parseColor(cols.focusedBg);
-  const focusedFg = yield* parseColor(cols.focusedFg);
 
   const listElement = yield* list(
     binds,
@@ -218,25 +217,35 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     {
       position: PositionRelative.make(1),
       width: "100%",
+      visible: true,
       left: 0,
       top: 2,
+      focused: options.focused ?? true,
       height: options.height
         ? options.height === "auto"
-          ? Math.min(
-              20, // Default file list height
-              parentDimensions.heightValue - searchHeight - pathHeight - statusBarHeight, // Space for search + path + status bar if enabled
-            )
+          ? Math.max(20, parentDimensions.heightValue - searchHeight - pathHeight - statusBarHeight)
           : options.height
-        : Math.min(20, parentDimensions.heightValue - searchHeight - pathHeight - statusBarHeight),
-      colors: {
-        bg: options.colors?.bg ?? DEFAULTS.colors.bg,
-        fg: options.colors?.fg ?? DEFAULTS.colors.fg,
-        focusedBg: options.colors?.focusedBg ?? DEFAULTS.colors.focusedBg,
-        focusedFg: options.colors?.focusedFg ?? DEFAULTS.colors.focusedFg,
-        selectedBg: options.colors?.selectedBg ?? DEFAULTS.colors.selectedBg,
-        selectedFg: options.colors?.selectedFg ?? DEFAULTS.colors.selectedFg,
-        scrollIndicator: options.colors?.scrollIndicator ?? DEFAULTS.colors.scrollIndicator,
-      },
+        : Math.max(20, parentDimensions.heightValue - searchHeight - pathHeight - statusBarHeight),
+      ...(options.colors
+        ? {
+            colors: {
+              bg: options.colors.bg ?? dt.bg,
+              fg: options.colors.fg ?? dt.fg,
+              selectedBg: options.colors.selectedBg ?? dt.selectedBg,
+              selectedFg: options.colors.selectedFg ?? dt.selectedFg,
+
+              focusedBg: options.colors.focusedBg ?? dt.focusedBg,
+              focusedFg: options.colors.focusedFg ?? dt.focusedFg,
+              scrollIndicatorColor: options.colors.scrollIndicatorColor ?? dt.scrollIndicatorColor,
+
+              directoryBg: options.colors.directoryBg ?? dt.directoryBg,
+              directoryFg: options.colors.directoryFg ?? dt.directoryFg,
+
+              fileBg: options.colors.fileBg ?? dt.fileBg,
+              fileFg: options.colors.fileFg ?? dt.fileFg,
+            },
+          }
+        : {}),
       overflow: "scroll",
       showScrollIndicator: options.showScrollIndicator ?? DEFAULTS.showScrollIndicator,
       renderItem: Effect.fn(function* (buffer, framebuffer_buffer, context: RenderItemContext<FileOption>) {
@@ -248,19 +257,20 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
         const dateInfo = file.modified ? ` ${file.modified.toLocaleDateString()}` : "";
         const nameContent = `${icon} ${file.name}${sizeInfo}${dateInfo}`;
 
-        let fg = file.isDirectory ? directoryFg : fileFg;
+        let fg = yield* parseColor(file.isDirectory ? colors.directoryFg : colors.fileFg);
         if (isSelected) {
-          fg = selFg;
+          fg = yield* parseColor(colors.selectedFg);
         }
         if (isFocused) {
-          fg = focusedFg;
+          fg = yield* parseColor(colors.focusedFg);
         }
-        let bg = file.isDirectory ? directoryBg : fileBg;
+
+        let bg = yield* parseColor(file.isDirectory ? colors.directoryBg : colors.fileBg);
         if (isSelected) {
-          bg = selBg;
+          bg = yield* parseColor(colors.selectedBg);
         }
         if (isFocused) {
-          bg = focusedBg;
+          bg = yield* parseColor(colors.focusedBg);
         }
 
         yield* Effect.all(
@@ -302,10 +312,14 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       position: PositionRelative.make(1),
       height: 1,
       width: "100%",
-      colors: {
-        bg: options.colors?.pathBg ?? DEFAULTS.colors.pathBg,
-        fg: options.colors?.pathFg ?? DEFAULTS.colors.pathFg,
-      },
+      ...(options.colors
+        ? {
+            colors: {
+              bg: options.colors.pathBg ?? dt.pathBg,
+              fg: options.colors.pathFg ?? dt.pathFg,
+            },
+          }
+        : {}),
     },
     wrapper,
   );
@@ -313,20 +327,34 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   const statusBarElement = yield* statusBar(
     binds,
     {
-      colors: options.colors,
+      ...(options.colors
+        ? {
+            colors: {
+              bg: options.colors.statusBarRightBg ?? dt.statusBarRightBg,
+              fg: options.colors.statusBarRightFg ?? dt.statusBarRightFg,
+            },
+          }
+        : {}),
     },
     wrapper,
   );
 
-  const statusBarRightText = yield* button(
+  const statusBarSortStatus = yield* text(
     binds,
+    options.sort && options.sort.length > 0 ? (options.sort[0].direction === "asc" ? "▲" : "▼") : "Ready",
     {
       position: PositionRelative.make(1),
       height: 1,
       right: 0,
       top: 0,
-      colors: options.colors,
-      content: options.sort && options.sort.length > 0 ? (options.sort[0].direction === "asc" ? "▲" : "▼") : "Ready",
+      ...(options.colors
+        ? {
+            colors: {
+              bg: options.colors.statusBarRightBg ?? dt.statusBarRightBg,
+              fg: options.colors.statusBarRightFg ?? dt.statusBarRightFg,
+            },
+          }
+        : {}),
     },
     statusBarElement,
   );
@@ -336,7 +364,6 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     binds,
     {
       content: "Sort",
-      colors: options.colors,
       onClick: Effect.fn(function* () {
         const currentSort = yield* Ref.get(sortConfig);
         const hasDateSort = currentSort.some((criterion) => criterion.type === "date");
@@ -351,14 +378,28 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
             ];
         yield* setSort(newSort);
         const sortText = newSort.some((criterion) => criterion.type === "date") ? "Date" : "Name";
-        yield* statusBarRightText.setText(`Sort: ${sortText}`);
+        yield* statusBarSortStatus.setContent(`Sort: ${sortText}`);
       }),
+      ...(options.colors
+        ? {
+            colors: {
+              bg: options.colors.sortButtonBg ?? dt.sortButtonBg,
+              fg: options.colors.sortButtonFg ?? dt.sortButtonFg,
+              hoverBg: options.colors.sortButtonHoverBg ?? dt.sortButtonHoverBg,
+              hoverFg: options.colors.sortButtonHoverFg ?? dt.sortButtonHoverFg,
+              focusedBg: options.colors.sortButtonFocusBg ?? dt.sortButtonFocusBg,
+              focusedFg: options.colors.sortButtonFocusFg ?? dt.sortButtonFocusFg,
+              pressedBg: options.colors.sortButtonPressedBg ?? dt.sortButtonPressedBg,
+              pressedFg: options.colors.sortButtonPressedFg ?? dt.sortButtonPressedFg,
+            },
+          }
+        : {}),
     },
     statusBarElement,
   );
 
   yield* statusBarElement.addElement("left", sortButton);
-  yield* statusBarElement.addElement("right", statusBarRightText);
+  yield* statusBarElement.addElement("right", statusBarSortStatus);
 
   // Always add to parent, but control visibility
   yield* statusBarElement.setVisible(statusBarEnabled);
@@ -370,7 +411,6 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       ...options,
       focused: true,
       visible: searchOpts.enabled,
-      colors: options.colors ?? DEFAULTS.colors,
       width: "100%",
       position: PositionRelative.make(1),
       height: 1,
@@ -391,6 +431,18 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
         }
         yield* listElement.setFocusedIndex(0);
       }),
+      ...(options.colors
+        ? {
+            colors: {
+              bg: options.colors.searchBg ?? dt.searchBg,
+              fg: options.colors.searchFg ?? dt.searchFg,
+              focusedBg: options.colors.searchFocusedBg ?? dt.searchFocusedBg,
+              focusedFg: options.colors.searchFocusedFg ?? dt.searchFocusedFg,
+              placeholderColor: options.colors.searchPlaceholderColor ?? dt.searchPlaceholderColor,
+              cursorColor: options.colors.searchCursorColor ?? dt.searchCursorColor,
+            },
+          }
+        : {}),
     },
     wrapper,
   );
@@ -497,16 +549,11 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     const v = yield* Ref.get(wrapper.visible);
     if (!v) return;
 
-    const ctx = yield* Ref.get(binds.context);
-    const { x, y } = yield* Ref.get(wrapper.location);
-    const { widthValue: w, heightValue: h } = yield* Ref.get(wrapper.dimensions);
-    yield* ctx.addToHitGrid(x, y, w, h, wrapper.num);
-
     let topY = 0;
     const elements = yield* Ref.get(wrapper.renderables);
     for (const element of elements) {
       const { heightValue: height } = yield* Ref.get(element.dimensions);
-      const loc = yield* Ref.updateAndGet(element.location, (loc) => ({ ...loc, y: topY, x: loc.x }));
+      yield* Ref.update(element.location, (loc) => ({ ...loc, y: topY, x: loc.x }));
       yield* element.update();
       topY += height;
     }
@@ -515,7 +562,8 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
   const onKeyboardEvent = Effect.fn(function* (event) {
     const fn = options.onKeyboardEvent ?? Effect.fn(function* (event) {});
     yield* fn(event);
-    if (!event.defaultPrevented) {
+    const isFocused = yield* Ref.get(listElement.focused);
+    if (!event.defaultPrevented && isFocused) {
       yield* handleKeyPress(event.parsedKey);
     }
   });
@@ -625,8 +673,61 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
     );
   }
 
+  const loadColorTheme = Effect.fn(function* (theme: typeof ColorsThemeRecord.Type) {
+    yield* pathText.loadColorTheme({
+      bg: theme.pathBg,
+      fg: theme.pathFg,
+    });
+
+    yield* searchInput.loadColorTheme({
+      bg: theme.searchBg,
+      fg: theme.searchFg,
+      focusedBg: theme.searchFocusedBg,
+      focusedFg: theme.searchFocusedFg,
+      placeholderColor: theme.searchPlaceholderColor,
+    });
+
+    yield* statusBarSortStatus.loadColorTheme({
+      bg: theme.statusBarStatusBg,
+      fg: theme.statusBarStatusFg,
+    });
+
+    yield* statusBarElement.loadColorTheme({
+      bg: theme.statusBarBg,
+      fg: theme.statusBarFg,
+    });
+
+    yield* listElement.loadColorTheme({
+      bg: theme.bg,
+      fg: theme.fg,
+      focusedBg: theme.focusedBg,
+      focusedFg: theme.focusedFg,
+      selectedBg: theme.selectedBg,
+      selectedFg: theme.selectedFg,
+      scrollIndicatorColor: theme.scrollIndicatorColor,
+
+      directoryBg: theme.directoryBg,
+      directoryFg: theme.directoryFg,
+      fileBg: theme.fileBg,
+      fileFg: theme.fileFg,
+    });
+
+    yield* sortButton.loadColorTheme({
+      bg: theme.sortButtonBg,
+      fg: theme.sortButtonFg,
+      hoverBg: theme.sortButtonHoverBg,
+      hoverFg: theme.sortButtonHoverFg,
+      focusBg: theme.sortButtonFocusBg,
+      focusFg: theme.sortButtonFocusFg,
+      pressedBg: theme.sortButtonPressedBg,
+      pressedFg: theme.sortButtonPressedFg,
+    });
+  });
+
   return {
     ...wrapper,
+    type: "file-select" as const,
+    loadColorTheme,
     onKeyboardEvent,
     onSelect,
     setLookupPath,

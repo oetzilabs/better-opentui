@@ -8,13 +8,14 @@ import { parseColor } from "../../colors/utils";
 import type { Collection } from "../../errors";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { Library } from "../../lib";
+import { DEFAULT_THEME } from "../../themes";
 import { PositionAbsolute, PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { type FrameBufferOptions } from "./framebuffer";
 import { group, type GroupElement } from "./group";
 import { input } from "./input";
 import { text } from "./text";
-import type { Binds, ElementOptions } from "./utils";
+import type { Binds, ColorsThemeRecord, ElementOptions } from "./utils";
 
 export interface SelectOption<T> {
   name: string;
@@ -47,6 +48,7 @@ export interface MultiSelectElement<T = any, FBT extends string = "multi-select"
     self: MultiSelectElement<T, FBT>,
   ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   onSelect: (options: SelectOption<T>[]) => Effect.Effect<void, Collection, Library>;
+  loadColorTheme: (theme: typeof ColorsThemeRecord.Type) => Effect.Effect<void, Collection, Library>;
 }
 
 export type MultiSelectOptions<OptionsType = any, FBT extends string = "multi-select"> = ElementOptions<
@@ -58,14 +60,19 @@ export type MultiSelectOptions<OptionsType = any, FBT extends string = "multi-se
     fg?: Input;
     selectedBg?: Input;
     selectedFg?: Input;
+
     focusedBg?: Input;
     focusedFg?: Input;
-    scrollIndicator?: Input;
+    scrollIndicatorColor?: Input;
+
+    searchBg?: Input;
+    searchFg?: Input;
+    searchFocusedBg?: Input;
+    searchFocusedFg?: Input;
+
     descriptionColor?: Input;
-    selectedDescriptionColor?: Input;
     disabledDescriptionColor?: Input;
-    headerBg?: Input;
-    headerFg?: Input;
+    selectedDescriptionColor?: Input;
   };
   options?: SelectOption<OptionsType>[];
   selectedIds?: string[];
@@ -84,19 +91,7 @@ export type MultiSelectOptions<OptionsType = any, FBT extends string = "multi-se
 };
 
 const DEFAULTS = {
-  colors: {
-    bg: Colors.Transparent,
-    fg: Colors.White,
-    selectedBg: Colors.Custom("#334455"),
-    selectedFg: Colors.Yellow,
-    focusedBg: Colors.Custom("#1a1a1a"),
-    focusedFg: Colors.White,
-    scrollIndicator: Colors.Custom("#666666"),
-    descriptionColor: Colors.Gray,
-    selectedDescriptionColor: Colors.Gray,
-    headerBg: Colors.Custom("#2a2a2a"),
-    headerFg: Colors.White,
-  },
+  colors: DEFAULT_THEME.elements["multi-select"],
   wrapSelection: false,
   showDescription: true,
   showScrollIndicator: false,
@@ -124,20 +119,12 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     binds,
     {
       ...options,
-      position: PositionRelative.make(1),
-      left: 0,
-      top: searchOpts.enabled && searchOpts.location === "top" ? 1 : -1, // weird that I have to do -1 here...
       height: options.height
         ? options.height === "auto"
-          ? (options.options ?? []).length * 2
+          ? Math.max(2, (options.options ?? []).length) * 2
           : options.height
         : options.height,
-      colors: {
-        bg: options.colors?.bg ?? DEFAULTS.colors.bg,
-        fg: options.colors?.fg ?? DEFAULTS.colors.fg,
-        focusedBg: options.colors?.focusedBg ?? DEFAULTS.colors.focusedBg,
-        focusedFg: options.colors?.focusedFg ?? DEFAULTS.colors.focusedFg,
-      },
+      ...(options.colors ? { colors: options.colors } : DEFAULTS.colors),
     },
     parentElement,
   );
@@ -162,14 +149,7 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
   const showScrollIndicator = yield* Ref.make(options.showScrollIndicator ?? DEFAULTS.showScrollIndicator);
   const description = yield* Ref.make(options.description ?? DEFAULTS.description);
 
-  const selectedBg = yield* Ref.make(options.colors?.selectedBg ?? DEFAULTS.colors.selectedBg);
-  const selectedFg = yield* Ref.make(options.colors?.selectedFg ?? DEFAULTS.colors.selectedFg);
-  const scrollIndicatorColor = yield* Ref.make(options.colors?.scrollIndicator ?? DEFAULTS.colors.scrollIndicator);
   const itemSpacing = yield* Ref.make(options.itemSpacing ?? DEFAULTS.itemSpacing);
-  const descriptionColor = yield* Ref.make(options.colors?.descriptionColor ?? DEFAULTS.colors.descriptionColor);
-  const selectedDescriptionColor = yield* Ref.make(
-    options.colors?.selectedDescriptionColor ?? DEFAULTS.colors.selectedDescriptionColor,
-  );
 
   // Calculate max visible items
   const linesPerItem = yield* Ref.make((options.showDescription ?? DEFAULTS.showDescription) ? 2 : 1);
@@ -192,8 +172,7 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     {
       ...options,
       focused: options.focused ?? false,
-      visible: true,
-      colors: options.colors ?? DEFAULTS.colors,
+      visible: options.search?.enabled ?? false,
       width: options.width,
       position: PositionRelative.make(1),
       height: 1,
@@ -217,6 +196,18 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
         }
         yield* updateScrollOffset();
       }),
+      ...(options.colors
+        ? {
+            colors: {
+              bg: options.colors.searchBg ?? DEFAULT_THEME.elements["multi-select"].searchBg,
+              fg: options.colors.searchFg ?? DEFAULT_THEME.elements["multi-select"].searchFg,
+              focusedBg: options.colors.searchFocusedBg ?? DEFAULT_THEME.elements["multi-select"].searchFocusedBg,
+              focusedFg: options.colors.searchFocusedFg ?? DEFAULT_THEME.elements["multi-select"].searchFocusedFg,
+              placeholderColor:
+                options.colors.searchPlaceholderColor ?? DEFAULT_THEME.elements["multi-select"].searchPlaceholderColor,
+            },
+          }
+        : {}),
     },
     parentElement,
   );
@@ -252,16 +243,12 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     const scroll = yield* Ref.get(scrollOffset);
     const showDesc = yield* Ref.get(showDescription);
     const desc = yield* Ref.get(description);
-    const selectBg = yield* Ref.get(selectedBg);
-    const selBg = yield* parseColor(selectBg);
-    const selectFg = yield* Ref.get(selectedFg);
-    const selFg = yield* parseColor(selectFg);
+
+    const selBg = yield* parseColor(colors.selectedBg);
+    const selFg = yield* parseColor(colors.selectedFg);
     const baseFg = yield* parseColor(focused ? colors.focusedFg : colors.fg);
-    const baseBg = yield* parseColor(focused ? colors.focusedBg : colors.bg);
-    const descColor = yield* Ref.get(descriptionColor);
-    const selDescColor = yield* Ref.get(selectedDescriptionColor);
-    const parsedDescColor = yield* parseColor(descColor);
-    const parsedSelDescColor = yield* parseColor(selDescColor);
+    const parsedDescColor = yield* parseColor(colors.descriptionColor);
+    const parsedSelDescColor = yield* parseColor(colors.selectedDescriptionColor);
 
     const fnt = yield* Ref.get(font);
 
@@ -315,7 +302,6 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
 
       if (showDesc && itemY + fontHeight < contentY + contentHeight) {
         const descColor = isFocused ? parsedSelDescColor : parsedDescColor;
-        const descBg = b.focused ? baseBg : bgColor;
         const descText = option.description ?? desc;
         yield* framebuffer_buffer.drawText(descText, descX, itemY + fontHeight, descColor);
       }
@@ -328,8 +314,7 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
       const indicatorHeight = Math.max(1, h - 2);
       const indicatorY = 1 + Math.floor(scrollPercent * indicatorHeight);
       const indicatorX = w - 1;
-      const sic = yield* Ref.get(scrollIndicatorColor);
-      const parsedSIC = yield* parseColor(sic);
+      const parsedSIC = yield* parseColor(colors.scrollIndicatorColor);
       yield* framebuffer_buffer.drawText("█", indicatorX, indicatorY, parsedSIC);
     }
 
@@ -405,17 +390,17 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
 
   const setSelectedTextColor = Effect.fn(function* (color) {
     if (typeof color === "function") {
-      yield* Ref.update(selectedFg, (c) => color(c));
+      yield* Ref.update(b.colors, (c) => ({ ...c, selectedFg: color(c.selectedFg) }));
     } else {
-      yield* Ref.set(selectedFg, color);
+      yield* Ref.update(b.colors, (c) => ({ ...c, selectedFg: color }));
     }
   });
 
   const setSelectedBgColor = Effect.fn(function* (color) {
     if (typeof color === "function") {
-      yield* Ref.update(selectedBg, (c) => color(c));
+      yield* Ref.update(b.colors, (c) => ({ ...c, selectedBg: color(c.selectedBg) }));
     } else {
-      yield* Ref.set(selectedBg, color);
+      yield* Ref.update(b.colors, (c) => ({ ...c, selectedBg: color }));
     }
   });
 
@@ -548,15 +533,6 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     );
   });
 
-  // const onUpdate = Effect.fn(function* (self) {
-  //   const fn = options.onUpdate ?? Effect.fn(function* (self) {});
-  //   yield* fn(self);
-  //   const ctx = yield* Ref.get(binds.context);
-  //   const { x, y } = yield* Ref.get(b.location);
-  //   const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-  //   yield* ctx.addToHitGrid(x, y, w, h, b.num);
-  // });
-
   b.onKeyboardEvent = Effect.fn(function* (event) {
     const fn = options.onKeyboardEvent ?? Effect.fn(function* (event) {});
     yield* fn(event);
@@ -577,9 +553,32 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     yield* fn(selectedOptions);
   });
 
+  const loadColorTheme = Effect.fn(function* (theme: typeof ColorsThemeRecord.Type) {
+    yield* searchinput.loadColorTheme({
+      bg: theme.searchBg,
+      fg: theme.searchFg,
+      focusedBg: theme.searchFocusedBg,
+      focusedFg: theme.searchFocusedFg,
+      placeholderColor: theme.searchPlaceholderColor,
+      cursorColor: theme.searchCursorColor,
+    });
+
+    yield* b.loadColorTheme({
+      bg: theme.bg,
+      fg: theme.fg,
+      focusedBg: theme.focusedBg,
+      focusedFg: theme.focusedFg,
+      selectedBg: theme.selectedBg,
+      selectedFg: theme.selectedFg,
+      scrollIndicatorColor: theme.scrollIndicatorColor,
+      descriptionColor: theme.descriptionColor,
+      selectedDescriptionColor: theme.selectedDescriptionColor,
+    });
+  });
+
   return {
     ...b,
-    // onUpdate,
+    loadColorTheme,
     onSelect,
     render,
     setOptions,

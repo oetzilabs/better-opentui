@@ -1,7 +1,7 @@
 import { DevTools } from "@effect/experimental";
 import { FileSystem, Path } from "@effect/platform";
 import { BunSocket } from "@effect/platform-bun";
-import { Cause, Context, Duration, Effect, Exit, Fiber, Layer, Mailbox, Ref, Schedule, Schema } from "effect";
+import { Cause, Context, DateTime, Duration, Effect, Exit, Fiber, Layer, Mailbox, Ref, Schedule, Schema } from "effect";
 import type { NoSuchElementException } from "effect/Cause";
 import {
   isDumpBuffersCommand,
@@ -49,6 +49,8 @@ import {
 } from "../inputs/mouse";
 import { Library } from "../lib";
 import type { RunnerEvent, RunnerEventMap, RunnerHooks, SceneSetupFunction, ScenesSetup } from "../run";
+import { ThemeManager, ThemeManagerLive } from "../themes/manager";
+import type { Theme } from "../themes/schema";
 import type { SelectionState } from "../types";
 import { Elements, ElementsLive, type ElementElement, type MethodParameters, type Methods } from "./elements";
 import type { BaseElement } from "./elements/base";
@@ -106,12 +108,21 @@ export type CapturedOutput = {
 };
 
 export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
-  dependencies: [OpenTuiConfigLive, MouseParserLive, ElementsLive, DevToolsLive, AnimationFrameLive, SceneManagerLive],
+  dependencies: [
+    OpenTuiConfigLive,
+    MouseParserLive,
+    ElementsLive,
+    DevToolsLive,
+    AnimationFrameLive,
+    SceneManagerLive,
+    ThemeManagerLive,
+  ],
   scoped: Effect.gen(function* () {
     const shutdown = yield* Shutdown;
     const cfg = yield* OpenTuiConfig;
     const animationFrame = yield* AnimationFrame;
     const sceneManager = yield* SceneManager;
+    const themeManager = yield* ThemeManager;
     const config = yield* cfg.get();
 
     const outputCache = yield* Ref.make<CapturedOutput[]>([]);
@@ -1285,6 +1296,8 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
       // return yield* Effect.dieMessage(es.map((e) => e.toString()).join("\n"));
     });
 
+    const lastAppliedTheme = yield* Ref.make<Theme | null>(null);
+
     const updateLoop = Effect.fn("cli.updateLoop")(function* () {
       const errs = yield* Ref.get(errors);
       const errsArr = Array.from(errs);
@@ -1313,6 +1326,12 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       // !INFO: This was the old way of rendering the tree, but we are moving to scenes.
       // yield* root.update();
+      const currentTheme = yield* themeManager.current();
+      const prevTheme = yield* Ref.get(lastAppliedTheme);
+      if (!prevTheme || prevTheme.name !== currentTheme.name) {
+        yield* elements.loadColorTheme(currentTheme);
+        yield* Ref.set(lastAppliedTheme, currentTheme);
+      }
 
       yield* sceneManager.update();
 
@@ -1688,7 +1707,7 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
     ): Effect.Effect<
       void,
       Collection | TypeError,
-      Library | CliRenderer | FileSystem.FileSystem | Path.Path | SceneManager
+      Library | CliRenderer | FileSystem.FileSystem | Path.Path | SceneManager | ThemeManager
     > =>
       Effect.gen(function* () {
         yield* sceneManager.clear();

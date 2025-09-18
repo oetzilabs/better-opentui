@@ -9,7 +9,7 @@ import type { ParsedKey } from "../../inputs/keyboard";
 import { Library } from "../../lib";
 import { base, type BaseElement } from "./base";
 import { type FrameBufferOptions } from "./framebuffer";
-import type { Binds, ElementOptions } from "./utils";
+import type { Binds, ColorsThemeRecord, ElementOptions } from "./utils";
 
 export interface InputElement extends BaseElement<"input", InputElement> {
   setValue: (value: string) => Effect.Effect<void, Collection, Library>;
@@ -26,13 +26,6 @@ export interface InputElement extends BaseElement<"input", InputElement> {
 }
 
 export type InputOptions = ElementOptions<"input", InputElement> & {
-  colors: FrameBufferOptions<InputElement>["colors"] & {
-    placeholderColor?: Input;
-    cursorColor?: Input;
-  };
-  // width: number;
-  // height: number;
-  respectAlpha?: boolean;
   placeholder?: string;
   maxLength?: number;
   value?: string;
@@ -42,16 +35,6 @@ export type InputOptions = ElementOptions<"input", InputElement> & {
 };
 
 const DEFAULTS = {
-  colors: {
-    bg: Colors.Transparent,
-    fg: Colors.White,
-    selectableBg: Colors.Custom("#1a1a1a"),
-    selectableFg: Colors.White,
-    placeholderColor: Colors.Custom("#666666"),
-    cursorColor: Colors.White,
-    focusedBg: Colors.Custom("#1a1a1a"),
-    focusedFg: Colors.White,
-  },
   placeholder: "",
   maxLength: 1000,
   value: "",
@@ -74,31 +57,22 @@ export const input = Effect.fn(function* (
       ...options,
       selectable: true,
       width: options.width ?? "auto",
-      height: options.height ?? "auto",
-      colors: {
-        ...options.colors,
-        bg: options.colors.bg ?? DEFAULTS.colors.bg,
-        fg: options.colors.fg ?? DEFAULTS.colors.fg,
-        selectableBg: options.colors.selectableBg ?? DEFAULTS.colors.selectableBg,
-        selectableFg: options.colors.selectableFg ?? DEFAULTS.colors.selectableFg,
-        focusedBg: options.colors.focusedBg ?? DEFAULTS.colors.focusedBg,
-        focusedFg: options.colors.focusedFg ?? DEFAULTS.colors.focusedFg,
-      },
+      height: options.height ?? 1,
+      ...(options.colors ? { colors: options.colors } : {}),
     },
     parentElement,
   );
 
   const framebuffer_buffer = yield* b.createFrameBuffer();
 
-  const value = yield* Ref.make(options.value ?? DEFAULTS.value);
-  const cursorPosition = yield* Ref.make((options.value ?? DEFAULTS.value).length);
+  const _value = options.value ?? DEFAULTS.value;
+
+  const value = yield* Ref.make(_value);
+  const cursorPosition = yield* Ref.make(_value.length);
   const placeholder = yield* Ref.make(options.placeholder ?? DEFAULTS.placeholder);
   const maxLength = yield* Ref.make(options.maxLength ?? DEFAULTS.maxLength);
 
-  const placeholderColor = yield* Ref.make(options.colors.placeholderColor ?? DEFAULTS.colors.placeholderColor);
-  const cursorColor = yield* Ref.make(options.colors.cursorColor ?? DEFAULTS.colors.cursorColor);
-
-  const lastCommittedValue = yield* Ref.make(options.value ?? DEFAULTS.value);
+  const lastCommittedValue = yield* Ref.make(_value);
 
   // Cursor rendering
   const updateCursorPosition = Effect.fn(function* () {
@@ -117,8 +91,8 @@ export const input = Effect.fn(function* (
     if (cursorDisplayX >= 0 && cursorDisplayX < w) {
       const absoluteCursorX = loc.x + cursorDisplayX + 1;
       const absoluteCursorY = loc.y + 1;
-      const cc = yield* Ref.get(cursorColor);
-      const parsedCC = yield* parseColor(cc);
+      const colors = yield* Ref.get(b.colors);
+      const parsedCC = yield* parseColor(colors.placeholderColor);
 
       yield* lib.setCursorPosition(cli, absoluteCursorX, absoluteCursorY, true);
       yield* lib.setCursorColor(cli, parsedCC);
@@ -128,8 +102,8 @@ export const input = Effect.fn(function* (
   b.setFocused = Effect.fn(function* (focused: boolean) {
     yield* Ref.set(b.focused, focused);
     if (focused) {
-      const cc = yield* Ref.get(cursorColor);
-      const parsedCC = yield* parseColor(cc);
+      const colors = yield* Ref.get(b.colors);
+      const parsedCC = yield* parseColor(colors.placeholderColor);
       yield* lib.setCursorColor(cli, parsedCC);
       yield* lib.setCursorStyle(cli, Block.make("block"), true);
       yield* updateCursorPosition();
@@ -163,8 +137,7 @@ export const input = Effect.fn(function* (
     const displayText = val || ph;
     const isPlaceholder = !val && !!ph;
     const baseTextColor = focused ? colors.focusedFg : colors.fg;
-    const phc = yield* Ref.get(placeholderColor);
-    const textColorParsed = yield* parseColor(isPlaceholder ? phc : baseTextColor);
+    const textColorParsed = yield* parseColor(isPlaceholder ? colors.placeholderColor : baseTextColor);
 
     const maxVisibleChars = w - 1;
     const curPos = yield* Ref.get(cursorPosition);
@@ -219,17 +192,17 @@ export const input = Effect.fn(function* (
 
   const setPlaceholderColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
     if (typeof color === "function") {
-      yield* Ref.update(placeholderColor, (c) => color(c));
+      yield* Ref.update(b.colors, (c) => ({ ...c, placeholderColor: color(c.placeholderColor) }));
     } else {
-      yield* Ref.set(placeholderColor, color);
+      yield* Ref.update(b.colors, (c) => ({ ...c, placeholderColor: color }));
     }
   });
 
   const setCursorColor = Effect.fn(function* (color: ((oldColor: Input) => Input) | Input) {
     if (typeof color === "function") {
-      yield* Ref.update(cursorColor, (c) => color(c));
+      yield* Ref.update(b.colors, (c) => ({ ...c, cursorColor: color(c.cursorColor) }));
     } else {
-      yield* Ref.set(cursorColor, color);
+      yield* Ref.update(b.colors, (c) => ({ ...c, cursorColor: color }));
     }
   });
 
@@ -368,17 +341,11 @@ export const input = Effect.fn(function* (
     yield* b.onUpdate(self);
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
-    const ctx = yield* Ref.get(binds.context);
-    const { x, y } = yield* Ref.get(b.location);
-    const { widthValue: w, heightValue: h } = yield* Ref.get(b.dimensions);
-    yield* ctx.addToHitGrid(x, y, w, h, b.num);
 
     const focused = yield* Ref.get(b.focused);
     if (focused) {
       yield* updateCursorPosition();
     }
-
-    yield* framebuffer_buffer.resize(w, h);
   });
 
   const onChange: InputElement["onChange"] = Effect.fn(function* (text: string) {

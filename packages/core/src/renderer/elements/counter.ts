@@ -24,10 +24,6 @@ export type CounterOptions = ElementOptions<"counter", CounterElement> & {
 };
 
 const DEFAULTS = {
-  colors: {
-    bg: Colors.Transparent,
-    fg: Colors.Black,
-  },
   width: "auto",
   height: 1,
   position: PositionRelative.make(1),
@@ -54,10 +50,7 @@ export const counter = Effect.fn(function* (
       position: options.position ?? DEFAULTS.position,
       width: (options.width ?? DEFAULTS.width) === "auto" ? contentWidth : options.width,
       height: options.height ?? DEFAULTS.height,
-      colors: {
-        ...DEFAULTS.colors,
-        ...options.colors,
-      },
+      ...(options.colors ? { colors: options.colors } : {}),
     },
     parentElement,
   );
@@ -69,13 +62,6 @@ export const counter = Effect.fn(function* (
 
   const tbp = yield* lib.createTextBufferPointer(capacity, widthMethod);
   const textBuffer = new TextBuffer(tbp, capacity);
-
-  const c = yield* Ref.get(b.colors);
-  const bgC = yield* parseColor(c.bg);
-  yield* textBuffer.setDefaultBg(bgC);
-
-  const fgC = yield* parseColor(c.fg);
-  yield* textBuffer.setDefaultFg(fgC);
 
   const updateDisplay = Effect.fn(function* () {
     const currentValue = yield* Ref.get(_value);
@@ -141,6 +127,15 @@ export const counter = Effect.fn(function* (
   const toString = Effect.fn(function* () {
     const currentValue = yield* Ref.get(_value);
     return currentValue.toString();
+  });
+
+  b.onUpdate = Effect.fn(function* (self) {
+    const c = yield* Ref.get(b.colors);
+    const bgC = yield* parseColor(c.bg);
+    yield* textBuffer.setDefaultBg(bgC);
+
+    const fgC = yield* parseColor(c.fg);
+    yield* textBuffer.setDefaultFg(fgC);
   });
 
   return {

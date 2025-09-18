@@ -40,14 +40,6 @@ export type ButtonOptions<BT extends string = "button"> = ElementOptions<BT, But
 };
 
 const DEFAULTS = {
-  colors: {
-    bg: Colors.Custom("#444444"),
-    fg: Colors.White,
-    hoverBg: Colors.Custom("#666666"),
-    hoverFg: Colors.White,
-    pressedBg: Colors.Custom("#222222"),
-    pressedFg: Colors.White,
-  },
   content: "Button",
   padding: 1,
 } satisfies ButtonOptions;
@@ -68,12 +60,7 @@ export const button = Effect.fn(function* <BT extends string = "button">(
       selectable: true,
       height: options.height ?? "auto",
       width: options.width ?? "auto",
-      colors: {
-        bg: options.colors?.bg ?? DEFAULTS.colors.bg,
-        fg: options.colors?.fg ?? DEFAULTS.colors.fg,
-        focusedBg: options.colors?.hoverBg ?? DEFAULTS.colors.hoverBg,
-        focusedFg: options.colors?.hoverFg ?? DEFAULTS.colors.hoverFg,
-      },
+      ...(options.colors ? { colors: options.colors } : {}),
     },
     parentElement,
   );
@@ -100,11 +87,6 @@ export const button = Effect.fn(function* <BT extends string = "button">(
   const isPressed = yield* Ref.make(false);
   const isHovered = yield* Ref.make(false);
 
-  const hoverBg = yield* Ref.make(options.colors?.hoverBg ?? DEFAULTS.colors.hoverBg);
-  const hoverFg = yield* Ref.make(options.colors?.hoverFg ?? DEFAULTS.colors.hoverFg);
-  const pressedBg = yield* Ref.make(options.colors?.pressedBg ?? DEFAULTS.colors.pressedBg);
-  const pressedFg = yield* Ref.make(options.colors?.pressedFg ?? DEFAULTS.colors.pressedFg);
-
   const previousFocused = yield* Ref.make(false);
   const previousPressed = yield* Ref.make(false);
   const pressStartTime = yield* Ref.make(0);
@@ -126,11 +108,11 @@ export const button = Effect.fn(function* <BT extends string = "button">(
     let fgColor: Input;
 
     if (pressed) {
-      bgColor = yield* Ref.get(pressedBg);
-      fgColor = yield* Ref.get(pressedFg);
+      bgColor = colors.pressedBg;
+      fgColor = colors.pressedFg;
     } else if (hovered || focused) {
-      bgColor = yield* Ref.get(hoverBg);
-      fgColor = yield* Ref.get(hoverFg);
+      bgColor = colors.hoverBg;
+      fgColor = colors.hoverFg;
     } else {
       bgColor = colors.bg;
       fgColor = colors.fg;

@@ -1,0 +1,126 @@
+{
+  "name": "default",
+  "colors": {
+    "bg": "transparent",
+    "fg": "#FFFFFF",
+    "cursorColor": "#FFFFFF"
+  },
+  "elements": {
+    "button": {
+      "bg": "#444444",
+      "fg": "#FFFFFF",
+      "focusedBg": "#1a1a1a",
+      "focusedFg": "#FFFFFF",
+      "hoverBg": "#666666",
+      "hoverFg": "#FFFFFF",
+      "pressedBg": "#222222",
+      "pressedFg": "#FFFFFF"
+    },
+    "input": {
+      "bg": "#0a0a0a",
+      "fg": "#FFFFFF",
+      "selectableBg": "#1a1a1a",
+      "selectableFg": "#FFFFFF",
+      "placeholderColor": "#666666",
+      "cursorColor": "#FFFFFF",
+      "focusedBg": "#1a1a1a",
+      "focusedFg": "#FFFFFF"
+    },
+    "textarea": {
+      "bg": "#1a1a1a",
+      "fg": "#FFFFFF",
+      "selectableBg": "#1a1a1a",
+      "selectableFg": "#FFFFFF",
+      "placeholderColor": "#666666",
+      "cursorColor": "#FFFFFF",
+      "focusedBg": "#1a1a1a",
+      "focusedFg": "#FFFFFF"
+    },
+    "checkbox": {
+      "bg": "#444444",
+      "fg": "#FFFFFF",
+      "hoverBg": "#666666",
+      "hoverFg": "#FFFFFF",
+      "pressedBg": "#222222",
+      "pressedFg": "#FFFFFF"
+    },
+    "list": {
+      "bg": "#444444",
+      "fg": "#FFFFFF",
+      "focusedBg": "#1a1a1a",
+      "focusedFg": "#FFFFFF",
+      "selectedBg": "#334455",
+      "selectedFg": "#FFFFFF",
+      "scrollIndicatorColor": "#666666"
+    },
+    "counter": {
+      "bg": "#444444",
+      "fg": "#FFFFFF"
+    },
+    "status-bar": {
+      "bg": "#1a1a1a",
+      "fg": "#FFFFFF"
+    },
+    "file-select": {
+      "bg": "#1a1a1a",
+      "fg": "#FFFFFF",
+      "selectedBg": "#334455",
+      "selectedFg": "#FFFFFF",
+
+      "focusedBg": "#1a1a1a",
+      "focusedFg": "#FFFFFF",
+      "scrollIndicatorColor": "#666666",
+
+      "searchBg": "#2a2a2a",
+      "searchFg": "#FFFFFF",
+      "searchFocusedBg": "#1a1a1a",
+      "searchFocusedFg": "#FFFFFF",
+      "searchPlaceholderColor": "#666666",
+      "searchCursorColor": "#FFFFFF",
+
+      "statusBarBg": "#1a1a1a",
+      "statusBarFg": "#FFFFFF",
+
+      "statusBarStatusBg": "#2a2a2a",
+      "statusBarStatusFg": "#FFFFFF",
+
+      "sortButtonBg": "#2a2a2a",
+      "sortButtonFg": "#FFFFFF",
+      "sortButtonHoverBg": "#222222",
+      "sortButtonHoverFg": "#FFFFFF",
+      "sortButtonFocusBg": "#222222",
+      "sortButtonFocusFg": "#FFFFFF",
+      "sortButtonPressedBg": "#222222",
+      "sortButtonPressedFg": "#FFFFFF",
+
+      "directoryBg": "#2a2a2a",
+      "directoryFg": "#4A90E2",
+      "fileBg": "transparent",
+      "fileFg": "#7ED321",
+
+      "pathBg": "#2a2a2a",
+      "pathFg": "#FFFFFF"
+    },
+    "multi-select": {
+      "bg": "transparent",
+      "fg": "#FFFFFF",
+      "selectedBg": "#334455",
+      "selectedFg": "#FFFF00",
+
+      "focusedBg": "#1a1a1a",
+      "focusedFg": "#FFFFFF",
+      "scrollIndicatorColor": "#666666",
+
+      "searchBg": "#2a2a2a",
+      "searchFg": "#FFFFFF",
+      "searchFocusedBg": "#1a1a1a",
+      "searchFocusedFg": "#FFFFFF",
+      "searchPlaceholderColor": "#666666",
+      "searchCursorColor": "#FFFFFF",
+
+      "descriptionColor": "#666666",
+      "disabledDescriptionColor": "#666666",
+      "selectedDescriptionColor": "#666666"
+    }
+  }
+}

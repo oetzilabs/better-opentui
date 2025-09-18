@@ -11,7 +11,7 @@ import { type GenericCollection } from "../utils/collection";
 import { PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { group } from "./group";
-import type { Binds, ElementOptions } from "./utils";
+import type { Binds, ColorsThemeRecord, ElementOptions } from "./utils";
 
 export type ListItem<T> = T;
 
@@ -24,15 +24,7 @@ export interface RenderItemContext<T> {
   y: number;
   width: number;
   height: number;
-  colors: {
-    bg: Input;
-    fg: Input;
-    focusedBg: Input;
-    focusedFg: Input;
-    selectedBg: Input;
-    selectedFg: Input;
-    scrollIndicator: Input;
-  };
+  colors: typeof ColorsThemeRecord.Type;
 }
 
 export interface ListElement<T, FBT extends string = "list"> extends BaseElement<"list", ListElement<T, FBT>> {
@@ -57,15 +49,6 @@ export interface ListElement<T, FBT extends string = "list"> extends BaseElement
 }
 
 export type ListOptions<T, FBT extends string = "list"> = ElementOptions<FBT, ListElement<T, FBT>> & {
-  colors?: {
-    bg?: Input;
-    fg?: Input;
-    focusedBg?: Input;
-    focusedFg?: Input;
-    selectedBg?: Input;
-    selectedFg?: Input;
-    scrollIndicator?: Input;
-  };
   maxVisibleItems?: number;
   showScrollIndicator?: boolean;
   onSelect?: (
@@ -81,20 +64,6 @@ export type ListOptions<T, FBT extends string = "list"> = ElementOptions<FBT, Li
   ) => Effect.Effect<void, Collection, Library>;
 };
 
-const DEFAULTS = {
-  colors: {
-    bg: Colors.Transparent,
-    fg: Colors.White,
-    focusedBg: Colors.Custom("#1a1a1a"),
-    focusedFg: Colors.White,
-    selectedBg: Colors.Custom("#334455"),
-    selectedFg: Colors.Yellow,
-    scrollIndicator: Colors.Gray,
-  },
-  maxVisibleItems: 10,
-  showScrollIndicator: false,
-} satisfies ListOptions<any>;
-
 export const list = Effect.fn(function* <T extends any, FBT extends string = "list">(
   binds: Binds,
   collection: GenericCollection<any>,
@@ -103,6 +72,11 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
 ) {
   const lib = yield* Library;
   if (!parentElement) return yield* Effect.fail(new Error("Parent element is required"));
+
+  const DEFAULTS = {
+    maxVisibleItems: 10,
+    showScrollIndicator: false,
+  } satisfies ListOptions<T>;
 
   // check if the collection has the displayKey
   const displayKey = yield* collection.getDisplayKey();
@@ -116,28 +90,14 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
   const scrollOffset = yield* Ref.make(0);
   const wrapSelection = yield* Ref.make(true);
   const showScrollIndicator = yield* Ref.make(options.showScrollIndicator ?? DEFAULTS.showScrollIndicator);
-  const scrollIndicatorColor = yield* Ref.make(options.colors?.scrollIndicator ?? DEFAULTS.colors.scrollIndicator);
 
-  const wrapper = yield* group(
-    binds,
-    {
-      position: PositionRelative.make(1),
-      width: "100%",
-      height: "auto",
-      left: 0,
-      top: 0,
-      visible: true,
-    },
-    parentElement,
-  );
-
-  const framebuffer_buffer = yield* wrapper.createFrameBuffer();
+  const { colors: optionsColors, ...restOptions } = options;
 
   const listElement = yield* base<"list", ListElement<T, FBT>>(
     "list",
     binds,
     {
-      ...options,
+      ...restOptions,
       position: PositionRelative.make(1),
       selectable: true,
       left: options.left ?? 0,
@@ -154,15 +114,11 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
             options.maxVisibleItems ?? DEFAULTS.maxVisibleItems,
             (yield* Ref.get(parentElement.dimensions)).heightValue,
           ),
-      colors: {
-        bg: options.colors?.bg ?? DEFAULTS.colors.bg,
-        fg: options.colors?.fg ?? DEFAULTS.colors.fg,
-        focusedBg: options.colors?.focusedBg ?? DEFAULTS.colors.focusedBg,
-        focusedFg: options.colors?.focusedFg ?? DEFAULTS.colors.focusedFg,
-      },
+      ...(optionsColors ? { colors: optionsColors } : {}),
     },
-    wrapper,
+    parentElement,
   );
+  const framebuffer_buffer = yield* listElement.createFrameBuffer();
 
   listElement.onResize = Effect.fn(function* (width: number, height: number) {
     yield* Ref.update(listElement.dimensions, (d) => ({ ...d, widthValue: width, heightValue: height }));
@@ -177,8 +133,8 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
       const baseFg = yield* parseColor(colors.fg);
       const focusedBg = yield* parseColor(colors.focusedBg);
       const focusedFg = yield* parseColor(colors.focusedFg);
-      const selBg = yield* parseColor(options.colors?.selectedBg ?? DEFAULTS.colors.selectedBg);
-      const selFg = yield* parseColor(options.colors?.selectedFg ?? DEFAULTS.colors.selectedFg);
+      const selBg = yield* parseColor(colors.selectedBg);
+      const selFg = yield* parseColor(colors.selectedFg);
 
       // Default rendering logic
       if (isFocused) {
@@ -231,7 +187,7 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
         y: itemY,
         width: w,
         height: 1,
-        colors: { ...options.colors, ...DEFAULTS.colors },
+        colors,
       });
     }
 
@@ -242,8 +198,7 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
       const scrollPercent = focIdx / Math.max(1, itemList.length - 1);
       const indicatorY = Math.floor(scrollPercent * h);
       const indicatorX = w - 1;
-      const sic = yield* Ref.get(scrollIndicatorColor);
-      const parsedSIC = yield* parseColor(sic);
+      const parsedSIC = yield* parseColor(colors.scrollIndicatorColor);
       yield* framebuffer_buffer.drawText("█", indicatorX, indicatorY, parsedSIC);
     }
 
@@ -421,7 +376,6 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
   const destroy = Effect.fn(function* () {
     yield* framebuffer_buffer.destroy;
     yield* listElement.destroy();
-    yield* wrapper.destroy();
   });
 
   const onUpdate =
@@ -431,14 +385,14 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
     });
 
   // Initialize
-  yield* wrapper.add(listElement);
+  // yield* wrapper.add(listElement);
 
   const setOnSelect = Effect.fn(function* (fn: ListElement<T, FBT>["onSelect"]) {
     onSelect = fn;
   });
 
   return {
-    ...wrapper,
+    ...listElement,
     onUpdate,
     renderItem,
     onKeyboardEvent,

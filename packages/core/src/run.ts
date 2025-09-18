@@ -1,14 +1,15 @@
 import type { FileSystem, Path } from "@effect/platform";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
 import { Cause, Console, Effect, Exit, Logger } from "effect";
-import { ClearFromCursor, ShowCursor, SwitchToMainScreen } from "./ansi";
 import * as Errors from "./errors";
 import { Library, LibraryLive } from "./lib";
 import { createOtelLayer } from "./otel";
 import { CliRenderer, CliRendererLive, type HookFunction, type ShutdownReason } from "./renderer/cli";
 import type { BaseElement } from "./renderer/elements/base";
 import { Shutdown, ShutdownLive } from "./renderer/latch/shutdown";
+import type { SceneNotFound } from "./renderer/scenes/errors";
 import { SceneManager, SceneManagerLive } from "./renderer/scenes/manager";
+import { ThemeManager, ThemeManagerLive } from "./themes/manager";
 
 export type TerminalFunctions = {
   setBackgroundColor: CliRenderer["setBackgroundColor"];
@@ -16,19 +17,23 @@ export type TerminalFunctions = {
 
 export type SetupFunction = (
   terminal: TerminalFunctions,
-) => Effect.Effect<void, Errors.Collection | TypeError, Library | CliRenderer | FileSystem.FileSystem | Path.Path>;
+) => Effect.Effect<
+  void,
+  Errors.Collection | TypeError,
+  Library | CliRenderer | FileSystem.FileSystem | Path.Path | ThemeManager
+>;
 
 export type SceneSetup<CurrentKey extends string, AllKeys extends string = string> = {
   createElement: CliRenderer["createElement"];
-  switchTo: (key: Exclude<AllKeys, CurrentKey>) => Effect.Effect<void, Errors.Collection>;
+  switchTo: (key: Exclude<AllKeys, CurrentKey>) => Effect.Effect<void, SceneNotFound>;
 };
 
 export type SceneSetupFunction<CurrentKey extends string, AllKeys extends string = string> = (
   scene: SceneSetup<CurrentKey, AllKeys>,
 ) => Effect.Effect<
   BaseElement<any, any>[] | BaseElement<any, any>,
-  Errors.Collection | TypeError,
-  Library | CliRenderer | FileSystem.FileSystem | Path.Path
+  Errors.Collection | TypeError | SceneNotFound,
+  Library | CliRenderer | FileSystem.FileSystem | Path.Path | ThemeManager
 >;
 
 export type ScenesSetup<Keys extends string = string> = {
@@ -117,7 +122,7 @@ export const run = <Keys extends string = string>(options: RunOptions<Keys>) =>
 
     // return yield* Effect.never;
   }).pipe(
-    Effect.provide([CliRendererLive, SceneManagerLive]),
+    Effect.provide([CliRendererLive, SceneManagerLive, ThemeManagerLive]),
     Effect.catchAllCause((cause) => Console.log(Cause.pretty(cause))),
     Effect.provide([ShutdownLive, LibraryLive, Logger.pretty, createOtelLayer("better-opentui")]),
     Effect.provide(BunContext.layer),

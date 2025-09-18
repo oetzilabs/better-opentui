@@ -12,7 +12,7 @@ import { isPositionAbsolute, PositionRelative } from "../utils/position";
 import { TextSelectionHelper } from "../utils/selection";
 import { StyledText } from "../utils/styled-text";
 import { base, type BaseElement } from "./base";
-import { calculateContentDimensions, type Binds, type ElementOptions } from "./utils";
+import { calculateContentDimensions, ColorsThemeRecord, type Binds, type ElementOptions } from "./utils";
 
 export interface TextElement extends BaseElement<"text", TextElement> {
   setContent: (content: string | StyledText) => Effect.Effect<void, Collection, Library>;

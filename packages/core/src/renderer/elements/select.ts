@@ -8,11 +8,12 @@ import { parseColor } from "../../colors/utils";
 import type { Collection } from "../../errors";
 import type { ParsedKey } from "../../inputs/keyboard";
 import { Library } from "../../lib";
+import { DEFAULT_THEME } from "../../themes";
 import { PositionRelative } from "../utils/position";
 import { base, type BaseElement } from "./base";
 import { type FrameBufferOptions } from "./framebuffer";
 import { input } from "./input";
-import type { Binds, ElementOptions } from "./utils";
+import type { Binds, ColorsThemeRecord, ElementOptions } from "./utils";
 
 export interface SelectOption<T> {
   name: string;
@@ -54,7 +55,7 @@ export type SelectOptions<OptionsType = any, FBT extends string = "select"> = El
     selectedFg?: Input;
     focusedBg?: Input;
     focusedFg?: Input;
-    scrollIndicator?: Input;
+    scrollIndicatorColor?: Input;
     descriptionColor?: Input;
     selectedDescriptionColor?: Input;
     disabledDescriptionColor?: Input;
@@ -75,17 +76,6 @@ export type SelectOptions<OptionsType = any, FBT extends string = "select"> = El
 };
 
 const DEFAULTS = {
-  colors: {
-    bg: Colors.Transparent,
-    fg: Colors.White,
-    selectedBg: Colors.Custom("#334455"),
-    selectedFg: Colors.Yellow,
-    focusedBg: Colors.Custom("#1a1a1a"),
-    focusedFg: Colors.White,
-    scrollIndicator: Colors.Custom("#666666"),
-    descriptionColor: Colors.Gray,
-    selectedDescriptionColor: Colors.Gray,
-  },
   wrapSelection: false,
   showDescription: true,
   showScrollIndicator: false,
@@ -119,10 +109,10 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
           : options.height
         : options.height,
       colors: {
-        bg: options.colors?.bg ?? DEFAULTS.colors.bg,
-        fg: options.colors?.fg ?? DEFAULTS.colors.fg,
-        focusedBg: options.colors?.focusedBg ?? DEFAULTS.colors.focusedBg,
-        focusedFg: options.colors?.focusedFg ?? DEFAULTS.colors.focusedFg,
+        bg: options.colors?.bg ?? DEFAULT_THEME.elements["select"].bg,
+        fg: options.colors?.fg ?? DEFAULT_THEME.elements["select"].fg,
+        focusedBg: options.colors?.focusedBg ?? DEFAULT_THEME.elements["select"].focusedBg,
+        focusedFg: options.colors?.focusedFg ?? DEFAULT_THEME.elements["select"].focusedFg,
       },
     },
     parentElement,
@@ -137,14 +127,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
   const showScrollIndicator = yield* Ref.make(options.showScrollIndicator ?? DEFAULTS.showScrollIndicator);
   const description = yield* Ref.make(options.description ?? DEFAULTS.description);
 
-  const selectedBg = yield* Ref.make(options.colors?.selectedBg ?? DEFAULTS.colors.selectedBg);
-  const selectedFg = yield* Ref.make(options.colors?.selectedFg ?? DEFAULTS.colors.selectedFg);
-  const scrollIndicatorColor = yield* Ref.make(options.colors?.scrollIndicator ?? DEFAULTS.colors.scrollIndicator);
   const itemSpacing = yield* Ref.make(options.itemSpacing ?? DEFAULTS.itemSpacing);
-  const descriptionColor = yield* Ref.make(options.colors?.descriptionColor ?? DEFAULTS.colors.descriptionColor);
-  const selectedDescriptionColor = yield* Ref.make(
-    options.colors?.selectedDescriptionColor ?? DEFAULTS.colors.selectedDescriptionColor,
-  );
 
   // Calculate max visible items
   const linesPerItem = yield* Ref.make((options.showDescription ?? DEFAULTS.showDescription) ? 2 : 1);
@@ -166,7 +149,6 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
       ...options,
       focused: options.focused ?? false,
       visible: true,
-      colors: options.colors ?? DEFAULTS.colors,
       width: options.width,
       height: 1,
       position: PositionRelative.make(1),
@@ -184,6 +166,18 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
         yield* Ref.update(opts, (opts) => filteredOptions);
         yield* updateScrollOffset();
       }),
+      ...(options.colors
+        ? {
+            colors: {
+              bg: options.colors.bg ?? DEFAULT_THEME.elements["input"].bg,
+              fg: options.colors.fg ?? DEFAULT_THEME.elements["input"].fg,
+              focusedBg: options.colors.focusedBg ?? DEFAULT_THEME.elements["input"].focusedBg,
+              focusedFg: options.colors.focusedFg ?? DEFAULT_THEME.elements["input"].focusedFg,
+              placeholderColor: options.colors.placeholderColor ?? DEFAULT_THEME.elements["input"].placeholderColor,
+              cursorColor: options.colors.cursorColor ?? DEFAULT_THEME.elements["input"].cursorColor,
+            },
+          }
+        : {}),
     },
     parentElement,
   );
@@ -217,16 +211,12 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
     const scroll = yield* Ref.get(scrollOffset);
     const showDesc = yield* Ref.get(showDescription);
     const desc = yield* Ref.get(description);
-    const selectBg = yield* Ref.get(selectedBg);
-    const selBg = yield* parseColor(selectBg);
-    const selectFg = yield* Ref.get(selectedFg);
-    const selFg = yield* parseColor(selectFg);
+    const selBg = yield* parseColor(colors.selectedBg);
+    const selFg = yield* parseColor(colors.selectedFg);
     const baseFg = yield* parseColor(focused ? colors.focusedFg : colors.fg);
     const baseBg = yield* parseColor(focused ? colors.focusedBg : colors.bg);
-    const descColor = yield* Ref.get(descriptionColor);
-    const selDescColor = yield* Ref.get(selectedDescriptionColor);
-    const parsedDescColor = yield* parseColor(descColor);
-    const parsedSelDescColor = yield* parseColor(selDescColor);
+    const parsedDescColor = yield* parseColor(colors.descriptionColor);
+    const parsedSelDescColor = yield* parseColor(colors.selectedDescriptionColor);
 
     const fnt = yield* Ref.get(font);
 
@@ -291,8 +281,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
       const indicatorHeight = Math.max(1, h - 2);
       const indicatorY = 1 + Math.floor(scrollPercent * indicatorHeight);
       const indicatorX = w - 1;
-      const sic = yield* Ref.get(scrollIndicatorColor);
-      const parsedSIC = yield* parseColor(sic);
+      const parsedSIC = yield* parseColor(colors.scrollIndicatorColor);
       yield* framebuffer_buffer.drawText("█", indicatorX, indicatorY, parsedSIC);
     }
 
@@ -338,17 +327,17 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
 
   const setSelectedTextColor = Effect.fn(function* (color) {
     if (typeof color === "function") {
-      yield* Ref.update(selectedFg, (c) => color(c));
+      yield* Ref.update(b.colors, (c) => ({ ...c, selectedFg: color(c.selectedFg) }));
     } else {
-      yield* Ref.set(selectedFg, color);
+      yield* Ref.update(b.colors, (c) => ({ ...c, selectedFg: color }));
     }
   });
 
   const setSelectedBgColor = Effect.fn(function* (color) {
     if (typeof color === "function") {
-      yield* Ref.update(selectedBg, (c) => color(c));
+      yield* Ref.update(b.colors, (c) => ({ ...c, selectedBg: color(c.selectedBg) }));
     } else {
-      yield* Ref.set(selectedBg, color);
+      yield* Ref.update(b.colors, (c) => ({ ...c, selectedBg: color }));
     }
   });
 
@@ -493,6 +482,28 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
   const onSelect = Effect.fn(function* (option?: SelectOption<OptionsType>) {
     const fn = options.onSelect ?? Effect.fn(function* (option?: SelectOption<OptionsType>) {});
     yield* fn(option);
+  });
+
+  const loadColorTheme = Effect.fn(function* (theme: typeof ColorsThemeRecord.Type) {
+    yield* b.loadColorTheme({
+      bg: theme.bg,
+      fg: theme.fg,
+      focusedBg: theme.focusedBg,
+      focusedFg: theme.focusedFg,
+      selectedBg: theme.selectedBg,
+      selectedFg: theme.selectedFg,
+      scrollIndicatorColor: theme.scrollIndicatorColor,
+      descriptionColor: theme.descriptionColor,
+      selectedDescriptionColor: theme.selectedDescriptionColor,
+    });
+    yield* searchinput.loadColorTheme({
+      bg: theme.searchBg,
+      fg: theme.searchFg,
+      focusedBg: theme.searchFocusedBg,
+      focusedFg: theme.searchFocusedFg,
+      placeholderColor: theme.searchPlaceholderColor,
+      cursorColor: theme.searchCursorColor,
+    });
   });
 
   return {
