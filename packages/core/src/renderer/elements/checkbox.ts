@@ -102,6 +102,7 @@ export const checkbox = Effect.fn(function* <BT extends string = "checkbox">(
       position: PositionRelative.make(1),
       selectable: true,
       height: options.height ?? 1,
+      focusable: true,
       width:
         options.width ??
         ((options.showDescription ?? DEFAULTS.showDescription)

@@ -58,6 +58,7 @@ export const input = Effect.fn(function* (
       selectable: true,
       width: options.width ?? "auto",
       height: options.height ?? 1,
+      focusable: true,
       ...(options.colors ? { colors: options.colors } : {}),
     },
     parentElement,
@@ -96,25 +97,6 @@ export const input = Effect.fn(function* (
 
       yield* lib.setCursorPosition(cli, absoluteCursorX, absoluteCursorY, true);
       yield* lib.setCursorColor(cli, parsedCC);
-    }
-  });
-
-  b.setFocused = Effect.fn(function* (focused: boolean) {
-    yield* Ref.set(b.focused, focused);
-    if (focused) {
-      const colors = yield* Ref.get(b.colors);
-      const parsedCC = yield* parseColor(colors.placeholderColor);
-      yield* lib.setCursorColor(cli, parsedCC);
-      yield* lib.setCursorStyle(cli, Block.make("block"), true);
-      yield* updateCursorPosition();
-    } else {
-      yield* lib.setCursorPosition(cli, 0, 0, false);
-      const v = yield* Ref.get(value);
-      const last = yield* Ref.get(lastCommittedValue);
-      if (v !== last) {
-        yield* Ref.set(lastCommittedValue, v);
-        // emit change event here if needed
-      }
     }
   });
 
@@ -344,8 +326,20 @@ export const input = Effect.fn(function* (
 
     const focused = yield* Ref.get(b.focused);
     if (focused) {
-      yield* updateCursorPosition();
+      const colors = yield* Ref.get(b.colors);
+      const parsedCC = yield* parseColor(colors.placeholderColor);
+      yield* lib.setCursorColor(cli, parsedCC);
+      yield* lib.setCursorStyle(cli, Block.make("block"), true);
+    } else {
+      yield* lib.setCursorPosition(cli, 0, 0, false);
+      const v = yield* Ref.get(value);
+      const last = yield* Ref.get(lastCommittedValue);
+      if (v !== last) {
+        yield* Ref.set(lastCommittedValue, v);
+        // emit change event here if needed
+      }
     }
+    yield* updateCursorPosition();
   });
 
   const onChange: InputElement["onChange"] = Effect.fn(function* (text: string) {

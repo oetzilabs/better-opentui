@@ -102,7 +102,8 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
       selectable: true,
       left: options.left ?? 0,
       top: options.top ?? 0,
-      focused: options.focused ?? true,
+      focused: options.focused ?? false,
+      focusable: true,
       height: options.height
         ? options.height === "auto"
           ? Math.min(
@@ -288,15 +289,10 @@ export const list = Effect.fn(function* <T extends any, FBT extends string = "li
 
   const handleKeyPress = Effect.fn(function* (key: ParsedKey) {
     const keyName = key.name;
+    const focused = yield* Ref.get(listElement.focused);
+    if (!focused) return false;
 
     return yield* Match.value(keyName).pipe(
-      Match.when(
-        "tab",
-        Effect.fn(function* () {
-          const f = yield* Ref.updateAndGet(listElement.focused, (f) => !f);
-          return true;
-        }),
-      ),
       Match.whenOr(
         "up",
         "k",

@@ -1,9 +1,12 @@
 import { Effect, Ref } from "effect";
 import type { OptimizedBuffer } from "../../buffer/optimized";
 import type { BaseElement } from "../elements/base";
+import type { RootElement } from "../elements/root";
+import { makeFocusManager } from "../focus";
 
 export const makeScene = Effect.fn(function* (name: string, ...elements: BaseElement<any, any>[]) {
   const renderables = yield* Ref.make(elements);
+  const focusManager = yield* makeFocusManager();
 
   const doRender = Effect.fn(function* (buffer: OptimizedBuffer, deltaTime: number) {
     const rs = yield* Ref.get(renderables);
@@ -14,6 +17,7 @@ export const makeScene = Effect.fn(function* (name: string, ...elements: BaseEle
   });
 
   const update = Effect.fn(function* () {
+    const currentFocusedElement = yield* getCurrentFocusedElement();
     const rs = yield* Ref.get(renderables);
     yield* Effect.all(
       rs.map((r) => r.update()),
@@ -60,6 +64,48 @@ export const makeScene = Effect.fn(function* (name: string, ...elements: BaseEle
     );
   });
 
+  const lastFocusedElement = yield* Ref.make<BaseElement<any, any> | null>(null);
+
+  const focusNext = Effect.fn(function* (direction: "next" | "previous") {
+    const rs = yield* Ref.get(renderables);
+    const element = yield* focusManager.next(rs, direction);
+    const lfe = yield* Ref.get(lastFocusedElement);
+    if (lfe) {
+      yield* lfe.blur();
+    }
+    if (element) {
+      yield* Ref.set(lastFocusedElement, element);
+      yield* element.focus();
+      return element;
+    }
+    return null;
+  });
+
+  const deepFind: (
+    elements: BaseElement<any, any>[],
+    predicate: (e: BaseElement<any, any>) => boolean,
+  ) => Effect.Effect<BaseElement<any, any> | null> = Effect.fn(function* (
+    elements: BaseElement<any, any>[],
+    predicate: (e: BaseElement<any, any>) => boolean,
+  ) {
+    for (const element of elements) {
+      if (predicate(element)) {
+        return element;
+      }
+      const renderables = yield* Ref.get(element.renderables);
+      const result = yield* Effect.suspend(() => deepFind(renderables, predicate));
+      if (result) return result;
+    }
+    return null;
+  });
+
+  const getCurrentFocusedElement = Effect.fn(function* () {
+    const cf = yield* Ref.get(focusManager.currentFocused);
+    if (!cf) return null;
+    const element = yield* deepFind(elements, (e) => e.id === cf);
+    return element ?? null;
+  });
+
   return {
     type: "scene" as const,
     getTreeInfo: function (this) {
@@ -70,6 +116,8 @@ export const makeScene = Effect.fn(function* (name: string, ...elements: BaseEle
     name,
     renderables,
     destroy,
+    focusNext,
+    getCurrentFocusedElement,
   } as const;
 });
 

@@ -155,6 +155,7 @@ export const select = Effect.fn(function* <OptionsType, FBT extends string = "se
       left: 0,
       top: 0,
       value: "",
+      focusable: true,
       placeholder: "Search options",
       onUpdate: Effect.fn(function* (self) {
         const value = yield* self.getValue();

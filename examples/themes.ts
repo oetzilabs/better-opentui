@@ -27,7 +27,6 @@ if (import.meta.main) {
           position: PositionRelative.make(1),
           top: 0,
           visible: true,
-          focused: false,
           placeholder: "this is a placeholder for the input",
         });
 
@@ -46,7 +45,6 @@ if (import.meta.main) {
           width: "100%",
           height: 5,
           visible: true,
-          focused: true,
           showScrollIndicator: true,
           onSelect: (item) =>
             Effect.gen(function* () {
@@ -72,7 +70,6 @@ if (import.meta.main) {
           width: "100%",
           height: "auto",
           visible: true,
-          focused: false,
           options: [
             { name: "Apple", id: "apple", value: "apple", description: "A red or green fruit" },
             { name: "Banana", id: "banana", value: "banana", description: "A yellow curved fruit" },
@@ -84,16 +81,15 @@ if (import.meta.main) {
             { name: "Honeydew", id: "honeydew", value: "honeydew", description: "A large green melon" },
           ],
           selectedIds: ["apple", "cherry"], // Pre-select Apple and Cherry
-          search: { enabled: true, location: "bottom" },
+          search: { enabled: true, location: "top" },
           showDescription: true,
         });
 
         const textareaElement = yield* parentContainer.create("textarea", {
           position: PositionRelative.make(1),
-          top: 8,
+          top: 27,
           width: 50,
           visible: true,
-          focused: false,
           autoHeight: false,
           minHeight: 3,
           maxHeight: 10,
@@ -131,7 +127,6 @@ if (import.meta.main) {
           width: "100%",
           height: 10,
           visible: true,
-          focused: true,
           lookup_path: process.cwd(),
           search: { enabled: true },
           statusBar: { enabled: true },
@@ -141,7 +136,7 @@ if (import.meta.main) {
             "path",
             "search",
             "file-list",
-            "status-bar",
+            // "status-bar",
           ],
           onSelect: (files) => Effect.gen(function* () {}),
         });
@@ -150,7 +145,6 @@ if (import.meta.main) {
           position: PositionRelative.make(1),
           top: 30,
           visible: true,
-          focused: false,
           content: "switch to main",
           onClick: () =>
             Effect.gen(function* () {

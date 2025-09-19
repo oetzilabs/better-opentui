@@ -58,6 +58,7 @@ export const button = Effect.fn(function* <BT extends string = "button">(
       ...options,
       position: PositionRelative.make(1),
       selectable: true,
+      focusable: true,
       height: options.height ?? "auto",
       width: options.width ?? "auto",
       ...(options.colors ? { colors: options.colors } : {}),

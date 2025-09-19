@@ -4,6 +4,7 @@ import type { Scene } from ".";
 import type { OptimizedBuffer } from "../../buffer/optimized";
 import type { Collection } from "../../errors";
 import type { Library } from "../../lib";
+import type { BaseElement } from "../elements/base";
 import { SceneNotFound } from "./errors";
 
 export const makeSceneManager = Effect.fn(function* () {
@@ -136,7 +137,28 @@ export const makeSceneManager = Effect.fn(function* () {
     yield* Ref.set(history, []);
   });
 
-  return { add, getCurrentScene, switchTo, back, forward, clear, render, update, getTreeInfo, destroy } as const;
+  const focus = Effect.fn(function* (direction: "next" | "previous") {
+    const cs = yield* Ref.get(currentScene);
+    if (!cs) return null;
+    const scs = yield* Ref.get(scenes);
+    const scene = scs.get(cs);
+    if (!scene) return null;
+    return yield* scene.focusNext(direction);
+  });
+
+  return {
+    add,
+    getCurrentScene,
+    switchTo,
+    back,
+    forward,
+    clear,
+    render,
+    update,
+    getTreeInfo,
+    destroy,
+    focus,
+  } as const;
 });
 
 export interface SceneManagerInterface {
@@ -153,6 +175,9 @@ export interface SceneManagerInterface {
   ) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
   getTreeInfo: () => Effect.Effect<string, Collection>;
   destroy: () => Effect.Effect<void, Collection, Library>;
+  focus: (
+    direction: "next" | "previous",
+  ) => Effect.Effect<BaseElement<any, any> | null, Collection, Library | Path.Path | FileSystem.FileSystem>;
 }
 
 export class SceneManager extends Context.Tag("SceneManager")<SceneManager, SceneManagerInterface>() {}

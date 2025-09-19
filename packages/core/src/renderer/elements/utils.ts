@@ -29,6 +29,7 @@ export const ColorsThemeRecord = Schema.Record({ key: Schema.String, value: Inpu
 export type ElementOptions<T extends string, E> = Partial<LayoutOptions> & {
   visible?: boolean;
   focused?: boolean;
+  focusable?: boolean;
   selectable?: boolean;
   colors?: typeof ColorsThemeRecord.Type;
   overflow?: "visible" | "hidden" | "scroll";

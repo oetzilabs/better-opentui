@@ -119,12 +119,21 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     binds,
     {
       ...options,
+      top:
+        searchOpts.enabled && searchOpts.location === "top"
+          ? typeof options.top === "number"
+            ? options.top + 1
+            : 0
+          : typeof options.top === "number"
+            ? options.top
+            : 0,
       height: options.height
         ? options.height === "auto"
           ? Math.max(2, (options.options ?? []).length) * 2
           : options.height
         : options.height,
       ...(options.colors ? { colors: options.colors } : DEFAULTS.colors),
+      focusable: true,
     },
     parentElement,
   );
@@ -177,7 +186,14 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
       position: PositionRelative.make(1),
       height: 1,
       left: 0,
-      top: searchOpts.enabled && searchOpts.location === "top" ? 0 : listHeight,
+      top:
+        searchOpts.enabled && searchOpts.location === "top"
+          ? typeof options.top === "number"
+            ? options.top
+            : 0
+          : typeof options.top === "number"
+            ? options.top + listHeight
+            : options.top,
       value: "",
       placeholder: "Search options",
       onUpdate: Effect.fn(function* (self) {
@@ -480,12 +496,6 @@ export const multiSelect = Effect.fn(function* <OptionsType, FBT extends string 
     const sa = yield* Ref.get(searchable);
     const keyName = key.name;
     const isShift = key.shift;
-
-    // If searchable is enabled, handle focus switching with Tab
-    if (sa && keyName === "tab") {
-      yield* Ref.update(searchinput.focused, (f) => !f);
-      return true;
-    }
 
     // Handle navigation and selection keys when list is focused
     return yield* Match.value(keyName).pipe(

@@ -63,6 +63,7 @@ export type BaseElement<T extends string, E> = {
   visible: Ref.Ref<boolean>;
   colors: Ref.Ref<typeof ColorsThemeRecord.Type>;
   attributes: Ref.Ref<number>;
+  focusable: Ref.Ref<boolean>;
   location: Ref.Ref<{
     x: number;
     y: number;
@@ -154,7 +155,13 @@ export type BaseElement<T extends string, E> = {
   getTreeInfo: (self: E) => Effect.Effect<string>;
   setupYogaProperties: (options: ElementOptions<T, E>) => Effect.Effect<void, Collection, Library>;
   createFrameBuffer: () => Effect.Effect<OptimizedBuffer | null, Collection, Library>;
+  blur: () => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
+  focus: () => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
+  onInternalBlur: (self: E) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
+  onInternalFocus: (self: E) => Effect.Effect<void, Collection, Library | FileSystem.FileSystem | Path.Path>;
 };
+
+export type AnyElement = BaseElement<any, any>;
 
 export const elementCounter = Metric.counter("element_counter", {
   description: "this counter increases the num of the element",
@@ -167,6 +174,7 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
   options: ElementOptions<T, E> = {
     visible: true,
     selectable: true,
+    focusable: false,
   },
   parentElement: BaseElement<any, any> | null = null,
 ) {
@@ -206,6 +214,7 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
   // console.debug(`type: ${type}, colors: ${JSON.stringify(options.colors ?? {})}`);
   const colors = yield* Ref.make(options.colors ?? {});
   const attributes = yield* Ref.make(options.attributes ?? 0);
+  const focusable = yield* Ref.make(options.focusable ?? false);
   const _yogaPerformancePositionUpdated = yield* Ref.make(false);
   const needsZIndexSort = yield* Ref.make(false);
   const zIndex = yield* Ref.make(options.zIndex ?? 0);
@@ -837,12 +846,21 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
     yield* Ref.update(colors, (c) => ({ ...c, ...theme, ...options.colors }));
   });
 
+  const onInternalBlur: BaseElement<T, E>["onInternalBlur"] = Effect.fn(function* (self) {
+    yield* Ref.set(self.focused, false);
+  });
+
+  const onInternalFocus: BaseElement<T, E>["onInternalFocus"] = Effect.fn(function* (self) {
+    yield* Ref.set(self.focused, true);
+  });
+
   return {
     id,
     num,
     type,
     visible,
     focused,
+    focusable,
     colors,
     attributes,
     parent,
@@ -867,6 +885,16 @@ export const base = Effect.fn(function* <T extends string, E extends BaseElement
           yield* postRender(buffer);
         });
     },
+    blur: function (this) {
+      const handler = this.onInternalBlur(this as E);
+      return handler;
+    },
+    focus: function (this) {
+      const handler = this.onInternalFocus(this as E);
+      return handler;
+    },
+    onInternalBlur,
+    onInternalFocus,
     add,
     remove,
     setLocation,

@@ -207,6 +207,7 @@ export const fileSelect = Effect.fn(function* <FBT extends string = "file-select
       width: "100%",
       height: "auto",
       visible: true,
+      focusable: true,
     },
     parentElement,
   );

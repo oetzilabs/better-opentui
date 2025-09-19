@@ -81,6 +81,7 @@ export const textarea = Effect.fn(function* (
           ? Math.max(options.minHeight ?? DEFAULTS.minHeight, (options.value ?? DEFAULTS.value).split("\n").length)
           : 5),
       ...(options.colors ? { colors: options.colors } : {}),
+      focusable: true,
     },
     parentElement,
   );
@@ -288,24 +289,6 @@ export const textarea = Effect.fn(function* (
 
     yield* lib.setCursorPosition(cli, absoluteCursorX, absoluteCursorY, true);
     yield* lib.setCursorColor(cli, parsedCC);
-  });
-
-  b.setFocused = Effect.fn(function* (focused: boolean) {
-    yield* Ref.set(b.focused, focused);
-    if (focused) {
-      const colors = yield* Ref.get(b.colors);
-      const parsedCC = yield* parseColor(colors.cursorColor);
-      yield* lib.setCursorColor(cli, parsedCC);
-      yield* lib.setCursorStyle(cli, Block.make("block"), true);
-      yield* updateCursorPosition();
-    } else {
-      yield* lib.setCursorPosition(cli, 0, 0, false);
-      const v = yield* Ref.get(value);
-      const last = yield* Ref.get(lastCommittedValue);
-      if (v !== last) {
-        yield* Ref.set(lastCommittedValue, v);
-      }
-    }
   });
 
   b.onResize = Effect.fn(function* (width: number, height: number) {
@@ -724,7 +707,21 @@ export const textarea = Effect.fn(function* (
     yield* b.onUpdate(self);
     const fn = options.onUpdate ?? Effect.fn(function* (self) {});
     yield* fn(self);
-
+    const focused = yield* Ref.get(b.focused);
+    if (focused) {
+      const colors = yield* Ref.get(b.colors);
+      const parsedCC = yield* parseColor(colors.cursorColor);
+      yield* lib.setCursorColor(cli, parsedCC);
+      yield* lib.setCursorStyle(cli, Block.make("block"), true);
+      yield* updateCursorPosition();
+    } else {
+      yield* lib.setCursorPosition(cli, 0, 0, false);
+      const v = yield* Ref.get(value);
+      const last = yield* Ref.get(lastCommittedValue);
+      if (v !== last) {
+        yield* Ref.set(lastCommittedValue, v);
+      }
+    }
     // Update autoHeight if needed
     yield* updateAutoHeight();
 
@@ -746,11 +743,6 @@ export const textarea = Effect.fn(function* (
     // const fullWidth = w + (showVScrollbarUpdate ? 1 : 0);
     // const fullHeight = h + (showHScrollbarUpdate ? 1 : 0);
     // yield* ctx.addToHitGrid(x, y, fullWidth, fullHeight, b.num);
-
-    const focused = yield* Ref.get(b.focused);
-    if (focused) {
-      yield* updateCursorPosition();
-    }
 
     // Resize framebuffer to content area (excluding scrollbar space)
     const contentWidth = Math.max(1, w - (showVScrollbarUpdate ? 1 : 0));

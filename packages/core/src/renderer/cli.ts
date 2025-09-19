@@ -570,11 +570,18 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
                 return yield* shutdown.run;
               }
               if (isDumpHitGridCommand(parsedKey.raw)) {
-                // const treeInfo = yield* root.getTreeInfo();
+                const rootElement = yield* root.getElements();
                 const treeInfo = yield* sceneManager.getTreeInfo();
                 const lastMousePos = yield* Ref.get(lastMousePosition);
-                const mouseInfo = `mouse (${lastMousePos.x}, ${lastMousePos.y})`;
-                const treeInfoWithMouse = `${mouseInfo}\n${treeInfo}`;
+                const cs = yield* sceneManager.getCurrentScene();
+                if (!cs) return false;
+                const focusedElement = yield* cs.getCurrentFocusedElement();
+                const focusedElementInfo = focusedElement ? `${focusedElement.type} (${focusedElement.id})` : "[none]";
+                const mouseInfo = `mouse (${lastMousePos.x}, ${lastMousePos.y})\n`;
+                const focusInfo = `focus: ${focusedElementInfo}\n`;
+                const rootInfo = `root-elements: ${rootElement.map((e) => e.type).join(", ")}\n`;
+
+                const treeInfoWithMouse = `${mouseInfo}${focusInfo}${rootInfo}${treeInfo}`;
                 const fs = yield* FileSystem.FileSystem;
                 const path = yield* Path.Path;
 
@@ -925,11 +932,21 @@ export class CliRenderer extends Effect.Service<CliRenderer>()("CliRenderer", {
 
       const currentScene = yield* sceneManager.getCurrentScene();
       if (currentScene) {
-        const sceneElements = yield* Ref.get(currentScene.renderables);
-        yield* Effect.all(
-          sceneElements.map((element) => element.processKeyboardEvent(keyboardEvent)),
-          { concurrency: 10 },
-        );
+        if (parsedKey.name === "tab") {
+          let fe: BaseElement<any, any> | null = null;
+          if (parsedKey.shift) {
+            fe = yield* sceneManager.focus("previous");
+          } else {
+            fe = yield* sceneManager.focus("next");
+          }
+          if (!fe) return false;
+          return true;
+        }
+        const currentFocusedElement = yield* currentScene.getCurrentFocusedElement();
+        if (!currentFocusedElement) {
+          return false;
+        }
+        return yield* currentFocusedElement.processKeyboardEvent(keyboardEvent);
       }
 
       return true;

@@ -30,6 +30,7 @@ export const group = Effect.fn(function* (
       height: options.height ?? "auto",
       visible: true,
       selectable: false,
+      focusable: false,
       position: PositionRelative.make(1),
     },
     parentElement,
